@@ -30,7 +30,7 @@ it.each([false, undefined])(
   'hides system recovery without confirmed administrator access (%s)',
   async (isAdministrator) => {
     profile.isAdministrator = isAdministrator;
-    const { user } = renderCitadel(<BackupPolicyForm mode="add" />);
+    const { user } = renderCitadel(<BackupPolicyForm mode="add" />, { groups: { realtimeTransport: 'None' } });
     const trigger = screen.getByRole('combobox', { name: 'Back up' });
     expect(trigger).toHaveTextContent('Deployment storage');
     expect(screen.queryByText('Offline recovery')).not.toBeInTheDocument();
@@ -42,7 +42,7 @@ it.each([false, undefined])(
 );
 
 it('groups backup choices and updates the accessible scope description when selecting a source', async () => {
-  const { user } = renderCitadel(<BackupPolicyForm mode="add" />);
+  const { user } = renderCitadel(<BackupPolicyForm mode="add" />, { groups: { realtimeTransport: 'None' } });
   const trigger = screen.getByRole('combobox', { name: 'Back up' });
   expect(trigger).toHaveTextContent('Citadel system');
   expect(trigger).toHaveAccessibleDescription("Back up Citadel's database and recovery keys.");
@@ -89,6 +89,7 @@ it('keeps the source locked after a successful backup with its scope visible', (
         } as BackupPolicyView
       }
     />,
+    { groups: { realtimeTransport: 'None' } },
   );
   const trigger = screen.getByRole('combobox', { name: 'Back up' });
   expect(trigger).toBeDisabled();
@@ -116,6 +117,7 @@ it('lets a legacy policy switch to Live without unlocking its storage source', a
         } as BackupPolicyView
       }
     />,
+    { groups: { realtimeTransport: 'None' } },
   );
   expect(screen.getByRole('combobox', { name: 'Back up' })).toBeDisabled();
   const consistency = screen.getByRole('combobox', { name: 'Consistency' });

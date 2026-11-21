@@ -48,12 +48,25 @@ pub struct BackupsHttpState {
 
 pub fn router(state: BackupsHttpState) -> Router {
     crate::api::mutation_notifications::notify_mutations(
-        documented_routes().split_for_parts().0.with_state(state),
+        documented_policy_routes()
+            .split_for_parts()
+            .0
+            .with_state(state.clone()),
         "BackupPolicy",
+    )
+    .merge(
+        documented_repository_routes()
+            .split_for_parts()
+            .0
+            .with_state(state),
     )
 }
 
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<BackupsHttpState> {
+    documented_policy_routes().merge(documented_repository_routes())
+}
+
+fn documented_repository_routes() -> utoipa_axum::router::OpenApiRouter<BackupsHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list_repositories))
         .normalized_routes(utoipa_axum::routes!(create_repository))
@@ -65,6 +78,10 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<BackupsH
         .normalized_routes(utoipa_axum::routes!(initialize_repository))
         .normalized_routes(utoipa_axum::routes!(check_repository))
         .normalized_routes(utoipa_axum::routes!(prune_repository))
+}
+
+fn documented_policy_routes() -> utoipa_axum::router::OpenApiRouter<BackupsHttpState> {
+    utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list_policies))
         .normalized_routes(utoipa_axum::routes!(platform_summaries))
         .normalized_routes(utoipa_axum::routes!(deployment_source_preview))
@@ -877,7 +894,7 @@ async fn create_repository(
     Ok(no_store(
         Json(api_result(
             BackupRepositoryView::try_from(result(
-                s.backups.store().create_repository(p.actor_id, &i).await,
+                s.backups.create_repository(p.actor_id, &i).await,
                 &h,
             )?)
             .map_err(ApiError::internal),
@@ -995,7 +1012,7 @@ async fn update_repository(
     Ok(no_store(
         Json(api_result(
             BackupRepositoryView::try_from(result(
-                s.backups.store().update_repository(id, &patch).await,
+                s.backups.update_repository(id, &patch).await,
                 &h,
             )?)
             .map_err(ApiError::internal),
@@ -1124,7 +1141,7 @@ async fn archive_repository(
         &h,
     )
     .await?;
-    result(s.backups.store().archive_repository(id).await, &h)?;
+    result(s.backups.archive_repository(id).await, &h)?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 

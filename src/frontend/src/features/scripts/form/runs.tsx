@@ -8,6 +8,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Timestamp } from '@/components/custom/timestamp';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { useQueryReconciliation } from '@/hooks/useQueryReconciliation';
+import { useReconcileScript } from '../cache';
 import { useMutate, useRead } from '@/lib/hooks';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Ban, Calendar, Clock, SquareTerminal, User, type LucideIcon } from 'lucide-react';
@@ -20,11 +22,15 @@ import { LogViewer } from '@/components/custom/log-viewer';
 export function ScriptRunsTab({ resource }: { resource: AuthorizedScript }) {
   const formatDateTime = useProfileDateTimeFormatter();
   const [logRunId, setLogRunId] = useState<string | undefined>();
+  const reconcile = useQueryReconciliation();
+  const script = useReconcileScript();
   const {
     mutateAsync: cancelRun,
     isPending: cancelPending,
     validationErrors: cancelErrors,
-  } = useMutate('cancelScriptRun');
+  } = useMutate('cancelScriptRun', {
+    onSuccess: (_, { id }) => Promise.all([script(id), reconcile(`scripts-runs:${id}`, 'listScriptRuns', { id })]),
+  });
   const { data, isLoading } = useScriptRuns(resource.id);
 
   const runs = useMemo(() => data?.data.runs ?? [], [data?.data.runs]);

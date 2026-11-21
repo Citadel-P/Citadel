@@ -56,7 +56,7 @@ const cases = [
   },
 ] as const;
 
-it.each(cases)('deleting from $route refreshes the list without rereading the removed resource', async (entry) => {
+it.each(cases)('deleting from $route leaves the detail without rereading the removed resource', async (entry) => {
   let deleted = false;
   const read = vi.fn(() => (deleted ? new HttpResponse(null, { status: 404 }) : HttpResponse.json(resource)));
   const list = vi.fn(() => HttpResponse.json([]));

@@ -277,7 +277,7 @@ impl Group {
             | Topic::BackupRestoreRuns(..)
             | Topic::BackupRestoreRun(..) => event.resource_type == "BackupPolicy",
             Topic::BackupRepository(..) | Topic::BackupRepositories => {
-                event.resource_type == "BackupRepository"
+                event.resource_type == "BackupRepository" && event.affects_resource(self.id())
             }
             Topic::BuildProject(..)
             | Topic::BuildProjects

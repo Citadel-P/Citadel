@@ -10,7 +10,7 @@ import {
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { useBackupRepositoriesGroup } from '../backup-repositories/hooks/useBackupRepositoriesGroup';
-import { toUpdateInput } from '../backup-repositories/form/form';
+import { toUpdateInput } from '../backup-repositories/input';
 import { RepositoryCredentials } from '../backup-repositories/credentials';
 import { BackupRepositoriesSection } from './repositories';
 

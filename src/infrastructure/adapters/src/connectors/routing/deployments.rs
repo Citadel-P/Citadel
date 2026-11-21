@@ -1,17 +1,20 @@
 use citadel_docker::client::deployments::observed_container_state;
-use citadel_docker::client::deployments::parse_mount;
-use citadel_docker::client::deployments::parse_port;
+#[cfg(test)]
+use citadel_docker::client::deployments::{parse_mount, parse_port};
 use std::collections::BTreeMap;
 
-use base64::Engine;
+use crate::connectors::registries::credentials::registry_auth;
 use citadel_deployments::{
     ContainerRestartPolicy, DeploymentError, DeploymentImageInfo, DeploymentRuntime,
     PreparedDeploymentImage, RuntimeContainerState, RuntimeDeploymentCommand,
     RuntimeDeploymentResult, StopSignal,
 };
+use citadel_platforms::image_reference::qualify_image_reference;
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind};
 use futures_util::{FutureExt, StreamExt, future::BoxFuture};
-use serde_json::{Value, json};
+use serde_json::Value;
+#[cfg(test)]
+use serde_json::json;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -21,7 +24,6 @@ use crate::connectors::agent::client::AgentClient;
 use citadel_docker::client::DockerClient;
 use citadel_docker::client::DockerError;
 
-const DEFAULT_DOCKER_HUB_ID: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000100);
 const DEPLOYMENT_LABEL: &str = "com.citadel.deployment-id";
 const MANAGED_LABEL: &str = "com.citadel.managed";
 
@@ -171,8 +173,10 @@ impl DeploymentRuntimeRouter {
         }
         let host = registry.host;
         let configuration = registry.configuration;
-        let image = qualify_image_reference(&host, image_tag)?;
-        let auth = registry_auth(registry_id, &host, &configuration)?;
+        let image = qualify_image_reference(&host, image_tag)
+            .map_err(|e| DeploymentError::Validation(e.into()))?;
+        let auth = registry_auth(registry_id, &host, &configuration)
+            .map_err(|e| DeploymentError::Validation(e.into()))?;
         Ok(RegistryPull { image, auth })
     }
 
@@ -547,92 +551,6 @@ struct RegistryPull {
     auth: Option<Zeroizing<String>>,
 }
 
-pub(crate) fn qualify_image_reference(host: &str, image: &str) -> Result<String, DeploymentError> {
-    let image = image.trim();
-    if image.is_empty() || image.len() > 2048 {
-        return Err(DeploymentError::Validation(
-            "The external image reference is invalid.".to_owned(),
-        ));
-    }
-    let docker_hub = host.eq_ignore_ascii_case("hub.docker.com")
-        || host.eq_ignore_ascii_case("docker.io")
-        || host.eq_ignore_ascii_case("registry-1.docker.io");
-    let first = image.split('/').next().unwrap_or_default();
-    let already_qualified = image.contains('/')
-        && (first.contains('.') || first.contains(':') || first.eq_ignore_ascii_case("localhost"));
-    let mut qualified = if docker_hub || already_qualified {
-        image.to_owned()
-    } else {
-        format!(
-            "{}/{}",
-            host.trim_end_matches('/'),
-            image.trim_start_matches('/')
-        )
-    };
-    let last = qualified.rsplit('/').next().unwrap_or_default();
-    if !qualified.contains('@') && !last.contains(':') {
-        qualified.push_str(":latest");
-    }
-    Ok(qualified)
-}
-
-pub(crate) fn registry_auth(
-    registry_id: Uuid,
-    host: &str,
-    configuration: &Value,
-) -> Result<Option<Zeroizing<String>>, DeploymentError> {
-    let kind = configuration
-        .get("$type")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    let field = |names: &[&str]| {
-        names
-            .iter()
-            .find_map(|name| configuration.get(*name).and_then(Value::as_str))
-    };
-    let enabled = |names: &[&str]| {
-        names
-            .iter()
-            .find_map(|name| configuration.get(*name).and_then(Value::as_bool))
-    };
-    let credentials = match kind {
-        "DockerHub" => field(&["UserName", "userName", "username"]).zip(field(&["PAT", "pat"])),
-        "GitHub" => {
-            if enabled(&["GhcrAuthEnabled", "ghcrAuthEnabled"]) == Some(true) {
-                field(&["NameSpace", "nameSpace"]).zip(field(&["PAT", "pat"]))
-            } else {
-                None
-            }
-        }
-        "Custom" => {
-            if enabled(&["AuthEnabled", "authEnabled"]) == Some(true) {
-                field(&["UserName", "userName", "username"]).zip(field(&["Password", "password"]))
-            } else {
-                None
-            }
-        }
-        "" if registry_id == DEFAULT_DOCKER_HUB_ID => None,
-        _ => {
-            return Err(DeploymentError::Validation(
-                "This Registry type is not available for Deployment Apply in the Rust server yet."
-                    .to_owned(),
-            ));
-        }
-    };
-    let Some((username, password)) = credentials else {
-        return Ok(None);
-    };
-    let json = serde_json::to_vec(&json!({
-        "username": username,
-        "password": password,
-        "serveraddress": host,
-    }))
-    .map_err(|error| DeploymentError::Storage(error.to_string()))?;
-    Ok(Some(Zeroizing::new(
-        base64::engine::general_purpose::STANDARD.encode(json),
-    )))
-}
-
 fn find_image<I>(requested: &str, images: I) -> Result<PreparedDeploymentImage, DeploymentError>
 where
     I: IntoIterator<Item = (String, Vec<String>, Vec<String>)>,
@@ -678,31 +596,6 @@ fn docker_create_body(command: &RuntimeDeploymentCommand) -> Result<Value, Deplo
     let mut command = command.clone();
     normalize_resource_limits(&mut command);
     add_ownership_labels(&mut command);
-    let mut exposed_ports = serde_json::Map::new();
-    let mut port_bindings = serde_json::Map::new();
-    for value in command.spec.ports.as_deref().unwrap_or_default() {
-        let (key, host_port) = parse_port(value)?;
-        exposed_ports.insert(key.clone(), json!({}));
-        if let Some(host_port) = host_port {
-            port_bindings.insert(key, json!([{ "HostPort": host_port.to_string() }]));
-        }
-    }
-    let mounts = command
-        .spec
-        .volumes
-        .as_deref()
-        .unwrap_or_default()
-        .iter()
-        .map(|value| parse_mount(value))
-        .collect::<Result<Vec<_>, _>>()?;
-    let endpoints = command
-        .spec
-        .networks
-        .as_deref()
-        .unwrap_or_default()
-        .iter()
-        .map(|network| (network.to_owned(), json!({})))
-        .collect::<serde_json::Map<_, _>>();
     let resource = command.spec.resource_spec.as_ref();
     let memory = resource
         .and_then(|value| value.memory_limit)
@@ -714,23 +607,21 @@ fn docker_create_body(command: &RuntimeDeploymentCommand) -> Result<Value, Deplo
         .unwrap_or_default();
     let lifecycle = command.spec.life_cycle_spec.as_ref();
     let restart = lifecycle.map_or(ContainerRestartPolicy::No, |value| value.restart_policy);
-    Ok(json!({
-        "Image": command.image_id,
-        "Cmd": command.spec.command,
-        "Env": command.environment_variables,
-        "Labels": command.spec.labels,
-        "StopSignal": lifecycle.and_then(|value| value.stop_signal).map(stop_signal),
-        "StopTimeout": lifecycle.and_then(|value| value.stop_timeout),
-        "ExposedPorts": exposed_ports,
-        "HostConfig": {
-            "PortBindings": port_bindings,
-            "Mounts": mounts,
-            "Memory": memory,
-            "NanoCpus": nano_cpus,
-            "RestartPolicy": { "Name": restart_policy(restart) }
-        },
-        "NetworkingConfig": { "EndpointsConfig": endpoints }
-    }))
+    citadel_docker::client::deployments::CreateConfig {
+        image: &command.image_id,
+        labels: command.spec.labels.unwrap_or_default(),
+        command: command.spec.command.as_deref(),
+        environment: Some(&command.environment_variables),
+        ports: command.spec.ports.as_deref().unwrap_or_default(),
+        volumes: command.spec.volumes.as_deref().unwrap_or_default(),
+        networks: command.spec.networks.as_deref().unwrap_or_default(),
+        memory: Some(memory),
+        nano_cpus: Some(nano_cpus),
+        restart: Some(restart_policy(restart)),
+        stop_signal: lifecycle.and_then(|v| v.stop_signal).map(stop_signal),
+        stop_timeout: lifecycle.and_then(|v| v.stop_timeout),
+    }
+    .body()
 }
 
 fn normalize_resource_limits(command: &mut RuntimeDeploymentCommand) {

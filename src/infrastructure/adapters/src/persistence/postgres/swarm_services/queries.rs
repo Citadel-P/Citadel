@@ -1,44 +1,19 @@
 use super::*;
 use citadel_primitives::AuthorizedResource;
 
-pub(super) const AUTHORIZED_CTES: &str = concat!(
-    include_str!("../enabled_actor_scope.sql"),
-    r#", global_permission AS (
-    SELECT COALESCE(MAX(permission.permissionlevel),0)::integer level_mask,
-           COALESCE(bit_or(permission.specificpermissions),0)::integer specific_mask
-    FROM actor_scope scope JOIN actorroles assignment ON assignment.actorid=scope.actorid
-    JOIN permissions permission ON permission.roleid=assignment.roleid
-    WHERE permission.resourcetype=20
-), resource_permissions AS (
-    SELECT access.resourceid, COALESCE(MAX(access.permissionlevel),0)::integer level_mask,
-           COALESCE(bit_or(access.specificpermissions),0)::integer specific_mask
-    FROM actor_scope scope JOIN resourceaccesses access ON access.actorid=scope.actorid
-    WHERE access.resourcetype=20 GROUP BY access.resourceid
-)
-"#
-);
+pub(super) const AUTHORIZED_CTES: &str =
+    super::super::authorization::workload_grants!(SwarmService, 20);
 
 pub(super) const PROJECTION: &str = concat!(
     r#"
 SELECT s.*,
-       COALESCE((SELECT jsonb_agg(jsonb_build_object(
- 'containerId', c.id, 'dockerContainerId', t.dockercontainerid, 'platformId', t.platformid,
- 'taskId', t.dockertaskid, 'nodeId', t.dockernodeid, 'name', COALESCE(NULLIF(t.name,''),c.name,t.dockertaskid), 'service', t.dockerserviceid,
- 'state', COALESCE(c.state, initcap(t.state)), 'observation', c.health,
- 'available', (NOT t.isstale AND c.id IS NOT NULL AND c.projectionstalesince IS NULL
- AND (CASE WHEN c.dockernodeid IS NULL THEN p.status='Online'
- ELSE EXISTS(SELECT 1 FROM swarmnoderuntimeprojectionstates ns WHERE ns.platformid=t.platformid AND ns.dockernodeid=t.dockernodeid AND NOT ns.isstale) END))
- ) ORDER BY t.dockerserviceid,t.slot,t.dockertaskid)
- FROM (SELECT DISTINCT ON (task.dockerserviceid, COALESCE(task.slot::text,task.dockernodeid)) task.*
- FROM swarmtaskprojections task WHERE task.platformid=s.platformid AND task.dockerserviceid=s.dockerserviceid AND lower(task.desiredstate)='running'
+       COALESCE(("#,
+    include_str!("../swarm_health_members.sql"),
+    r#"task.platformid=s.platformid AND task.dockerserviceid=s.dockerserviceid
  AND EXISTS(SELECT 1 FROM swarmserviceprojections owned WHERE owned.platformid=task.platformid AND owned.dockerserviceid=task.dockerserviceid AND owned.swarmserviceid=s.id AND owned.ownership<>'OwnershipConflict')
- ORDER BY task.dockerserviceid,COALESCE(task.slot::text,task.dockernodeid),task.dockercreatedat DESC NULLS LAST,task.versionindex DESC,task.dockertaskid DESC) t
- -- The connected manager uses the platform daemon scope; workers use explicit node scopes.
- -- Resolve only the pinned manager identity, never an arbitrary NULL-node container.
- LEFT JOIN containers c ON c.platformid=t.platformid AND NULLIF(t.dockernodeid,'') IS NOT NULL
- AND c.dockernodeid IS NOT DISTINCT FROM (CASE
- WHEN t.dockernodeid=NULLIF(COALESCE(p.platformdescriptor->>'nodeID',p.platformdescriptor->>'NodeID'),'') THEN NULL
- ELSE t.dockernodeid END) AND c.dockercontainerid=t.dockercontainerid), '[]'::jsonb) health_members,
+"#,
+    include_str!("../swarm_health_container.sql"),
+    r#"), '[]'::jsonb) health_members,
        projection.ownership projection_ownership, projection.mode health_mode, COALESCE(projection.isstale,TRUE) health_stale,
        p.name platform_name, p.status platform_status,
        projection.runningtaskcount, projection.desiredtaskcount,

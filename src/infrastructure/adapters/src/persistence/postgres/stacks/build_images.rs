@@ -1,3 +1,4 @@
+use citadel_platforms::image_reference::pin_to_digest;
 use citadel_stacks::{
     ResolvedStackBuildImageBinding, StackBuildImageBinding, StackBuildImageResolverPort, StackError,
 };
@@ -113,25 +114,6 @@ fn first_reference(value: Value) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
-}
-
-fn pin_to_digest(reference: &str, digest: Option<&str>) -> String {
-    let reference = reference.trim();
-    let Some(digest) = digest.map(str::trim).filter(|digest| !digest.is_empty()) else {
-        return reference.to_owned();
-    };
-    let base = if let Some((base, _)) = reference.rsplit_once('@') {
-        base
-    } else if let Some(index) = reference.rfind(':').filter(|index| {
-        reference
-            .rfind('/')
-            .is_none_or(|last_slash| *index > last_slash)
-    }) {
-        &reference[..index]
-    } else {
-        reference
-    };
-    format!("{base}@{digest}")
 }
 
 fn storage(error: impl std::fmt::Display) -> StackError {

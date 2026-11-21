@@ -7,6 +7,7 @@ import { Timestamp } from '@/components/custom/timestamp';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { useReconcileBuildRun } from '../cache';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { parseCitadelDate } from '@/lib/date-time';
 import { useMutate, useRead } from '@/lib/hooks';
@@ -41,7 +42,8 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
   const [logRunId, setLogRunId] = useState<string | undefined>();
   const { runId: requestedRunId, clearRunId } = useBuildRunQuery();
   const queryClient = useQueryClient();
-  const cancelRun = useMutate('cancelBuildRun');
+  const reconcile = useReconcileBuildRun();
+  const cancelRun = useMutate('cancelBuildRun', { onSuccess: (_, { id }) => reconcile(resource.id, id) });
   const formatDateTime = useProfileDateTimeFormatter();
   const readArgs = useMemo(() => ({ query: { projectId: resource.id, limit: 50 } }), [resource.id]);
   const { data, isLoading } = useRead('listBuildRuns', readArgs);
@@ -207,14 +209,12 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
     async (run: BuildRunView) => {
       try {
         await cancelRun.mutateAsync({ id: run.id } as any);
-        await queryClient.invalidateQueries({ queryKey: ['listBuildRuns'] });
-        await queryClient.invalidateQueries({ queryKey: ['getBuildProject', { id: resource.id }] });
         toast.success('Build cancellation requested');
       } catch {
         /**Nope */
       }
     },
-    [cancelRun, queryClient, resource.id],
+    [cancelRun],
   );
 
   const columns = useMemo(

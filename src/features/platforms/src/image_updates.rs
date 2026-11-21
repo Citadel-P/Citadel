@@ -711,48 +711,9 @@ fn empty(reference: &str, status: ImageUpdateStatus, reason: Option<&str>) -> Im
 pub fn eligible(reference: &str) -> bool {
     !reference.is_empty() && !reference.contains('@') && !reference.contains('<')
 }
-pub fn registry_host(host: &str) -> String {
-    let host = host.trim_end_matches('/').to_ascii_lowercase();
-    match host.as_str() {
-        "hub.docker.com" | "index.docker.io" | "registry-1.docker.io" => "docker.io".into(),
-        _ => host,
-    }
-}
-pub fn reference_host(reference: &str) -> String {
-    let first = reference.split('/').next().unwrap_or_default();
-    if reference.contains('/')
-        && (first.contains('.') || first.contains(':') || first == "localhost")
-    {
-        registry_host(first)
-    } else {
-        "docker.io".into()
-    }
-}
+pub use crate::image_reference::{canonical_reference, reference_host, registry_host};
 fn failure(kind: RuntimeErrorKind, message: &str) -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(kind, message, false)
-}
-
-/// Docker Hub aliases normalize without changing tag case or private registry identity.
-pub fn canonical_reference(reference: &str) -> String {
-    let reference = reference.trim();
-    let host = reference_host(reference);
-    let first = reference.split('/').next().unwrap_or_default();
-    let explicit = reference.contains('/')
-        && (first.contains('.') || first.contains(':') || first == "localhost");
-    let name = if explicit {
-        reference.split_once('/').unwrap().1
-    } else {
-        reference
-    };
-    let mut result = if host == "docker.io" && !name.contains('/') {
-        format!("{host}/library/{name}")
-    } else {
-        format!("{host}/{name}")
-    };
-    if !result.contains('@') && !result.rsplit('/').next().unwrap_or_default().contains(':') {
-        result.push_str(":latest");
-    }
-    result
 }
 
 #[cfg(test)]

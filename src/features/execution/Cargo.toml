@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+tracing.workspace = true
 futures-util.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

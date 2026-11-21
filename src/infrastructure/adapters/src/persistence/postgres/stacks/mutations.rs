@@ -622,20 +622,12 @@ pub(super) async fn validate_tags(
     tx: &mut Transaction<'_, Postgres>,
     ids: &[Uuid],
 ) -> Result<(), StackError> {
-    if ids.is_empty() {
-        return Ok(());
-    }
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tags WHERE id=ANY($1::uuid[])")
-        .bind(ids)
-        .fetch_one(&mut **tx)
+    crate::persistence::postgres::tags::validate_tag_ids(tx, ids)
         .await
-        .map_err(storage)?;
-    if count as usize != ids.len() {
-        return Err(StackError::Validation(
-            "One or more selected Tags do not exist.".to_owned(),
-        ));
-    }
-    Ok(())
+        .map_err(|error| match error {
+            citadel_tags::TagError::Validation(message) => StackError::Validation(message),
+            other => storage(other),
+        })
 }
 pub(super) async fn insert_tags(
     tx: &mut Transaction<'_, Postgres>,
@@ -643,10 +635,18 @@ pub(super) async fn insert_tags(
     actor: ActorId,
     tags: &[Uuid],
 ) -> Result<(), StackError> {
-    for tag in tags {
-        sqlx::query("INSERT INTO resourcetags(resourcetype,resourceid,tagid,createdat,createdbyactorid) VALUES('Stack',$1,$2,$3,$4)").bind(id).bind(tag).bind(Utc::now()).bind(actor.value()).execute(&mut **tx).await.map_err(storage)?;
-    }
-    Ok(())
+    crate::persistence::postgres::tags::insert_resource_tags(
+        tx,
+        actor,
+        citadel_tags::TaggableResourceType::Stack,
+        id,
+        tags,
+    )
+    .await
+    .map_err(|error| match error {
+        citadel_tags::TagError::Conflict(message) => StackError::Conflict(message),
+        other => storage(other),
+    })
 }
 pub(super) async fn lock_name(
     tx: &mut Transaction<'_, Postgres>,

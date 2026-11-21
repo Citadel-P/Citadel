@@ -337,29 +337,31 @@ pub(super) async fn validate_tags(
     tx: &mut Transaction<'_, Postgres>,
     ids: &[Uuid],
 ) -> Result<(), SwarmServiceError> {
-    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM tags WHERE id=ANY($1::uuid[])")
-        .bind(ids)
-        .fetch_one(&mut **tx)
+    crate::persistence::postgres::tags::validate_tag_ids(tx, ids)
         .await
-        .map_err(storage)?;
-    if count == ids.len() as i64 {
-        Ok(())
-    } else {
-        Err(SwarmServiceError::Validation(
-            "One or more Tags do not exist.".to_owned(),
-        ))
-    }
+        .map_err(|error| match error {
+            citadel_tags::TagError::Validation(message) => SwarmServiceError::Validation(message),
+            other => storage(other),
+        })
 }
-pub(super) async fn replace_tags(
+pub(super) async fn insert_tags(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
     actor: ActorId,
     tags: &[Uuid],
 ) -> Result<(), SwarmServiceError> {
-    for tag in tags {
-        sqlx::query("INSERT INTO resourcetags(resourcetype,resourceid,tagid,createdbyactorid) VALUES('SwarmService',$1,$2,$3)").bind(id).bind(tag).bind(actor.value()).execute(&mut **tx).await.map_err(database_error)?;
-    }
-    Ok(())
+    crate::persistence::postgres::tags::insert_resource_tags(
+        tx,
+        actor,
+        citadel_tags::TaggableResourceType::SwarmService,
+        id,
+        tags,
+    )
+    .await
+    .map_err(|error| match error {
+        citadel_tags::TagError::Conflict(message) => SwarmServiceError::Conflict(message),
+        other => storage(other),
+    })
 }
 
 /// Shared atomic creation used by ordinary creates and copy finalization.
@@ -430,7 +432,7 @@ pub(crate) async fn create_in_transaction(
         VALUES($1,$2,$3,$4,$5,$6,$7,'Created','NeverApplied','Idle',0,$8,$9,$9,'-infinity','Unknown')"#)
         .bind(id).bind(input.platform_id).bind(&input.name).bind(&input.description).bind(&docker_name)
         .bind(spec).bind(desired).bind(actor_id.value()).bind(now).execute(&mut **tx).await.map_err(database_error)?;
-    replace_tags(tx, id, actor_id, &input.tag_ids).await?;
+    insert_tags(tx, id, actor_id, &input.tag_ids).await?;
     if let Some(source) = &duplicate {
         crate::persistence::postgres::bindings::access::copy_grants(
             tx,

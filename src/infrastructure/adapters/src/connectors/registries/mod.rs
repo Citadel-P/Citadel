@@ -1,4 +1,5 @@
 pub mod browser;
+pub(crate) mod credentials;
 
 pub mod digest;
 

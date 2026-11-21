@@ -1,9 +1,16 @@
+import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
+import { useCollectionRows } from '@/hooks/useCollectionRows';
 import { BackupPolicyView } from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo } from 'react';
+
+const mergeRun = (incoming: BackupPolicyView, existing: BackupPolicyView) => ({
+  ...incoming,
+  latestRun: incoming.latestRun ?? existing.latestRun,
+});
 
 export const useBackupPoliciesGroup = () => {
   const { selectedTagNames } = useResourceTagFilter();
@@ -11,21 +18,12 @@ export const useBackupPoliciesGroup = () => {
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const { data, isLoading, error, refetch, isFetching } = useRead('listBackupPolicies', readArgs);
-  const [policies, setPolicies] = useState<BackupPolicyView[] | undefined>();
+  const groupName = 'backup-policies';
+  const structuralSharing = useCollectionStructuralSharing(groupName);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listBackupPolicies', readArgs, {
+    structuralSharing,
+  });
   const capabilities = data?.data.capabilities;
-  const lastFetchedRef = useRef<BackupPolicyView[]>([]);
-
-  useEffect(() => {
-    if (!data) return;
-
-    const newBase = data.data.policies;
-    if (newBase !== lastFetchedRef.current) {
-      lastFetchedRef.current = newBase;
-      setPolicies(newBase);
-    }
-  }, [data]);
-
   const matchesActiveFilters = useCallback(
     (policy: BackupPolicyView) => {
       if (selectedTagNames.length === 0) return true;
@@ -36,33 +34,16 @@ export const useBackupPoliciesGroup = () => {
     [selectedTagNames],
   );
 
-  const handleBackupPolicyInfoUpdated = useCallback(
-    (policy: BackupPolicyView, action: string) => {
-      setPolicies((prev) => {
-        if (!prev) return prev;
-        if (action === 'create') {
-          return matchesActiveFilters(policy) ? [...prev, policy] : prev;
-        }
-        if (action === 'delete') {
-          return prev.filter((item) => item.id !== policy.id);
-        }
-
-        const index = prev.findIndex((item) => item.id === policy.id);
-        if (!matchesActiveFilters(policy)) {
-          return index === -1 ? prev : prev.filter((item) => item.id !== policy.id);
-        }
-
-        if (index === -1) return [...prev, policy];
-
-        const updated = [...prev];
-        updated[index] = {
-          ...policy,
-          latestRun: policy.latestRun ?? updated[index].latestRun,
-        };
-        return updated;
-      });
-    },
-    [matchesActiveFilters],
+  const reload = useCallback(async () => {
+    const result = await refetch();
+    return result.isSuccess ? result.data.data.policies : undefined;
+  }, [refetch]);
+  const [policies, handleBackupPolicyInfoUpdated, onJoinedGroup] = useCollectionRows(
+    data?.data.policies,
+    JSON.stringify(readArgs ?? {}),
+    matchesActiveFilters,
+    reload,
+    mergeRun,
   );
 
   const setupEventListeners = useCallback(
@@ -80,7 +61,8 @@ export const useBackupPoliciesGroup = () => {
   );
 
   useRealtimeGroup({
-    groupName: 'backup-policies',
+    groupName,
+    onJoinedGroup,
     setupEventListeners,
     removeEventListeners,
   });

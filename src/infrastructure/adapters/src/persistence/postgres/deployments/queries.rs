@@ -124,26 +124,8 @@ ORDER BY d.createdat DESC, d.name, d.id"#
         })
     }
 }
-pub(super) const AUTHORIZED_CTES: &str = concat!(
-    include_str!("../enabled_actor_scope.sql"),
-    r#", global_permission AS (
-    SELECT COALESCE(MAX(permission.permissionlevel), 0)::integer AS level_mask,
-           COALESCE(bit_or(permission.specificpermissions), 0)::integer AS specific_mask
-    FROM actor_scope scope
-    JOIN actorroles assignment ON assignment.actorid = scope.actorid
-    JOIN permissions permission ON permission.roleid = assignment.roleid
-    WHERE permission.resourcetype = 1
-), resource_permissions AS (
-    SELECT access.resourceid,
-           COALESCE(MAX(access.permissionlevel), 0)::integer AS level_mask,
-           COALESCE(bit_or(access.specificpermissions), 0)::integer AS specific_mask
-    FROM actor_scope scope
-    JOIN resourceaccesses access ON access.actorid = scope.actorid
-    WHERE access.resourcetype = 1
-    GROUP BY access.resourceid
-)
-"#
-);
+pub(super) const AUTHORIZED_CTES: &str =
+    super::super::authorization::workload_grants!(Deployment, 1);
 
 pub(super) const PROJECTION: &str = r#"
 SELECT d.id, d.name, d.description, d.platformid, d.createdat, d.createdbyactorid,

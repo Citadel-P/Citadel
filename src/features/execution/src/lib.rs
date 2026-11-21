@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
+mod completion;
 mod process;
+pub use completion::persist_completion;
 mod redaction;
 
 pub use process::{

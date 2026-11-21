@@ -1,10 +1,17 @@
-import { AuthorizedProject, ResourceCapabilitiesView } from '@/api/generated/api.types';
+import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
+import { useCollectionRows } from '@/hooks/useCollectionRows';
+import { AuthorizedProject } from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { selectBuildProjectLatestRun } from '../build-run-state';
+
+const mergeRun = (incoming: AuthorizedProject, existing: AuthorizedProject) => ({
+  ...incoming,
+  latestRun: selectBuildProjectLatestRun(incoming, existing.latestRun),
+});
 
 export const useBuildsGroup = () => {
   const { selectedTagNames } = useResourceTagFilter();
@@ -12,22 +19,12 @@ export const useBuildsGroup = () => {
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const { data, isLoading, error, refetch, isFetching } = useRead('listBuildProjects', readArgs);
-  const [projects, setProjects] = useState<AuthorizedProject[] | undefined>();
-  const [capabilities, setCapabilities] = useState<ResourceCapabilitiesView | undefined>();
-  const lastFetchedRef = useRef<AuthorizedProject[]>([]);
-
-  useEffect(() => {
-    if (!data) return;
-
-    const next = data.data.projects;
-    if (next !== lastFetchedRef.current) {
-      lastFetchedRef.current = next;
-      setProjects(next);
-      setCapabilities(data.data.capabilities);
-    }
-  }, [data]);
-
+  const groupName = 'build-projects';
+  const structuralSharing = useCollectionStructuralSharing(groupName);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listBuildProjects', readArgs, {
+    structuralSharing,
+  });
+  const capabilities = data?.data.capabilities;
   const matchesActiveFilters = useCallback(
     (project: AuthorizedProject) => {
       if (selectedTagNames.length === 0) return true;
@@ -38,33 +35,16 @@ export const useBuildsGroup = () => {
     [selectedTagNames],
   );
 
-  const handleBuildProjectInfoUpdated = useCallback(
-    (project: AuthorizedProject, action: string) => {
-      setProjects((prev) => {
-        if (!prev) return prev;
-        if (action === 'create') {
-          return matchesActiveFilters(project) ? [...prev, project] : prev;
-        }
-        if (action === 'delete') {
-          return prev.filter((item) => item.id !== project.id);
-        }
-
-        const index = prev.findIndex((item) => item.id === project.id);
-        if (!matchesActiveFilters(project)) {
-          return index === -1 ? prev : prev.filter((item) => item.id !== project.id);
-        }
-
-        if (index === -1) return [...prev, project];
-
-        const updated = [...prev];
-        updated[index] = {
-          ...project,
-          latestRun: selectBuildProjectLatestRun(project, updated[index].latestRun),
-        };
-        return updated;
-      });
-    },
-    [matchesActiveFilters],
+  const reload = useCallback(async () => {
+    const result = await refetch();
+    return result.isSuccess ? result.data.data.projects : undefined;
+  }, [refetch]);
+  const [projects, handleBuildProjectInfoUpdated, onJoinedGroup] = useCollectionRows(
+    data?.data.projects,
+    JSON.stringify(readArgs ?? {}),
+    matchesActiveFilters,
+    reload,
+    mergeRun,
   );
 
   const setupEventListeners = useCallback(
@@ -82,7 +62,8 @@ export const useBuildsGroup = () => {
   );
 
   useRealtimeGroup({
-    groupName: 'build-projects',
+    groupName,
+    onJoinedGroup,
     setupEventListeners,
     removeEventListeners,
   });

@@ -208,7 +208,7 @@ export function useSegmentTitle() {
 
 export function useSelectedResources<T>(key: ResourceType) {
   const [selected, setSelected] = useAtom(selectedResourcesAtoms(key));
-  return [selected as T[], setSelected as (items: T[]) => void] as const;
+  return [selected as T[], setSelected as (items: T[] | ((current: T[]) => T[])) => void] as const;
 }
 
 export function useResourceFilter<T extends object = any>(key: ResourceType) {

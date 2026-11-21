@@ -1,3 +1,4 @@
+import type { QueryClient } from '@tanstack/react-query';
 import {
   BackupCoverageStatus,
   BackupPolicyReference,
@@ -74,4 +75,16 @@ export function backupCoverageMessages(coverage: ResourceBackupSummaryView): str
     })
     .filter((message) => message !== undefined);
   return [...new Set([...messages, ...coverage.warnings])];
+}
+
+// These HTTP projections include policy coverage. Workload and volume tables receive their own live views.
+export function invalidatePolicyCoverage(client: QueryClient) {
+  return Promise.all(
+    [
+      'getPlatformBackupSummaries',
+      'getStackBackupSourcePreview',
+      'getDeploymentBackupSourcePreview',
+      'getSwarmServiceBackupSourcePreview',
+    ].map((operation) => client.invalidateQueries({ queryKey: [operation], type: 'active' })),
+  );
 }

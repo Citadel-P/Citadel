@@ -1,41 +1,31 @@
 use super::*;
-use std::{future::Future, time::Duration};
+use std::future::Future;
 
 /// Retry persistence of an already computed result, never external execution.
 pub(super) async fn persist<T, F, Fut>(
     run_id: Uuid,
     shutdown: &CancellationToken,
-    mut completion: F,
+    completion: F,
 ) -> Result<Option<T>, BackupError>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<Option<T>, BackupError>>,
 {
-    let mut delay = Duration::from_millis(250);
-    loop {
-        // Give an in-flight commit a chance to finish even during shutdown.
-        match tokio::time::timeout(Duration::from_secs(10), completion()).await {
-            Ok(Ok(confirmed)) => return Ok(confirmed),
-            Ok(Err(BackupError::Storage(error))) => {
-                tracing::warn!(%error, %run_id, "Backup operation completion pending");
-            }
-            Ok(Err(error)) => return Err(error),
-            Err(_) => tracing::warn!(%run_id, "Backup operation completion timed out"),
-        }
-        tokio::select! {
-            biased;
-            () = shutdown.cancelled() => return Ok(None),
-            () = tokio::time::sleep(delay) => {},
-        }
-        delay = (delay * 2).min(Duration::from_secs(5));
-    }
+    citadel_execution::persist_completion(
+        run_id,
+        shutdown,
+        |e| matches!(e, BackupError::Storage(_)),
+        completion,
+    )
+    .await
+    .map(Option::flatten)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::{cell::RefCell, future::pending};
-    use tokio::time::Instant;
+    use tokio::time::{Duration, Instant};
 
     #[tokio::test(start_paused = true)]
     async fn timeout_and_storage_failures_share_capped_backoff() {

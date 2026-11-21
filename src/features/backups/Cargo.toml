@@ -6,6 +6,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+citadel-execution = { path = "../execution" }
 citadel-primitives = { path = "../primitives" }
 citadel-tags = { path = "../tags" }
 citadel-activities = { path = "../activities" }

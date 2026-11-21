@@ -39,6 +39,7 @@ const OUTPUT_FRAME_OVERHEAD: usize = 256;
 pub struct EdgeError {
     code: Code,
     message: &'static str,
+    retryable: Option<bool>,
     capacity_busy_not_submitted: bool,
 }
 
@@ -47,6 +48,7 @@ impl EdgeError {
         Self {
             code,
             message,
+            retryable: None,
             capacity_busy_not_submitted: false,
         }
     }
@@ -55,6 +57,7 @@ impl EdgeError {
         Self {
             code: Code::ResourceExhausted,
             message,
+            retryable: None,
             capacity_busy_not_submitted: true,
         }
     }
@@ -67,9 +70,16 @@ impl EdgeError {
     fn remote(code: &str) -> Self {
         // Preserve error types without exposing remote messages that may contain
         // resolved credentials or other sensitive command input.
+        let retryable = match code {
+            "docker_timeout" => Some(true),
+            "permanent_unavailable" => Some(false),
+            _ => None,
+        };
         let (code, message) = match code {
             "cancelled" => (Code::Cancelled, "Edge command canceled."),
-            "deadline_exceeded" => (Code::DeadlineExceeded, "Edge command timed out."),
+            "docker_timeout" | "deadline_exceeded" => {
+                (Code::DeadlineExceeded, "Edge command timed out.")
+            }
             "resource_exhausted" => (
                 Code::ResourceExhausted,
                 "Edge command resource limit exceeded.",
@@ -88,16 +98,28 @@ impl EdgeError {
                 "Edge command precondition failed.",
             ),
             "out_of_range" => (Code::OutOfRange, "Edge command argument is out of range."),
-            "unavailable" => (Code::Unavailable, "Edge runtime is unavailable."),
+            "permanent_unavailable" | "unavailable" => {
+                (Code::Unavailable, "Edge runtime is unavailable.")
+            }
             "unimplemented" => (Code::Unimplemented, "Edge command is not supported."),
             "data_loss" => (Code::DataLoss, "Edge command returned invalid data."),
             _ => (Code::Unknown, "Edge command failed."),
         };
-        Self::new(code, message)
+        Self {
+            retryable,
+            ..Self::new(code, message)
+        }
     }
 
     pub(crate) fn status(&self) -> Status {
-        Status::new(self.code, self.message)
+        let mut status = Status::new(self.code, self.message);
+        if let Some(retry) = self.retryable {
+            status.metadata_mut().insert(
+                citadel_contracts::RUNTIME_RETRYABLE,
+                if retry { "true" } else { "false" }.parse().unwrap(),
+            );
+        }
+        status
     }
 
     pub(crate) fn runtime(self) -> citadel_platforms::RuntimeCapabilityError {
@@ -725,5 +747,27 @@ mod preparation_ownership_tests {
         outbound.encoding_finished();
         assert_eq!(slots.available_permits(), 2);
         assert_eq!(session.pending_count(), 1, "remote build still executing");
+    }
+}
+
+#[cfg(test)]
+mod error_tests {
+    use super::EdgeError;
+    use citadel_platforms::RuntimeErrorKind::*;
+    #[test]
+    fn command_failures_preserve_retry_and_cancellation() {
+        for (wire, kind, retry) in [
+            ("aborted", Conflict, false),
+            ("failed_precondition", InvalidRequest, false),
+            ("unavailable", Unavailable, true),
+            ("permanent_unavailable", Unavailable, false),
+            ("docker_timeout", Timeout, true),
+            ("deadline_exceeded", Timeout, false),
+            ("data_loss", Remote, false),
+            ("cancelled", Cancelled, false),
+        ] {
+            let error = EdgeError::remote(wire).runtime();
+            assert_eq!((error.kind, error.retryable), (kind, retry));
+        }
     }
 }

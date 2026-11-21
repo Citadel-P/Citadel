@@ -62,7 +62,7 @@ async fn local_apply_creates_observes_and_deletes_a_real_container() {
             }),
             resource_spec: None,
             labels: None,
-            ports: None,
+            ports: Some(vec!["53/udp".into()]),
             volumes: None,
             networks: None,
             command: Some(vec!["sleep".to_owned(), "30".to_owned()]),
@@ -86,6 +86,11 @@ async fn local_apply_creates_observes_and_deletes_a_real_container() {
                     == Some(&deployment_id.to_string())
             })
             .map(|container| container.id),
+    };
+    let inspected = if let Some(id) = &container_id {
+        Some(docker.inspect_container_document(id).await)
+    } else {
+        None
     };
     if let Some(container_id) = &container_id {
         runtime
@@ -129,5 +134,13 @@ async fn local_apply_creates_observes_and_deletes_a_real_container() {
 
     let applied = applied.unwrap();
     assert_eq!(applied.state, RuntimeContainerState::Running);
-    assert!(container_id.is_some());
+    let document = inspected
+        .expect("created container")
+        .expect("Docker inspect");
+    assert!(document["Config"]["ExposedPorts"].get("53/udp").is_some());
+    assert!(
+        document["HostConfig"]["PortBindings"]
+            .get("53/udp")
+            .is_none()
+    );
 }

@@ -27,11 +27,12 @@ import { Switch } from '@/components/ui/switch';
 import { useTaskSheet } from '@/lib/atoms';
 import { byteTransform } from '@/lib/bytes.helper';
 import type { DateTimeFormatter } from '@/lib/date-time';
+import { useQueryReconciliation } from '@/hooks/useQueryReconciliation';
+import { useReconcileBackupPolicy } from '../cache';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
-import { useQueryClient } from '@tanstack/react-query';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { Ban, FileText, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -43,10 +44,25 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
   const linkedRun = useRead('getBackupRun', { id: linkedRunId ?? undefined });
   const openedLinkedRun = useRef<string | undefined>(undefined);
   const [restoreRun, setRestoreRun] = useState<BackupRunView | undefined>();
-  const queryClient = useQueryClient();
   const formatDateTime = useProfileDateTimeFormatter();
-  const cancelRun = useMutate('cancelBackupRun');
-  const cancelRestoreRun = useMutate('cancelBackupRestoreRun');
+  const reconcile = useQueryReconciliation();
+  const policy = useReconcileBackupPolicy();
+  const policyId = resource.id;
+  const cancelRun = useMutate('cancelBackupRun', {
+    onSuccess: (_, { id }) =>
+      Promise.all([
+        policy(policyId),
+        reconcile(`backup-runs:${policyId}`, 'listBackupRuns', { query: { policyId } }),
+        reconcile(`backup-run:${id}`, 'getBackupRun', { id }),
+      ]),
+  });
+  const cancelRestoreRun = useMutate('cancelBackupRestoreRun', {
+    onSuccess: (_, { id }) =>
+      Promise.all([
+        reconcile(`backup-restore-runs:${policyId}`, 'listBackupRestoreRuns', { query: { policyId } }),
+        reconcile(`backup-restore-run:${id}`, 'getBackupRestoreRun', { id }),
+      ]),
+  });
   const { open: openSheet } = useTaskSheet('BackupPolicy');
   const readArgs = useMemo(() => ({ query: { policyId: resource.id, limit: 50 } }), [resource.id]);
   const { data, isLoading } = useRead('listBackupRuns', readArgs);
@@ -164,27 +180,24 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
     async (run: BackupRunView) => {
       try {
         await cancelRun.mutateAsync({ id: run.id } as any);
-        await queryClient.invalidateQueries({ queryKey: ['listBackupRuns'] });
-        await queryClient.invalidateQueries({ queryKey: ['getBackupPolicy', { id: resource.id }] });
         toast.success('Backup run cancellation requested');
       } catch {
         toast.error(cancelRun.validationErrors ?? 'Failed to cancel backup run');
       }
     },
-    [cancelRun, queryClient, resource.id],
+    [cancelRun],
   );
 
   const handleCancelRestore = useCallback(
     async (run: BackupRestoreRunView) => {
       try {
         await cancelRestoreRun.mutateAsync({ id: run.id } as any);
-        await queryClient.invalidateQueries({ queryKey: ['listBackupRestoreRuns'] });
         toast.success('Restore run cancellation requested');
       } catch {
         toast.error(cancelRestoreRun.validationErrors ?? 'Failed to cancel restore run');
       }
     },
-    [cancelRestoreRun, queryClient],
+    [cancelRestoreRun],
   );
 
   const handleOpenLogs = useCallback(

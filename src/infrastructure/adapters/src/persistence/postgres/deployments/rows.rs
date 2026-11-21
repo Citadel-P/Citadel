@@ -101,15 +101,8 @@ pub(super) fn decode_permission(
     level: i32,
     specifics: i32,
 ) -> Result<EffectivePermission, DeploymentError> {
-    if administrator {
-        return Ok(EffectivePermission::Administrator);
-    }
-    Ok(EffectivePermission::Granted {
-        level: PermissionLevel::from_i32(level).ok_or_else(|| {
-            DeploymentError::Storage(format!("unknown persisted PermissionLevel value {level}"))
-        })?,
-        specifics: SpecificPermissions::from_bits_retain(specifics as u32),
-    })
+    super::super::authorization::workload_permission(administrator, level, specifics)
+        .map_err(DeploymentError::Storage)
 }
 
 pub(super) fn platform_kind(descriptor: &Value) -> &str {

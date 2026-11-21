@@ -1,40 +1,28 @@
-import { BackupRepositoryView, ResourceCapabilitiesView } from '@/api/generated/api.types';
+import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
+import { useCollectionRows } from '@/hooks/useCollectionRows';
+
+const allRepositories = () => true;
 
 export const useBackupRepositoriesGroup = () => {
-  const { data, isLoading, error, refetch, isFetching } = useRead('listBackupRepositories');
-  const [repositories, setRepositories] = useState<BackupRepositoryView[] | undefined>();
-  const [capabilities, setCapabilities] = useState<ResourceCapabilitiesView | undefined>();
-  const lastFetchedRef = useRef<BackupRepositoryView[]>([]);
-
-  useEffect(() => {
-    if (!data) return;
-
-    const newBase = data.data.repositories;
-    if (newBase !== lastFetchedRef.current) {
-      lastFetchedRef.current = newBase;
-      setRepositories(newBase);
-      setCapabilities(data.data.capabilities);
-    }
-  }, [data]);
-
-  const handleBackupRepositoryInfoUpdated = useCallback((repository: BackupRepositoryView, action: string) => {
-    setRepositories((prev) => {
-      if (!prev) return prev;
-      if (action === 'create') return [...prev, repository];
-      if (action === 'delete') return prev.filter((item) => item.id !== repository.id);
-
-      const index = prev.findIndex((item) => item.id === repository.id);
-      if (index === -1) return [...prev, repository];
-
-      const updated = [...prev];
-      updated[index] = repository;
-      return updated;
-    });
-  }, []);
+  const groupName = 'backup-repositories';
+  const structuralSharing = useCollectionStructuralSharing(groupName);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listBackupRepositories', undefined, {
+    structuralSharing,
+  });
+  const reload = useCallback(async () => {
+    const result = await refetch();
+    return result.isSuccess ? result.data.data.repositories : undefined;
+  }, [refetch]);
+  const [repositories, handleBackupRepositoryInfoUpdated, onJoinedGroup] = useCollectionRows(
+    data?.data.repositories,
+    'backup-repositories',
+    allRepositories,
+    reload,
+  );
 
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
@@ -51,10 +39,11 @@ export const useBackupRepositoriesGroup = () => {
   );
 
   useRealtimeGroup({
-    groupName: 'backup-repositories',
+    groupName,
+    onJoinedGroup,
     setupEventListeners,
     removeEventListeners,
   });
 
-  return { error, refetch, isFetching, repositories, isLoading, capabilities };
+  return { error, refetch, isFetching, repositories, isLoading, capabilities: data?.data.capabilities };
 };

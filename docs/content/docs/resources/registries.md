@@ -25,6 +25,8 @@ For a private image:
 3. Select **Save**. Citadel checks supported credentials before saving.
 4. Choose this Registry in your Deployment, Stack, or Build Project.
 
+Enable authentication for GitHub or Custom registries when Citadel should use their stored credentials. With authentication disabled, Citadel accesses these registries anonymously.
+
 Use a provider token with the access needed for your task. Pulling and pushing
 images may require different permissions.
 

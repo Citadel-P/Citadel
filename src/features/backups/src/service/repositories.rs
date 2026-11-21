@@ -1,6 +1,46 @@
 use super::*;
 
 impl BackupService {
+    pub fn with_repository_change_notifier(
+        mut self,
+        notifier: Arc<dyn Fn(Uuid) + Send + Sync>,
+    ) -> Self {
+        self.on_repository_change = Some(notifier);
+        self
+    }
+
+    fn repository_changed(&self, id: Uuid) {
+        if let Some(notify) = &self.on_repository_change {
+            notify(id);
+        }
+    }
+
+    pub async fn create_repository(
+        &self,
+        actor: ActorId,
+        input: &BackupRepositoryConfiguration,
+    ) -> Result<BackupRepository, BackupError> {
+        let repository = self.store.create_repository(actor, input).await?;
+        self.repository_changed(repository.id);
+        Ok(repository)
+    }
+
+    pub async fn update_repository(
+        &self,
+        id: Uuid,
+        patch: &Value,
+    ) -> Result<BackupRepository, BackupError> {
+        let repository = self.store.update_repository(id, patch).await?;
+        self.repository_changed(id);
+        Ok(repository)
+    }
+
+    pub async fn archive_repository(&self, id: Uuid) -> Result<(), BackupError> {
+        self.store.archive_repository(id).await?;
+        self.repository_changed(id);
+        Ok(())
+    }
+
     pub async fn update_repository_credentials(
         &self,
         id: Uuid,
@@ -60,7 +100,7 @@ impl BackupService {
             .release_repository_operation(id, operation_id)
             .await;
         if result.is_ok() {
-            self.changed();
+            self.repository_changed(id);
         }
         let repository = result?;
         released?;
@@ -164,8 +204,8 @@ impl BackupService {
             .release_repository_operation(id, operation_id)
             .await;
         let (repository, validation) = recorded?;
+        self.repository_changed(id);
         released?;
-        self.changed();
         // Validate returns the recorded readiness result. Mutating operations
         // must preserve configuration errors as client errors after releasing the lease.
         if operation != "Validate"

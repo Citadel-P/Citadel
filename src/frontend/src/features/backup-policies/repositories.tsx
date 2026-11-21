@@ -1,3 +1,12 @@
+import { useReconcileBackupRepository } from '../backup-repositories/cache';
+import {
+  BackupRepositoryFormInput,
+  createDefaultInput,
+  createFileSystemSpec,
+  createS3Spec,
+  toCreateInput,
+  toUpdateInput,
+} from '../backup-repositories/input';
 import {
   BackupRepositorySpec,
   BackupRepositoryStatus,
@@ -9,8 +18,7 @@ import {
   ResourceControlState,
   ResourceType,
 } from '@/api/generated/api.types';
-import { IntegrationAddCard, IntegrationCard } from '@/components/custom/common';
-import { DropdownActionButton, RowActionMenu } from '@/components/custom/dropdown-with-dialog';
+import { IntegrationAddCard } from '@/components/custom/common';
 import { FieldInput, FieldSwitch, ItemSelector } from '@/components/custom/form-builder';
 import { StateIndicator } from '@/components/custom/state-indicator';
 import { Button } from '@/components/ui/button';
@@ -24,15 +32,10 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useMutate, useRead } from '@/lib/hooks';
-import { hasCapability } from '@/lib/resource-capabilities';
 import { cn } from '@/lib/utils';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircle2,
-  Cloud,
   DatabaseBackup,
-  Eye,
-  FolderLock,
   LoaderCircle,
   LockKeyhole,
   ChevronDown,
@@ -44,26 +47,18 @@ import { type Dispatch, type ReactNode, type SetStateAction, useState } from 're
 import { toast } from 'sonner';
 import { RepositoryCredentials } from '../backup-repositories/credentials';
 import { BackupRepositoryDropdownActions } from '../backup-repositories/actions';
-import { destinationText } from '../backup-repositories/table';
+import { RepositoryCard } from '../backup-repositories/table';
+import { useRepositoryOperations } from '../backup-repositories/operations';
 import {
-  BackupRepositoryFormInput,
   bucketLookupOptions,
-  createDefaultInput,
-  createFileSystemSpec,
-  createS3Spec,
   fileSystemLocationOptions,
   FileSystemPlatformSelector,
-  getRepositoryOperationContext,
   RepositoryTypeSelector,
   SecretSelector,
-  toCreateInput,
-  toUpdateInput,
 } from '../backup-repositories/form/form';
 import { useBackupRepositoriesGroup } from '../backup-repositories/hooks/useBackupRepositoriesGroup';
 
 const EMPTY_REPOSITORIES: BackupRepositoryView[] = [];
-type RepositoryOperation = 'validate' | 'initialize' | 'check' | 'prune';
-type PendingRepositoryOperations = Partial<Record<string, RepositoryOperation>>;
 
 export function BackupRepositoriesSection() {
   const { repositories: loadedRepositories, isLoading, capabilities } = useBackupRepositoriesGroup();
@@ -73,19 +68,6 @@ export function BackupRepositoriesSection() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<BackupRepositoryView | null>(null);
   const [input, setInput] = useState<BackupRepositoryFormInput>(createDefaultInput);
-  const [pendingOperations, setPendingOperations] = useState<PendingRepositoryOperations>({});
-
-  const setRepositoryOperation = (repositoryId: string, operation: RepositoryOperation | null) => {
-    setPendingOperations((current) => {
-      if (operation) {
-        return { ...current, [repositoryId]: operation };
-      }
-
-      const { [repositoryId]: _removed, ...next } = current;
-      return next;
-    });
-  };
-
   const openAdd = () => {
     setEditing(null);
     setInput(createDefaultInput());
@@ -127,8 +109,7 @@ export function BackupRepositoriesSection() {
             <RepositoryCard
               key={repository.id}
               repository={repository}
-              pendingOperation={pendingOperations[repository.id] ?? null}
-              onPendingOperationChange={setRepositoryOperation}
+              actions={BackupRepositoryDropdownActions}
               onEdit={() => openEdit(repository)}
             />
           ))}
@@ -149,182 +130,6 @@ export function BackupRepositoriesSection() {
   );
 }
 
-function RepositoryCard({
-  repository,
-  pendingOperation,
-  onPendingOperationChange,
-  onEdit,
-}: {
-  repository: BackupRepositoryView;
-  pendingOperation: RepositoryOperation | null;
-  onPendingOperationChange: (repositoryId: string, operation: RepositoryOperation | null) => void;
-  onEdit: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const validate = useMutate('validateBackupRepository');
-  const initialize = useMutate('initializeBackupRepository');
-  const check = useMutate('checkBackupRepository');
-  const prune = useMutate('pruneBackupRepository');
-
-  const Icon = repository.type === BackupRepositoryType.S3Compatible ? Cloud : FolderLock;
-  const label = repository.type === BackupRepositoryType.S3Compatible ? 'S3-compatible' : 'Filesystem';
-  const {
-    edit: _routeEdit,
-    validate: _validateAction,
-    initialize: _initializeAction,
-    check: _checkAction,
-    prune: _pruneAction,
-    ...repositoryActions
-  } = BackupRepositoryDropdownActions;
-  const canExecute = hasCapability(repository, 'canExecute');
-  const isResourceProcessing = repository.controlState === ResourceControlState.Processing;
-  const operating = pendingOperation !== null || isResourceProcessing;
-
-  const refreshRepository = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
-    await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: repository.id }] });
-  };
-
-  const runOperation = async (
-    operation: RepositoryOperation,
-    mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
-    successMessage: string,
-    _failureMessage: string,
-  ) => {
-    if (operating || (operation === 'initialize' && repository.status === BackupRepositoryStatus.Ready)) return;
-
-    onPendingOperationChange(repository.id, operation);
-    try {
-      await mutation.mutateAsync({ id: repository.id, data: getRepositoryOperationContext(repository) } as any);
-      await refreshRepository();
-      toast.success(successMessage);
-    } catch {
-      //toast.error(mutation.validationErrors ?? _failureMessage);
-    } finally {
-      onPendingOperationChange(repository.id, null);
-    }
-  };
-
-  const operationAction = (
-    operation: RepositoryOperation,
-    title: string,
-    icon: ReactNode,
-    mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
-    successMessage: string,
-    failureMessage: string,
-    readyOnly = false,
-  ) => {
-    const loading = pendingOperation === operation;
-    const disabled =
-      !canExecute ||
-      operating ||
-      (operation === 'initialize' && repository.status === BackupRepositoryStatus.Ready) ||
-      (readyOnly && repository.status !== BackupRepositoryStatus.Ready);
-    return (
-      <DropdownActionButton
-        title={title}
-        icon={icon}
-        loading={loading}
-        disabled={disabled}
-        onClick={() => runOperation(operation, mutation, successMessage, failureMessage)}
-      />
-    );
-  };
-
-  const actions = {
-    edit: ({ resource }: { resource: BackupRepositoryView }) => (
-      <DropdownActionButton
-        title="Edit"
-        icon={<Eye className="h-4 w-4" />}
-        disabled={!(resource.capabilities?.canRead ?? true)}
-        onClick={onEdit}
-      />
-    ),
-    validate: () =>
-      operationAction(
-        'validate',
-        'Validate',
-        <CheckCircle2 className="h-4 w-4" />,
-        validate,
-        'Repository validated',
-        'Failed to validate repository.',
-      ),
-    initialize: () =>
-      operationAction(
-        'initialize',
-        'Initialize',
-        <DatabaseBackup className="h-4 w-4" />,
-        initialize,
-        'Repository initialized',
-        'Failed to initialize repository.',
-      ),
-    check: () =>
-      operationAction(
-        'check',
-        'Check',
-        <RefreshCw className="h-4 w-4" />,
-        check,
-        'Repository checked',
-        'Failed to check repository.',
-        true,
-      ),
-    prune: () =>
-      operationAction(
-        'prune',
-        'Prune',
-        <Scissors className="h-4 w-4" />,
-        prune,
-        'Repository pruned',
-        'Failed to prune repository.',
-        true,
-      ),
-    ...repositoryActions,
-  };
-  const progressLabel = pendingOperation
-    ? {
-        validate: 'Validating',
-        initialize: 'Initializing',
-        check: 'Checking',
-        prune: 'Pruning',
-      }[pendingOperation]
-    : isResourceProcessing
-      ? 'Processing'
-      : null;
-
-  return (
-    <IntegrationCard
-      title={repository.name}
-      subtitle={destinationText(repository.spec)}
-      onEdit={onEdit}
-      icon={
-        <div
-          className={cn(
-            'flex h-10 w-10 items-center justify-center rounded-lg border shadow-sm',
-            repository.type === BackupRepositoryType.S3Compatible
-              ? 'border-sky-500/15 bg-sky-500/10 text-sky-600'
-              : 'border-emerald-500/15 bg-emerald-500/10 text-emerald-600',
-          )}>
-          <Icon className="h-4 w-4" />
-        </div>
-      }
-      footerLeft={
-        progressLabel ? (
-          <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-            <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-            <span className="truncate text-xs font-medium">{progressLabel}</span>
-          </div>
-        ) : (
-          <div className="flex min-w-0 items-center gap-1.5">
-            <StateIndicator value={repository.status} />
-            <span className="truncate text-xs font-medium text-muted-foreground">{label}</span>
-          </div>
-        )
-      }
-      footerRight={<RowActionMenu resource={repository} actions={actions} />}
-    />
-  );
-}
-
 function RepositoryDialog({
   open,
   onOpenChange,
@@ -340,24 +145,14 @@ function RepositoryDialog({
   input: BackupRepositoryFormInput;
   setInput: Dispatch<SetStateAction<BackupRepositoryFormInput>>;
 }) {
-  const queryClient = useQueryClient();
-  const create = useMutate('createBackupRepository');
-  const update = useMutate('updateBackupRepository');
-  const validate = useMutate('validateBackupRepository');
-  const initialize = useMutate('initializeBackupRepository');
-  const check = useMutate('checkBackupRepository');
-  const prune = useMutate('pruneBackupRepository');
-  const [pendingOperation, setPendingOperation] = useState<RepositoryOperation | null>(null);
+  const reconcile = useReconcileBackupRepository();
+  const create = useMutate('createBackupRepository', { onSuccess: () => reconcile() });
+  const update = useMutate('updateBackupRepository', { onSuccess: (_, { id }) => reconcile(id) });
+  const { canRun, run, pending: pendingOperation } = useRepositoryOperations(editing);
   const [updatingCredentials, setUpdatingCredentials] = useState(false);
   const saving = create.isPending || update.isPending;
   const operating =
-    updatingCredentials ||
-    pendingOperation !== null ||
-    validate.isPending ||
-    initialize.isPending ||
-    check.isPending ||
-    prune.isPending;
-
+    updatingCredentials || !!pendingOperation || editing?.controlState === ResourceControlState.Processing;
   const selectedType = (input.spec?.$type ?? BackupRepositoryType.FileSystem) as BackupRepositoryType;
   const formDisabled = editing ? !(editing.capabilities?.canWrite ?? true) : false;
   const ready = editing?.status === BackupRepositoryStatus.Ready;
@@ -404,35 +199,12 @@ function RepositoryDialog({
         }
         toast.success('Repository created. Initialize or validate it before assigning it to critical policies.');
       }
-
-      await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
-      if (editing) await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: editing.id }] });
     } catch {
       // toast.error(create.validationErrors ?? update.validationErrors ?? 'Failed to save repository.');
     }
   };
 
-  const runOperation = async (
-    operation: RepositoryOperation,
-    mutation: { mutateAsync: (variables: any) => Promise<unknown>; validationErrors?: string | null },
-    successMessage: string,
-    _failureMessage: string,
-  ) => {
-    if (!editing || operating || saving || hasChanges || formDisabled || (operation === 'initialize' && ready)) return;
-
-    setPendingOperation(operation);
-    try {
-      await mutation.mutateAsync({ id: editing.id, data: getRepositoryOperationContext(editing) } as any);
-      await queryClient.invalidateQueries({ queryKey: ['listBackupRepositories'] });
-      await queryClient.invalidateQueries({ queryKey: ['getBackupRepository', { id: editing.id }] });
-      toast.success(successMessage);
-    } catch {
-      //toast.error(mutation.validationErrors ?? _failureMessage);
-    } finally {
-      setPendingOperation(null);
-    }
-  };
-
+  const maintenanceLocked = formDisabled || updatingCredentials || saving || hasChanges;
   const title = editing ? (formDisabled ? 'Backup Repository' : 'Edit Backup Repository') : 'Add Backup Repository';
 
   return (
@@ -719,62 +491,35 @@ function RepositoryDialog({
                     icon={<CheckCircle2 className="size-3.5" />}
                     label="Validate"
                     description="Confirm Citadel can access this repository."
-                    disabled={formDisabled || operating || saving || hasChanges}
+                    disabled={!canRun('validate', maintenanceLocked)}
                     loading={pendingOperation === 'validate'}
-                    onClick={() =>
-                      runOperation('validate', validate, 'Repository validated', 'Failed to validate repository.')
-                    }
+                    onClick={() => run('validate', maintenanceLocked)}
                   />
                   {!ready && (
                     <RepositoryOperationButton
                       icon={<DatabaseBackup className="size-3.5" />}
                       label="Initialize"
                       description="Create the Restic repository in an empty destination."
-                      disabled={
-                        formDisabled ||
-                        operating ||
-                        saving ||
-                        hasChanges ||
-                        editing.status === BackupRepositoryStatus.Ready
-                      }
+                      disabled={!canRun('initialize', maintenanceLocked)}
                       loading={pendingOperation === 'initialize'}
-                      onClick={() =>
-                        runOperation(
-                          'initialize',
-                          initialize,
-                          'Repository initialized',
-                          'Failed to initialize repository.',
-                        )
-                      }
+                      onClick={() => run('initialize', maintenanceLocked)}
                     />
                   )}
                   <RepositoryOperationButton
                     icon={<RefreshCw className="size-3.5" />}
                     label="Check"
                     description="Verify repository integrity."
-                    disabled={
-                      formDisabled ||
-                      operating ||
-                      saving ||
-                      hasChanges ||
-                      editing.status !== BackupRepositoryStatus.Ready
-                    }
+                    disabled={!canRun('check', maintenanceLocked)}
                     loading={pendingOperation === 'check'}
-                    onClick={() => runOperation('check', check, 'Repository checked', 'Failed to check repository.')}
+                    onClick={() => run('check', maintenanceLocked)}
                   />
                   <RepositoryOperationButton
                     icon={<Scissors className="size-3.5" />}
                     label="Prune"
                     description="Reclaim unreferenced data without removing snapshots. Policy retention controls snapshot expiration."
-                    disabled={
-                      formDisabled ||
-                      operating ||
-                      saving ||
-                      hasChanges ||
-                      editing.status !== BackupRepositoryStatus.Ready
-                    }
+                    disabled={!canRun('prune', maintenanceLocked)}
                     loading={pendingOperation === 'prune'}
-                    onClick={() => runOperation('prune', prune, 'Repository pruned', 'Failed to prune repository.')}
+                    onClick={() => run('prune', maintenanceLocked)}
                   />
                 </div>
               </div>

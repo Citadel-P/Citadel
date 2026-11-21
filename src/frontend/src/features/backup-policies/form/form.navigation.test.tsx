@@ -59,6 +59,7 @@ it.each([
       <Route path={returnTo} element={<p>Resource overview</p>} />
     </Routes>,
     {
+      groups: { realtimeTransport: 'None' },
       route: `/backup-policies/add?sourceType=DockerVolume&platformId=p&volumeName=uploads&dockerNodeId=node-a&${new URLSearchParams({ returnTo })}`,
     },
   );
@@ -86,6 +87,7 @@ it.each([
 it('ignores source prefill when editing an existing policy', () => {
   const resource = { id: 'existing', source: { $type: 'Stack', stackId: 'original-stack' } } as BackupPolicyView;
   renderCitadel(<BackupPolicyForm mode="edit" resource={resource} />, {
+    groups: { realtimeTransport: 'None' },
     route: '/backup-policies/edit/existing?sourceType=Deployment&deploymentId=other',
   });
   expect(captured.mock.lastCall?.[0].original.source).toEqual(resource.source);
@@ -106,6 +108,7 @@ it('preserves the explicit bind path and exact node when saving a contextual pol
       />
     </Routes>,
     {
+      groups: { realtimeTransport: 'None' },
       route: '/backup-policies/add?sourceType=BindMount&platformId=p&hostPath=%2Fsrv%2Fapp%20data&dockerNodeId=node-a',
     },
   );
@@ -135,7 +138,10 @@ it('stays on the policy when saving edits with a return link', async () => {
       />
       <Route path="/stacks/edit/stack" element={<p>Resource overview</p>} />
     </Routes>,
-    { route: '/backup-policies/edit/existing?returnTo=%2Fstacks%2Fedit%2Fstack' },
+    {
+      groups: { realtimeTransport: 'None' },
+      route: '/backup-policies/edit/existing?returnTo=%2Fstacks%2Fedit%2Fstack',
+    },
   );
   await user.click(screen.getByRole('button', { name: 'Save' }));
   expect(create).toHaveBeenCalledWith(expect.objectContaining({ id: 'existing' }));

@@ -1,3 +1,4 @@
+import { useReconcileBuildProject } from '../cache';
 import {
   BuildArgSpec,
   WebhookConfig,
@@ -34,7 +35,6 @@ import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { MonacoEditor, type MonacoDiagnostic } from '@/lib/monaco';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useQueryClient } from '@tanstack/react-query';
 import { GitBranch, Plus, Trash2 } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
@@ -440,7 +440,6 @@ export const BuildForm = ({
     { enabled: !!duplicateFrom },
   );
   const duplicate = duplicateData?.data;
-  const queryClient = useQueryClient();
   const [update, setUpdate] = useState<Partial<BuildInput>>({});
   useEffect(() => {
     if (!duplicateFrom || !duplicate || loadedDuplicate.current === duplicateFrom) return;
@@ -474,8 +473,9 @@ export const BuildForm = ({
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
   const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
   const elasticBuildExecutionEnabled = hasLicenseCapability(LicenseCapability.ElasticBuildExecution);
-  const createBuild = useMutate('createBuildProject');
-  const updateBuild = useMutate('updateBuildProject');
+  const reconcile = useReconcileBuildProject();
+  const createBuild = useMutate('createBuildProject', { onSuccess: () => reconcile() });
+  const updateBuild = useMutate('updateBuildProject', { onSuccess: (_, { id }) => reconcile(id) });
   const currentGitRepositoryId = update.gitRepositoryId ?? resource?.gitRepositoryId ?? defaultBuild.gitRepositoryId;
   const { data: gitRefsData, isFetching: isFetchingGitRefs } = useRead(
     'getGitRepositoryRefs',
@@ -542,8 +542,6 @@ export const BuildForm = ({
       updateBuild.mutateAsync({ id: id!, data: normalizePayload(payload, mode) as UpdateBuildProjectInput }),
     onRefresh: () => {
       localStorage.removeItem(`Build:${id ?? 'new'}`);
-      queryClient.invalidateQueries({ queryKey: ['getBuildProject', { id }] });
-      queryClient.invalidateQueries({ queryKey: ['listBuildProjects'] });
     },
     extractName: (payload, response) =>
       response?.data?.name ?? ('name' in payload ? payload.name : undefined) ?? resource?.name ?? 'Build',

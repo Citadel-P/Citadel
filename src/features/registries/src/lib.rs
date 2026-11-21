@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 mod model;
-pub use model::{RegistryDetails, RegistryStatus};
+pub use model::{DEFAULT_DOCKER_HUB_ID, RegistryDetails, RegistryStatus};
 mod commands;
 pub use commands::{NewRegistry, RegistryPatch};
 mod validation;
@@ -23,4 +23,4 @@ pub mod registry_images;
 use citadel_primitives::PatchField;
 
 mod credentials;
-pub use credentials::mask_registry_credentials;
+pub use credentials::{RegistryConfiguration, mask_registry_credentials};

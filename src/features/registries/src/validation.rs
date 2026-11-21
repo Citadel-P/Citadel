@@ -74,15 +74,11 @@ fn validate_registry_host(host: &str) -> Result<(), RegistryError> {
 }
 
 fn validate_registry_configuration(configuration: &Value, kind: &str) -> Result<(), RegistryError> {
+    let config = RegistryConfiguration(configuration);
     let string_length = |name: &str, minimum: usize| {
-        configuration_value(configuration, name)
-            .and_then(Value::as_str)
+        config
+            .string(name)
             .is_some_and(|value| value.len() >= minimum)
-    };
-    let enabled = |name: &str| {
-        configuration_value(configuration, name)
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
     };
     let valid = match kind {
         "DockerHub" => string_length("userName", 4) && string_length("pat", 10),
@@ -98,12 +94,10 @@ fn validate_registry_configuration(configuration: &Value, kind: &str) -> Result<
                 && string_length("pat", 10)
         }
         "GitHub" => {
-            !enabled("ghcrAuthEnabled")
-                || (string_length("pat", 10) && string_length("nameSpace", 5))
+            !config.auth_enabled() || (string_length("pat", 10) && string_length("nameSpace", 5))
         }
         "Custom" => {
-            !enabled("authEnabled")
-                || (string_length("userName", 3) && string_length("password", 6))
+            !config.auth_enabled() || (string_length("userName", 3) && string_length("password", 6))
         }
         _ => false,
     };
@@ -116,18 +110,8 @@ fn validate_registry_configuration(configuration: &Value, kind: &str) -> Result<
     }
 }
 
-fn configuration_value<'a>(configuration: &'a Value, name: &str) -> Option<&'a Value> {
-    configuration
-        .as_object()?
-        .iter()
-        .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value))
-}
-
 pub fn registry_type(configuration: &Value) -> Result<String, RegistryError> {
-    configuration
-        .get("$type")
-        .or_else(|| configuration.get("type"))
-        .and_then(Value::as_str)
+    Some(RegistryConfiguration(configuration).kind())
         .filter(|kind| {
             matches!(
                 *kind,

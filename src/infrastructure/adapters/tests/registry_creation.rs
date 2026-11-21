@@ -111,6 +111,13 @@ async fn creation_checks_credentials_before_persistence() {
             }),
         )
         .route(
+            "/users/public-user/packages/container/app/versions",
+            get(|headers: HeaderMap| async move {
+                assert!(!headers.contains_key("authorization"));
+                Json(json!([]))
+            }),
+        )
+        .route(
             "/users/test-user/packages",
             get(|headers: HeaderMap| async move {
                 if headers["authorization"] == "Bearer accepted-token" {
@@ -129,6 +136,20 @@ async fn creation_checks_credentials_before_persistence() {
         axum::serve(listener, router).await.unwrap();
     });
     let checker = RegistryBrowser::with_endpoints(&endpoint, &endpoint).unwrap();
+    for flag in [None, Some(false)] {
+        let mut cfg = json!({"$type":"GitHub","nameSpace":"public-user","pat":"retained-secret"});
+        if let Some(flag) = flag {
+            cfg["ghcrAuthEnabled"] = json!(flag);
+        }
+        checker
+            .browse(
+                &cfg,
+                citadel_registries::registry_images::RegistryBrowseKind::GithubVersions,
+                Some("app"),
+            )
+            .await
+            .unwrap();
+    }
     for (kind, token, accepted) in [
         ("DockerHub", "accepted-token", true),
         ("DockerHub", "rejected-token", false),

@@ -1,4 +1,5 @@
 use super::images::PostgresImageMutationStore;
+use citadel_platforms::image_reference::canonical_reference;
 use citadel_platforms::{RuntimeCapabilityError, RuntimeErrorKind, image_usage::*};
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
@@ -87,7 +88,7 @@ impl ImageUsageStore for PostgresImageMutationStore {
                         let host: Option<String> = row.get("registryhost");
                         host.zip(reference)
                             .and_then(|(host, reference)| {
-                                crate::connectors::routing::deployments::qualify_image_reference(
+                                citadel_platforms::image_reference::qualify_image_reference(
                                     &host, &reference,
                                 )
                                 .ok()
@@ -206,7 +207,7 @@ impl ImageUsageStore for PostgresImageMutationStore {
                         host.as_ref()
                             .zip(reference.as_ref())
                             .and_then(|(host, reference)| {
-                                crate::connectors::routing::deployments::qualify_image_reference(
+                                citadel_platforms::image_reference::qualify_image_reference(
                                     host, reference,
                                 )
                                 .ok()
@@ -233,7 +234,7 @@ impl ImageUsageStore for PostgresImageMutationStore {
                         .into_iter()
                         .filter_map(|service| service.image)
                         .find(|candidate| {
-                            crate::connectors::routing::deployments::qualify_image_reference(
+                            citadel_platforms::image_reference::qualify_image_reference(
                                 "docker.io",
                                 candidate,
                             )
@@ -282,29 +283,6 @@ impl ImageUsageStore for PostgresImageMutationStore {
 
 fn storage(error: impl std::fmt::Display) -> RuntimeCapabilityError {
     RuntimeCapabilityError::new(RuntimeErrorKind::Remote, error.to_string(), false)
-}
-
-fn canonical_reference(reference: &str) -> String {
-    let reference = reference.trim();
-    let short = reference
-        .strip_prefix("docker.io/")
-        .or_else(|| reference.strip_prefix("index.docker.io/"))
-        .or_else(|| reference.strip_prefix("registry-1.docker.io/"))
-        .unwrap_or(reference);
-    let first = short.split('/').next().unwrap_or_default();
-    let private =
-        short.contains('/') && (first.contains('.') || first.contains(':') || first == "localhost");
-    let mut result = if private {
-        short.to_owned()
-    } else if short.contains('/') {
-        format!("docker.io/{short}")
-    } else {
-        format!("docker.io/library/{short}")
-    };
-    if !result.contains('@') && !result.rsplit('/').next().unwrap_or_default().contains(':') {
-        result.push_str(":latest");
-    }
-    result
 }
 
 #[cfg(test)]

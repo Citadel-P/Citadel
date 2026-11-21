@@ -218,20 +218,14 @@ async fn validate_tags(
     transaction: &mut Transaction<'_, Postgres>,
     tag_ids: &[Uuid],
 ) -> Result<(), PlatformRegistrationError> {
-    if tag_ids.is_empty() {
-        return Ok(());
-    }
-    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM tags WHERE id = ANY($1)")
-        .bind(tag_ids)
-        .fetch_one(&mut **transaction)
+    crate::persistence::postgres::tags::validate_tag_ids(transaction, tag_ids)
         .await
-        .map_err(storage)?;
-    if usize::try_from(count).ok() != Some(tag_ids.len()) {
-        return Err(PlatformRegistrationError::Validation(
-            "One or more Tags do not exist.".to_owned(),
-        ));
-    }
-    Ok(())
+        .map_err(|error| match error {
+            citadel_tags::TagError::Validation(message) => {
+                PlatformRegistrationError::Validation(message)
+            }
+            other => storage(other),
+        })
 }
 
 async fn insert_platform(
@@ -274,18 +268,18 @@ async fn insert_tags(
     actor_id: ActorId,
     registration: &PlatformRegistration,
 ) -> Result<(), PlatformRegistrationError> {
-    for tag_id in &registration.tag_ids {
-        sqlx::query(
-            "INSERT INTO resourcetags (resourcetype,resourceid,tagid,createdbyactorid) VALUES ('Platform',$1,$2,$3)",
-        )
-        .bind(registration.id)
-        .bind(tag_id)
-        .bind(actor_id.value())
-        .execute(&mut **transaction)
-        .await
-        .map_err(storage)?;
-    }
-    Ok(())
+    crate::persistence::postgres::tags::insert_resource_tags(
+        transaction,
+        actor_id,
+        citadel_tags::TaggableResourceType::Platform,
+        registration.id,
+        &registration.tag_ids,
+    )
+    .await
+    .map_err(|error| match error {
+        citadel_tags::TagError::Conflict(message) => PlatformRegistrationError::Conflict(message),
+        other => storage(other),
+    })
 }
 
 async fn insert_created_activity(
@@ -330,7 +324,7 @@ fn bounded_i64(value: impl TryInto<i64>) -> i64 {
     value.try_into().unwrap_or(i64::MAX)
 }
 
-fn storage(error: sqlx::Error) -> PlatformRegistrationError {
+fn storage(error: impl std::fmt::Display) -> PlatformRegistrationError {
     PlatformRegistrationError::Storage(error.to_string())
 }
 

@@ -124,7 +124,7 @@ impl ImageUpdateResolver for ImageUpdateAdapter {
                 {
                     return Err(failure("Registry configuration changed. Check again."));
                 }
-                crate::connectors::routing::deployments::registry_auth(
+                crate::connectors::registries::credentials::registry_auth(
                     registry.id,
                     &configuration.host,
                     &configuration.configuration,

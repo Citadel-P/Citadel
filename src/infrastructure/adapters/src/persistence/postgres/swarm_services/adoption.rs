@@ -1,6 +1,7 @@
 use super::*;
 use crate::connectors::routing::swarm_services::SwarmServiceRuntimeRouter;
 use citadel_contracts::citadel::swarm::v1::SwarmServiceMessage;
+use citadel_platforms::image_reference::repository;
 use citadel_primitives::AuthorizedResource;
 use citadel_swarm_services::{adoption::*, *};
 use hmac::{Hmac, KeyInit, Mac};
@@ -324,7 +325,7 @@ impl SwarmServiceAdoptionPort for PostgresSwarmServiceAdoption {
                 .bind(new_id).bind(platform).bind(&input.name).bind(&input.description).bind(&service.name).bind(id).bind(version)
                 .bind(input.spec.to_storage_value()?).bind(input.spec.desired_hash()).bind(&service.runtime_hash).bind(health.as_str()).bind(actor.value())
                 .execute(&mut *tx).await.map_err(database_error)?;
-            replace_tags(&mut tx, new_id, actor, &input.tag_ids).await?;
+            insert_tags(&mut tx, new_id, actor, &input.tag_ids).await?;
             sqlx::query("UPDATE swarmserviceprojections SET swarmserviceid=$3,ownership='CitadelService',ownershipdiagnostic=NULL,runningtaskcount=$4,desiredtaskcount=$5,versionindex=$6,updatestate=$7,updatemessage=$8,liveruntimehash=$9 WHERE platformid=$1 AND dockerserviceid=$2")
                 .bind(platform).bind(id).bind(new_id).bind(service.running_task_count).bind(service.desired_task_count)
                 .bind(version).bind(&service.update_state).bind(&service.update_message).bind(&service.runtime_hash).execute(&mut *tx).await.map_err(storage)?;
@@ -353,33 +354,6 @@ impl SwarmServiceAdoptionPort for PostgresSwarmServiceAdoption {
             get_authorized(&self.pool, actor, admin, new_id).await
         })
     }
-}
-
-fn repository(value: &str) -> Option<String> {
-    let value = value.trim().trim_start_matches('/').to_ascii_lowercase();
-    if value.is_empty() || value.starts_with("sha256:") {
-        return None;
-    }
-    let value = value.split('@').next().unwrap_or_default();
-    let value = match value.rfind(':') {
-        Some(i) if value.rfind('/').is_none_or(|s| i > s) => &value[..i],
-        _ => value,
-    };
-    let Some((host, _)) = value.split_once('/') else {
-        return Some(format!("docker.io/library/{value}"));
-    };
-    Some(if host == "index.docker.io" || host == "docker.io" {
-        let path = value.split_once('/').unwrap().1;
-        if path.contains('/') {
-            format!("docker.io/{path}")
-        } else {
-            format!("docker.io/library/{path}")
-        }
-    } else if host.contains('.') || host.contains(':') || host == "localhost" {
-        value.into()
-    } else {
-        format!("docker.io/{value}")
-    })
 }
 
 fn definition(service: &SwarmServiceMessage) -> Result<SwarmServiceSpec, SwarmServiceError> {
