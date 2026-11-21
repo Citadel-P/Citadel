@@ -19,6 +19,7 @@ use crate::connectors::agent::client::AgentContainerAction;
 use crate::connectors::agent::client::AgentStackRegistry;
 use crate::persistence::postgres::stacks::release_resources;
 use citadel_docker::client::DockerClient;
+mod image_inventory;
 mod import;
 pub(crate) mod update_scanner;
 pub use update_scanner::StackUpdateRuntime;

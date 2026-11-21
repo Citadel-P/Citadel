@@ -24,8 +24,13 @@ impl Budget {
     pub(crate) fn value(
         &self,
         value: &serde_json::Value,
+        extra_bytes: usize,
     ) -> Result<OwnedSemaphorePermit, Exceeded> {
-        self.reserve(json_bytes(value).saturating_add(1024))
+        self.reserve(
+            json_bytes(value)
+                .saturating_add(1024)
+                .saturating_add(extra_bytes),
+        )
     }
 }
 #[derive(Debug)]

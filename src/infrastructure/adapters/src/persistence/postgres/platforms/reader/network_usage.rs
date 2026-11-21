@@ -3,6 +3,7 @@ use citadel_platforms::network_usage::*;
 
 pub(super) async fn read(
     pool: &PgPool,
+    cache: &super::compose_networks::ComposeNetworks,
     actor: ActorId,
     administrator: bool,
     platform: Uuid,
@@ -18,6 +19,15 @@ pub(super) async fn read(
     if networks.is_empty() {
         return Ok(result);
     }
+    let snapshot = cache.snapshot(platform);
+    let mut ids = Vec::new();
+    let mut revisions = Vec::new();
+    let mut bytes = Vec::new();
+    for (id, document) in &snapshot {
+        ids.push(*id);
+        revisions.push(document.revision.as_str());
+        bytes.push(document.bytes);
+    }
     let saved = sqlx::query(concat!(
         include_str!("../../enabled_actor_scope.sql"),
         include_str!("../workload_read_grants.sql"),
@@ -29,6 +39,9 @@ pub(super) async fn read(
     .bind(actor.value())
     .bind(administrator)
     .bind(platform)
+    .bind(ids)
+    .bind(revisions)
+    .bind(bytes)
     .fetch_all(pool)
     .await
     .map_err(storage)?;
@@ -36,7 +49,7 @@ pub(super) async fn read(
     let saved: Vec<_> = saved
         .into_iter()
         .take(2000)
-        .map(saved_reference)
+        .map(|row| saved_reference(row, platform, cache, &snapshot))
         .collect::<Result<_, _>>()?;
     // Serialize only the admitted ID prefix, without first copying all endpoints.
     for (batch_index, batch) in networks.chunks(100).enumerate() {
@@ -148,7 +161,12 @@ impl<'a> From<&'a NetworkUsageQuery> for BoundedNetwork<'a> {
     }
 }
 type SavedReference = (NetworkUsageEntry, Vec<String>, Option<String>);
-fn saved_reference(row: PgRow) -> Result<SavedReference, AuthorizedReadError> {
+fn saved_reference(
+    row: PgRow,
+    platform: Uuid,
+    cache: &super::compose_networks::ComposeNetworks,
+    snapshot: &std::collections::HashMap<Uuid, std::sync::Arc<super::compose_networks::Document>>,
+) -> Result<SavedReference, AuthorizedReadError> {
     let kind = match row.try_get::<i32, _>("kind").map_err(storage)? {
         1 => Some(NetworkWorkloadKind::Deployment),
         2 => Some(NetworkWorkloadKind::Stack),
@@ -180,25 +198,42 @@ fn saved_reference(row: PgRow) -> Result<SavedReference, AuthorizedReadError> {
     if entry.workload_kind == Some(NetworkWorkloadKind::Deployment) && references.is_empty() {
         references.push("bridge".into());
     }
-    let project = if entry.workload_kind == Some(NetworkWorkloadKind::Stack) {
-        row.try_get::<Option<String>, _>("projectname")
-            .map_err(storage)?
-            .or_else(|| {
-                entry
-                    .workload_name
-                    .as_deref()
-                    .zip(entry.workload_id)
-                    .map(|(name, id)| citadel_stacks::normalize_project_name(name, id))
-            })
-    } else {
-        None
-    };
-    if let Some(compose) = row
-        .try_get::<Option<String>, _>("compose")
+    let mut project: Option<String> = row.try_get("projectname").map_err(storage)?;
+    if let Some(id) = row
+        .try_get::<Option<Uuid>, _>("releaseid")
         .map_err(storage)?
-        && let Ok(model) = citadel_stacks::parse_compose(&[compose])
     {
-        references.extend(model.network_names.into_values());
+        let admitted: bool = row.try_get("admitted").map_err(storage)?;
+        if row.try_get::<bool, _>("cached").map_err(storage)? {
+            let doc = &snapshot[&id];
+            project = doc.project.clone();
+            if admitted {
+                references.extend(doc.names.iter().cloned());
+            }
+        } else if admitted {
+            let names: Vec<_> = row
+                .try_get::<Option<String>, _>("compose")
+                .map_err(storage)?
+                .and_then(|compose| citadel_stacks::parse_compose(&[compose]).ok())
+                .map(|model| model.network_names.into_values().collect())
+                .unwrap_or_default();
+            references.extend(names.iter().cloned());
+            cache.remember(
+                id,
+                platform,
+                row.try_get("revision").map_err(storage)?,
+                row.try_get("bytes").map_err(storage)?,
+                project.clone(),
+                names,
+            );
+        }
+        project = project.or_else(|| {
+            entry
+                .workload_name
+                .as_deref()
+                .zip(entry.workload_id)
+                .map(|(name, id)| citadel_stacks::normalize_project_name(name, id))
+        });
     }
     Ok((entry, references, project))
 }

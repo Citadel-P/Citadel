@@ -46,18 +46,26 @@ pub(super) async fn get_action_tx(
         .map_err(storage)?
         .ok_or(ScriptError::NotFound)
         .and_then(map_action)?;
-    enrich_actions(&mut *tx, std::slice::from_mut(&mut script)).await?;
+    enrich_actions(
+        &mut *tx,
+        vec![(id, &mut script.tags, &mut script.latest_run)],
+    )
+    .await?;
     Ok(script)
 }
 
 pub(super) async fn enrich_actions(
     connection: &mut sqlx::PgConnection,
-    scripts: &mut [Script],
+    mut scripts: Vec<(
+        Uuid,
+        &mut Vec<citadel_tags::TagSummary>,
+        &mut Option<ScriptRun>,
+    )>,
 ) -> Result<(), ScriptError> {
     if scripts.is_empty() {
         return Ok(());
     }
-    let ids: Vec<_> = scripts.iter().map(|script| script.id).collect();
+    let ids: Vec<_> = scripts.iter().map(|script| script.0).collect();
     let mut positions: std::collections::HashMap<_, _> = ids
         .iter()
         .enumerate()
@@ -68,7 +76,7 @@ pub(super) async fn enrich_actions(
     for row in tags {
         let id: Uuid = row.try_get("resourceid").map_err(storage)?;
         if let Some(index) = positions.get(&id) {
-            scripts[*index].tags.push(citadel_tags::TagSummary {
+            scripts[*index].1.push(citadel_tags::TagSummary {
                 id: row.try_get("id").map_err(storage)?,
                 name: row.try_get("name").map_err(storage)?,
                 color: row.try_get("color").map_err(storage)?,
@@ -86,7 +94,7 @@ pub(super) async fn enrich_actions(
     for row in runs {
         let run = map_run(row)?;
         if let Some(index) = positions.remove(&run.script_id) {
-            scripts[index].latest_run = Some(run);
+            *scripts[index].2 = Some(run);
         }
     }
     Ok(())

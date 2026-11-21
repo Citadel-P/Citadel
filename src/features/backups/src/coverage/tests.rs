@@ -4,6 +4,7 @@ use crate::{
     BackupSnapshotAvailability, policies::read_models::BackupPreviewKind, spec::BackupSourceSpec,
 };
 use chrono::Utc;
+use std::collections::BTreeSet;
 use uuid::Uuid;
 fn fixture() -> (CoverageSnapshot, ObservedStorage) {
     let platform = Uuid::now_v7();
@@ -95,7 +96,7 @@ fn green_requires_runnable_schedule_and_matching_available_snapshot() {
         policy_status(&snapshot.policies[0], &target.target, false),
         Status::Warning
     );
-    let summary = snapshot.evaluate(
+    let summary = snapshot.clone().indexed().evaluate(
         target.target.platform_id,
         std::slice::from_ref(&target),
         None,
@@ -119,7 +120,7 @@ fn green_requires_runnable_schedule_and_matching_available_snapshot() {
 fn failures_dominate_manual_configuration_and_history_survives() {
     let (mut snapshot, target) = fixture();
     let at = Utc::now();
-    snapshot.successes.push((target.target.clone(), at));
+    snapshot.successes.insert(target.target.clone(), at);
     for failed in [
         BackupRunStatus::Failed,
         BackupRunStatus::TimedOut,
@@ -127,7 +128,7 @@ fn failures_dominate_manual_configuration_and_history_survives() {
         BackupRunStatus::Rejected,
     ] {
         snapshot.policies[0].latest_run.as_mut().unwrap().status = failed;
-        let summary = snapshot.evaluate(
+        let summary = snapshot.clone().indexed().evaluate(
             target.target.platform_id,
             std::slice::from_ref(&target),
             None,
@@ -146,6 +147,7 @@ fn empty_and_incomplete_inventory_are_distinct_without_message_matching() {
     target.target.docker_node_id = Some("b".into());
     assert_eq!(
         snapshot
+            .indexed()
             .evaluate(target.target.platform_id, &[target], None, true, true)
             .status,
         Some(Status::Unprotected)
@@ -182,4 +184,176 @@ fn workload_eligibility_preserves_node_and_bind_boundaries() {
         &target.target,
         false
     ));
+}
+
+impl CoverageSnapshot {
+    fn evaluate(
+        &self,
+        platform: Uuid,
+        targets: &[ObservedStorage],
+        resource: Option<(BackupPreviewKind, Uuid)>,
+        complete: bool,
+        scheduling_available: bool,
+    ) -> CoverageSummary {
+        let mut related = BTreeSet::new();
+        let mut has_resource_policy = false;
+        for p in &self.policies {
+            if resource.is_some() && source_identity(&p.source) == resource {
+                related.insert(p.id);
+                has_resource_policy = true;
+            }
+        }
+        let mut reasons = BTreeSet::new();
+        if !complete {
+            reasons.insert(CoverageReason::InventoryIncomplete);
+        }
+        let uncertain = self
+            .policies
+            .iter()
+            .filter_map(|p| source_identity(&p.source))
+            .any(|(k, id)| {
+                self.workloads
+                    .iter()
+                    .any(|w| w.kind == k && w.id == id && w.platform_id == platform && !w.complete)
+            });
+        let volumes = targets
+            .iter()
+            .map(|v| {
+                let matched = self
+                    .policies
+                    .iter()
+                    .filter(|p| match &p.source {
+                        BackupSourceSpec::DockerVolume {
+                            platform_id,
+                            volume_name,
+                            docker_node_id,
+                            ..
+                        } => {
+                            v.target.host_path.is_none()
+                                && v.target.platform_id == *platform_id
+                                && v.target.name == *volume_name
+                                && v.target.docker_node_id == *docker_node_id
+                        }
+                        BackupSourceSpec::BindMount {
+                            platform_id,
+                            host_path,
+                            docker_node_id,
+                        } => {
+                            v.target.platform_id == *platform_id
+                                && v.target.host_path.as_ref() == Some(host_path)
+                                && v.target.docker_node_id == *docker_node_id
+                        }
+                        source => source_identity(source).is_some_and(|(kind, id)| {
+                            self.workloads.iter().any(|w| {
+                                w.kind == kind
+                                    && w.id == id
+                                    && w.volumes.iter().any(|candidate| {
+                                        candidate.included && candidate.target == v.target
+                                    })
+                            })
+                        }),
+                    })
+                    .collect::<Vec<_>>();
+                let policy_ids = matched.iter().map(|p| p.id).collect::<Vec<_>>();
+                related.extend(&policy_ids);
+                if !scheduling_available && matched.iter().any(|p| p.enabled && p.scheduled()) {
+                    reasons.insert(CoverageReason::SchedulingUnavailable);
+                }
+                let status = if !v.target.supported() {
+                    Some(Status::NotApplicable)
+                } else if matched.is_empty() {
+                    if uncertain {
+                        None
+                    } else {
+                        Some(Status::Unprotected)
+                    }
+                } else {
+                    aggregate(
+                        matched
+                            .iter()
+                            .map(|p| Some(policy_status(p, &v.target, scheduling_available))),
+                        false,
+                    )
+                };
+                StorageCoverage {
+                    target: v.target.clone(),
+                    included: v.included,
+                    status,
+                    policy_ids,
+                    last_successful_run_at: self
+                        .successes
+                        .iter()
+                        .filter(|(t, _)| **t == v.target)
+                        .map(|(_, at)| *at)
+                        .max(),
+                }
+            })
+            .collect::<Vec<_>>();
+        CoverageSummary {
+            status: aggregate(volumes.iter().map(|v| v.status), !complete),
+            volumes,
+            policy_ids: related.into_iter().collect(),
+            has_resource_policy,
+            reasons: reasons.into_iter().collect(),
+        }
+    }
+}
+
+#[test]
+fn indexed_coverage_matches_scan_for_shared_and_unrelated_workloads() {
+    for n in [5, 100] {
+        compare_index_with_scan(n);
+    }
+}
+
+fn compare_index_with_scan(count: usize) {
+    let (mut snapshot, target) = fixture();
+    let platform = target.target.platform_id;
+    let mut targets = vec![target.clone()];
+    for n in 0..count {
+        let id = Uuid::now_v7();
+        let mut volume = target.clone();
+        volume.target.name = format!("volume-{n}");
+        volume.included = true;
+        let mut shared = target.clone();
+        shared.included = n % 2 == 0;
+        snapshot.workloads.push(WorkloadStorage {
+            id,
+            kind: BackupPreviewKind::Stack,
+            platform_id: platform,
+            complete: n != 0,
+            volumes: vec![shared, volume.clone()],
+        });
+        snapshot.policies.push(CoveragePolicy {
+            id: Uuid::now_v7(),
+            name: format!("policy-{n}"),
+            enabled: true,
+            cron: None,
+            source: BackupSourceSpec::Stack { stack_id: id },
+            repository_ready: true,
+            latest_run: None,
+        });
+        targets.push(volume);
+    }
+    let resource = Some((BackupPreviewKind::Stack, snapshot.workloads[0].id));
+    let start = std::time::Instant::now();
+    let expected = targets
+        .iter()
+        .map(|target| {
+            snapshot.evaluate(platform, std::slice::from_ref(target), resource, true, true)
+        })
+        .collect::<Vec<_>>();
+    let scan_time = start.elapsed();
+    let start = std::time::Instant::now();
+    let index = snapshot.indexed();
+    let actual = targets
+        .iter()
+        .map(|target| index.evaluate(platform, std::slice::from_ref(target), resource, true, true))
+        .collect::<Vec<_>>();
+    let index_time = start.elapsed();
+    assert_eq!(expected, actual);
+    eprintln!(
+        "{count} workloads, {} targets: scan {scan_time:?}; build index and evaluate {index_time:?}",
+        targets.len()
+    );
 }

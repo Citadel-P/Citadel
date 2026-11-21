@@ -187,8 +187,27 @@ impl From<citadel_scripts::ScriptProgressError> for ScriptProgressError {
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ScriptList {
-    pub(crate) scripts: Vec<AuthorizedScript>,
+    pub(crate) scripts: Vec<ScriptSummaryView>,
     pub(crate) capabilities: crate::api::resources::capabilities::ResourceCapabilitiesView,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ScriptSummaryView {
+    pub id: Uuid,
+    pub name: String,
+    #[schema(required = true)]
+    pub description: Option<String>,
+    pub enabled: bool,
+    #[schema(value_type = crate::api::resources::schema_models::primitives::ResourceControlStateSchema)]
+    pub control_state: ResourceControlState,
+    pub schedule_enabled: bool,
+    #[schema(required = true)]
+    pub schedule_cron: Option<String>,
+    pub tags: Vec<crate::api::resources::tags::views::TagSummary>,
+    #[schema(required = true)]
+    pub latest_run: Option<ScriptRunView>,
+    pub capabilities: crate::api::resources::capabilities::ResourceCapabilitiesView,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]

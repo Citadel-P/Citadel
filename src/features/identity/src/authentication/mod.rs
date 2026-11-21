@@ -26,8 +26,8 @@ mod commands;
 
 mod repository;
 pub use repository::{
-    Clock, EntitlementService, IdentityStore, PasswordHasher, ServiceAccountTokenCodec,
-    SessionTokenCodec,
+    BearerGuard, Clock, EntitlementService, IdentityStore, PasswordHasher,
+    ServiceAccountTokenCodec, SessionTokenCodec,
 };
 mod service;
 

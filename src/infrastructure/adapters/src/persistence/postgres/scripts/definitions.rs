@@ -101,7 +101,7 @@ impl PostgresScriptRepository {
         actor: ActorId,
         administrator: bool,
         tags: &'a [String],
-    ) -> BoxFuture<'a, Result<Vec<Script>, ScriptError>> {
+    ) -> BoxFuture<'a, Result<Vec<citadel_scripts::ScriptSummary>, ScriptError>> {
         Box::pin(async move {
             let mut scripts = crate::persistence::postgres::authorization::tagged_workload_rows(
                 &self.pool,
@@ -109,20 +109,29 @@ impl PostgresScriptRepository {
                 administrator,
                 ResourceType::Script,
                 "Script",
-                "scripts resource WHERE TRUE",
+                "(SELECT id,name,description,enabled,controlstate,scheduleenabled,schedulecron FROM scripts) resource WHERE TRUE",
                 tags,
             )
             .await
             .map_err(storage)?
             .into_iter()
-            .map(map_action)
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|row| Ok(citadel_scripts::ScriptSummary {
+                id:row.try_get("id").map_err(storage)?,name:row.try_get("name").map_err(storage)?,
+                description:row.try_get("description").map_err(storage)?,enabled:row.try_get("enabled").map_err(storage)?,
+                control_state:row.try_get::<String,_>("controlstate").map_err(storage)?.parse().map_err(storage)?,
+                schedule_enabled:row.try_get("scheduleenabled").map_err(storage)?,schedule_cron:row.try_get("schedulecron").map_err(storage)?,
+                tags:Vec::new(),latest_run:None,
+            }))
+            .collect::<Result<Vec<_>, ScriptError>>()?;
             if scripts.is_empty() {
                 return Ok(scripts);
             }
             enrich_actions(
                 &mut *self.pool.acquire().await.map_err(storage)?,
-                &mut scripts,
+                scripts
+                    .iter_mut()
+                    .map(|s| (s.id, &mut s.tags, &mut s.latest_run))
+                    .collect(),
             )
             .await?;
             Ok(scripts)

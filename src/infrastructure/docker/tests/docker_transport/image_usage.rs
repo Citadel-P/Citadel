@@ -104,3 +104,51 @@ async fn image_inventory_counts_running_and_stopped_references_without_per_image
     server.await.unwrap();
     std::fs::remove_file(path).unwrap();
 }
+
+#[tokio::test]
+async fn identity_checks_reobserve_tags_without_loading_layers_or_attachments() {
+    use citadel_platforms::images::ImageInspectionPort;
+    let path = temp_socket();
+    let listener = UnixListener::bind(&path).unwrap();
+    let server = tokio::spawn(async move {
+        for (route, body) in [
+            (
+                "/version",
+                r#"{"ApiVersion":"1.49","MinAPIVersion":"1.41"}"#,
+            ),
+            (
+                "/v1.49/images/image/json",
+                r#"{"Id":"image","RepoTags":["app:latest"],"Os":"linux","Architecture":"amd64"}"#,
+            ),
+            (
+                "/v1.49/images/image/json",
+                r#"{"Id":"image","RepoTags":[],"Os":"linux","Architecture":"amd64"}"#,
+            ),
+        ] {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let (request, _) = read_terminal_request(&mut socket).await;
+            assert_eq!(request.split_whitespace().nth(1), Some(route));
+            socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+        }
+    });
+    let client = DockerClient::new(&path, Duration::from_secs(2)).unwrap();
+    let cancel = CancellationToken::new();
+    assert_eq!(
+        client
+            .image_identity("image", &cancel)
+            .await
+            .unwrap()
+            .repo_tags,
+        ["app:latest"]
+    );
+    assert!(
+        client
+            .image_identity("image", &cancel)
+            .await
+            .unwrap()
+            .repo_tags
+            .is_empty()
+    );
+    server.await.unwrap();
+    std::fs::remove_file(path).unwrap();
+}

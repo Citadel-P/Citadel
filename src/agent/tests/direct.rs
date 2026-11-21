@@ -444,7 +444,7 @@ async fn image_inspection_history_build_host_and_pull_failures_round_trip() {
     let list = client
         .list(signed(
             &host.id,
-            ListImagesRequest {},
+            ListImagesRequest::default(),
             "/citadel.images.v1.ImageService/List",
             [21; 16],
         ))
@@ -457,7 +457,10 @@ async fn image_inspection_history_build_host_and_pull_failures_round_trip() {
     let result = client
         .inspect(signed(
             &host.id,
-            InspectImageRequest { id: "redis".into() },
+            InspectImageRequest {
+                id: "redis".into(),
+                identity_only: false,
+            },
             "/citadel.images.v1.ImageService/Inspect",
             [22; 16],
         ))

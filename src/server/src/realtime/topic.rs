@@ -18,6 +18,7 @@ pub enum Topic {
     Containers(Uuid),
     Images(Uuid),
     DockerDaemon(Uuid),
+    Volumes(Uuid),
     Deployment(Uuid),
     Stack(Uuid),
     StackInfo(Uuid),
@@ -84,6 +85,7 @@ impl Topic {
             ["container-health", id] => Self::ContainerHealth(non_nil(id)?),
             ["images", id] => Self::Images(non_nil(id)?),
             ["docker-daemon", id] => Self::DockerDaemon(non_nil(id)?),
+            ["volumes", id] => Self::Volumes(non_nil(id)?),
             ["deployment", id] => Self::Deployment(non_nil(id)?),
             ["stack", id] => Self::Stack(non_nil(id)?),
             ["stack-info", id] => Self::StackInfo(non_nil(id)?),
@@ -150,6 +152,7 @@ impl Topic {
             Self::Containers(_) => "containers",
             Self::Images(_) => "images",
             Self::DockerDaemon(_) => "docker-daemon",
+            Self::Volumes(_) => "volumes",
             Self::Deployment(_) => "deployment",
             Self::Stack(_) => "stack",
             Self::StackInfo(_) => "stack-info",
@@ -186,6 +189,7 @@ impl Topic {
             | Self::ContainerHealth(id)
             | Self::Images(id)
             | Self::DockerDaemon(id)
+            | Self::Volumes(id)
             | Self::Deployment(id)
             | Self::Stack(id)
             | Self::StackInfo(id)

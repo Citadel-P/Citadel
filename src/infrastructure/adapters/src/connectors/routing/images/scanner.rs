@@ -1,10 +1,9 @@
 //! DeploymentImageScannerJob: one successful registry observation per unique
 //! image each cycle, shared by Deployment, Stack, and managed Service checks.
 use crate::connectors::registries::digest_cache::ImageDigestCache;
-use citadel_deployments::{DeploymentRepository, DeploymentRuntime};
-use citadel_primitives::ActorId;
-use citadel_stacks::StackRepository;
-use citadel_swarm_services::SwarmServiceRepository;
+use crate::persistence::postgres::platforms::image_scan;
+use citadel_deployments::DeploymentRuntime;
+use citadel_stacks::{StackReleaseSource, StackSpec};
 use futures_util::future::BoxFuture;
 use sqlx::PgPool;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
@@ -72,94 +71,76 @@ impl ImageScanner {
         &self,
         cancel: &CancellationToken,
     ) -> Result<Vec<ImageScanTask>, sqlx::Error> {
-        let actor = ActorId::new(Uuid::from_u128(1));
-        let deployments =
-            crate::persistence::postgres::deployments::PostgresDeploymentRepository::new(
-                self.pool.clone(),
-            );
-        let stacks =
-            crate::persistence::postgres::stacks::PostgresStackRepository::new(self.pool.clone());
-        let services =
-            crate::persistence::postgres::swarm_services::PostgresSwarmServiceRepository::new(
-                self.pool.clone(),
-            );
         let mut tasks = Vec::new();
-        for kind in ["Deployment", "Stack", "SwarmService"] {
-            let mut after = Uuid::nil();
-            loop {
+        self.external_tasks(false, cancel, &mut tasks).await?;
+        let mut after = Uuid::nil();
+        while !cancel.is_cancelled() {
+            let page = image_scan::stack_images(&self.pool, after).await?;
+            let full = page.len() == image_scan::STACK_PAGE as usize;
+            for (id, platform, spec, source) in page {
                 if cancel.is_cancelled() {
                     return Ok(tasks);
                 }
-                let ids: Vec<Uuid> =
-                    crate::persistence::postgres::platforms::image_scan::candidates(
-                        &self.pool, kind, after,
-                    )
-                    .await?;
-                if ids.is_empty() {
-                    break;
-                }
-                for id in ids {
-                    after = id;
-                    match kind {
-                        "Deployment" => {
-                            if let Ok(view) = deployments.get_authorized(actor, true, id).await
-                                && view.spec.update_behavior
-                                    != citadel_deployments::UpdateBehavior::Disabled
-                                && let citadel_deployments::DeploymentImageInfo::External {
-                                    registry_id: registry,
-                                    image_tag: reference,
-                                    ..
-                                } = &view.spec.image
-                            {
-                                tasks.push(ImageScanTask {
-                                    platform: view.platform_id,
-                                    registry: *registry,
-                                    reference: reference.clone(),
-                                });
-                            }
-                        }
-                        "Stack" => {
-                            if let Ok(view) = stacks.get_authorized(actor, true, id).await
-                                && let Some(platform) = view.platform_id
-                                && let Ok(checks) = match &self.git {
-                                    Some(git) => {
-                                        super::super::stacks::update_scanner::stack_image_checks(
-                                            git, &view, true, cancel,
-                                        )
-                                        .await
-                                    }
-                                    None => citadel_stacks::build_manual_stack_checks(&view, true),
-                                }
-                            {
-                                tasks.extend(checks.into_iter().map(|check| ImageScanTask {
-                                    platform,
-                                    registry: check.key.registry_id,
-                                    reference: check.image_name,
-                                }));
-                            }
-                        }
-                        _ => {
-                            if let Ok(view) = services.get_authorized(actor, true, id).await
-                                && view.spec.update_behavior
-                                    != citadel_swarm_services::UpdateBehavior::Disabled
-                                && let citadel_swarm_services::SwarmServiceImageInfo::External {
-                                    registry_id: registry,
-                                    image_tag: reference,
-                                    ..
-                                } = &view.spec.image
-                            {
-                                tasks.push(ImageScanTask {
-                                    platform: view.platform_id,
-                                    registry: *registry,
-                                    reference: reference.clone(),
-                                });
-                            }
-                        }
-                    }
+                after = id;
+                let Ok(spec) = StackSpec::from_storage_value(spec) else {
+                    continue;
+                };
+                let Ok(source) = source
+                    .map(StackReleaseSource::from_storage_value)
+                    .transpose()
+                else {
+                    continue;
+                };
+                if let Ok(files) = super::super::stacks::update_scanner::applied_compose_files(
+                    self.git.as_deref(),
+                    &spec,
+                    source.as_ref(),
+                    cancel,
+                )
+                .await
+                    && let Ok(checks) = citadel_stacks::stack_checks_for_compose(&spec, &files)
+                {
+                    tasks.extend(checks.into_iter().map(|check| ImageScanTask {
+                        platform,
+                        registry: check.key.registry_id,
+                        reference: check.image_name,
+                    }));
                 }
             }
+            if !full {
+                break;
+            }
         }
+        self.external_tasks(true, cancel, &mut tasks).await?;
         Ok(tasks)
+    }
+    async fn external_tasks(
+        &self,
+        swarm: bool,
+        cancel: &CancellationToken,
+        tasks: &mut Vec<ImageScanTask>,
+    ) -> Result<(), sqlx::Error> {
+        let mut after = Uuid::nil();
+        while !cancel.is_cancelled() {
+            let page = image_scan::external_images(&self.pool, after, swarm).await?;
+            let full = page.len() == image_scan::IMAGE_PAGE as usize;
+            for (id, platform, registry, reference) in page {
+                after = id;
+                if let Some(registry) = registry.and_then(|v| Uuid::parse_str(&v).ok())
+                    && let Some(reference) = reference
+                {
+                    tasks.push(ImageScanTask {
+                        platform,
+                        registry,
+                        reference,
+                    });
+                }
+            }
+            if !full {
+                break;
+            }
+        }
+        Ok(())
     }
 }
 async fn scan_unique(

@@ -25,7 +25,8 @@ const HEALTH_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT ctid FR
 const ACTIVITY_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT ctid FROM activityevents WHERE createdat<CURRENT_TIMESTAMP-INTERVAL '90 days' AND NOT EXISTS(SELECT 1 FROM instancerestarts r WHERE r.activityid=activityevents.id) ORDER BY createdat LIMIT 5000 FOR UPDATE SKIP LOCKED) DELETE FROM activityevents target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
 const SCRIPT_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT r.ctid FROM scriptruns r WHERE finishedat<CURRENT_TIMESTAMP-INTERVAL '90 days' AND status NOT IN('Queued','Running') AND NOT EXISTS(SELECT 1 FROM scripts a WHERE a.currentrunid=r.id) ORDER BY finishedat LIMIT 5000 FOR UPDATE OF r SKIP LOCKED) DELETE FROM scriptruns target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
 const TOKEN_EXPIRY_SQL: &str = "WITH expired AS MATERIALIZED (SELECT ctid FROM refreshtokens WHERE expiresat<CURRENT_TIMESTAMP ORDER BY expiresat LIMIT 5000 FOR UPDATE SKIP LOCKED) DELETE FROM refreshtokens target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
-const BUILD_RETENTION_SQL: &str = "WITH expired AS MATERIALIZED (SELECT r.ctid FROM buildruns r WHERE r.completedat<CURRENT_TIMESTAMP-make_interval(days=>$1) AND r.status IN('Succeeded','Failed','TimedOut','Cancelled','Interrupted') AND NOT EXISTS(SELECT 1 FROM buildexecutorreservations reservation WHERE reservation.runid=r.id) AND NOT EXISTS(SELECT 1 FROM buildcompletionqueue q WHERE q.buildrunid=r.id) AND NOT EXISTS(SELECT 1 FROM buildprojects p WHERE p.currentrunid=r.id) AND NOT EXISTS(SELECT 1 FROM deployments d WHERE jsonb_path_exists(d.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) AND NOT EXISTS(SELECT 1 FROM stackreleases s WHERE jsonb_path_exists(s.spec::jsonb, '$.** ? (@ == $id)', jsonb_build_object('id',r.id::text))) ORDER BY r.completedat LIMIT 1000 FOR UPDATE OF r SKIP LOCKED) DELETE FROM buildruns target WHERE target.ctid=ANY(ARRAY(SELECT ctid FROM expired))";
+const BUILD_RETENTION_SQL: &str = include_str!("builds/retention_page.sql");
+type BuildCursor = Option<(chrono::DateTime<chrono::Utc>, uuid::Uuid)>;
 
 pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> {
     let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Recovery.start();
@@ -123,7 +124,12 @@ impl RetentionSweep {
             statistics: None,
         }
     }
-    async fn batch(&mut self, pool: &PgPool, days: Option<i32>) -> Result<u64, sqlx::Error> {
+    async fn batch(
+        &mut self,
+        pool: &PgPool,
+        days: Option<i32>,
+        cursor: &mut BuildCursor,
+    ) -> Result<u64, sqlx::Error> {
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::Retention.start();
         let mut deleted = 0;
         for (i, sql) in [
@@ -161,13 +167,20 @@ impl RetentionSweep {
             deleted += count;
         }
         if self.builds {
-            let count = sqlx::query(BUILD_RETENTION_SQL)
+            let (time, id) = cursor.unzip();
+            let (count, time, id): (
+                i64,
+                Option<chrono::DateTime<chrono::Utc>>,
+                Option<uuid::Uuid>,
+            ) = sqlx::query_as(BUILD_RETENTION_SQL)
                 .bind(days)
-                .execute(pool)
-                .await?
-                .rows_affected();
-            self.builds = count > 0;
-            deleted += count;
+                .bind(time)
+                .bind(id)
+                .fetch_one(pool)
+                .await?;
+            *cursor = time.zip(id);
+            self.builds = cursor.is_some();
+            deleted += count as u64;
         }
         // Keep partition work after the independent families: a partition-lock
         // timeout must not prevent their already-safe short commits.
@@ -185,17 +198,21 @@ impl RetentionSweep {
 
 /// One pass for explicit maintenance callers and bounded-storage regression tests.
 pub async fn cleanup(pool: &PgPool, days: Option<i32>) -> Result<u64, sqlx::Error> {
-    RetentionSweep::new(days).batch(pool, days).await
+    RetentionSweep::new(days).batch(pool, days, &mut None).await
 }
 
 /// One scheduled tick: round-robin short batches, without repeating exhausted families.
-async fn drain_cleanup(pool: &PgPool, days: Option<i32>) -> Result<u64, sqlx::Error> {
+async fn drain_cleanup(
+    pool: &PgPool,
+    days: Option<i32>,
+    cursor: &mut BuildCursor,
+) -> Result<u64, sqlx::Error> {
     let mut sweep = RetentionSweep::new(days);
     let mut total = 0;
     for _ in 0..128 {
-        let count = sweep.batch(pool, days).await?;
+        let count = sweep.batch(pool, days, cursor).await?;
         total += count;
-        if count == 0 {
+        if count == 0 && !sweep.builds {
             break;
         }
         tokio::task::yield_now().await;
@@ -255,6 +272,7 @@ pub async fn recover_on_startup(pool: &PgPool) -> Result<(), sqlx::Error> {
 
 pub struct PostgresMaintenanceStore {
     pool: PgPool,
+    build_cursor: tokio::sync::Mutex<BuildCursor>,
     platform_cursor: std::sync::atomic::AtomicI64,
     coarse_cursor: std::sync::atomic::AtomicI64,
     physical_discovery: tokio::sync::Mutex<super::platforms::statistics::maintenance::Discovery>,
@@ -263,6 +281,7 @@ impl PostgresMaintenanceStore {
     pub fn new(pool: PgPool) -> Self {
         Self {
             pool,
+            build_cursor: Default::default(),
             platform_cursor: std::sync::atomic::AtomicI64::new(0),
             coarse_cursor: std::sync::atomic::AtomicI64::new(0),
             physical_discovery: Default::default(),
@@ -356,7 +375,8 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
         Result<u64, citadel_runtime::maintenance::MaintenanceError>,
     > {
         Box::pin(async move {
-            drain_cleanup(&self.pool, days)
+            let mut cursor = self.build_cursor.lock().await;
+            drain_cleanup(&self.pool, days, &mut cursor)
                 .await
                 .map_err(|e| citadel_runtime::maintenance::MaintenanceError(e.to_string()))
         })
@@ -403,17 +423,33 @@ mod tests {
         let url = std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap();
         let mut conn = PgConnection::connect(&url).await.unwrap();
         let mut tx = conn.begin().await.unwrap();
+        // Exercise the real migration against pre-existing owner tables. The schema
+        // and every migration object are rolled back with the fixture.
+        let schema = format!("retention_{}", uuid::Uuid::now_v7().simple());
+        tx.execute(sqlx::AssertSqlSafe(format!(
+            "CREATE SCHEMA {schema}; SET LOCAL search_path TO {schema}"
+        )))
+        .await
+        .unwrap();
         tx.execute(
             "CREATE TEMP TABLE instancerestarts(activityid uuid) ON COMMIT DROP;
             CREATE TEMP TABLE scripts(currentrunid uuid) ON COMMIT DROP;
             CREATE TEMP TABLE buildprojects(currentrunid uuid) ON COMMIT DROP;
             CREATE TEMP TABLE buildexecutorreservations(runid uuid) ON COMMIT DROP;
             CREATE TEMP TABLE buildcompletionqueue(buildrunid uuid) ON COMMIT DROP;
-            CREATE TEMP TABLE deployments(spec jsonb) ON COMMIT DROP;
-            CREATE TEMP TABLE stackreleases(spec jsonb) ON COMMIT DROP;",
+            CREATE TABLE deployments(id uuid DEFAULT gen_random_uuid(),spec jsonb);
+            CREATE TABLE stackreleases(id uuid DEFAULT gen_random_uuid(),spec jsonb);
+            CREATE TABLE buildruns(id uuid, completedat timestamptz, status text);
+            CREATE INDEX ix_buildruns_retention ON buildruns(completedat);",
         )
         .await
         .unwrap();
+        tx.execute(include_str!(
+            "../../../../database/generated/0011_build_spec_references.sql"
+        ))
+        .await
+        .unwrap();
+        tx.execute("DROP TABLE buildruns").await.unwrap();
         for (table, time, query, limit) in [
             (
                 "containerhealthtransitions",
@@ -438,7 +474,7 @@ mod tests {
         ] {
             tx.execute(sqlx::AssertSqlSafe(format!(
                 "CREATE TEMP TABLE {table}(id uuid PRIMARY KEY, {time} timestamptz NOT NULL, status text NOT NULL DEFAULT 'Succeeded') ON COMMIT DROP;
-                 CREATE INDEX ON {table}({time});
+                 CREATE INDEX ON {table}({time},id);
                  INSERT INTO {table}(id,{time}) SELECT gen_random_uuid(),now()+interval '1 day' FROM generate_series(1,100000);
                  INSERT INTO {table}(id,{time}) SELECT gen_random_uuid(),now()-interval '100 days' FROM generate_series(1,{limit}+1);
                  ANALYZE {table}"
@@ -489,7 +525,10 @@ mod tests {
             let statement =
                 sqlx::query_scalar::<_, serde_json::Value>(sqlx::AssertSqlSafe(explain.as_str()));
             let statement = if table == "buildruns" {
-                statement.bind(90_i32)
+                statement
+                    .bind(90_i32)
+                    .bind(Option::<chrono::DateTime<chrono::Utc>>::None)
+                    .bind(Option::<uuid::Uuid>::None)
             } else {
                 statement
             };
@@ -516,6 +555,53 @@ mod tests {
                     .fetch_one(&mut *tx)
                     .await
                     .unwrap();
+            if table == "buildruns" {
+                // Five protected terminal runs occupied slots in the first page.
+                assert_eq!(remaining, 100001 + protected + 5);
+                let (count, _, _): (
+                    i64,
+                    Option<chrono::DateTime<chrono::Utc>>,
+                    Option<uuid::Uuid>,
+                ) = sqlx::query_as(query)
+                    .bind(90_i32)
+                    .bind(Option::<chrono::DateTime<chrono::Utc>>::None)
+                    .bind(Option::<uuid::Uuid>::None)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .unwrap();
+                assert_eq!(count, 6);
+                let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM buildruns")
+                    .fetch_one(&mut *tx)
+                    .await
+                    .unwrap();
+                assert_eq!(remaining, 100000 + protected);
+                tx.execute("WITH old AS (INSERT INTO buildruns(id,completedat) SELECT gen_random_uuid(),now()-interval '200 days' FROM generate_series(1,1000) RETURNING id)
+                    INSERT INTO stackreleases(spec) SELECT jsonb_agg(id::text) FROM old;
+                    INSERT INTO buildruns(id,completedat) VALUES(gen_random_uuid(),now()-interval '190 days')").await.unwrap();
+                type Page = (
+                    i64,
+                    Option<chrono::DateTime<chrono::Utc>>,
+                    Option<uuid::Uuid>,
+                );
+                let (deleted, time, id): Page = sqlx::query_as(query)
+                    .bind(90_i32)
+                    .bind(Option::<chrono::DateTime<chrono::Utc>>::None)
+                    .bind(Option::<uuid::Uuid>::None)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .unwrap();
+                assert_eq!(deleted, 0);
+                assert!(time.is_some() && id.is_some());
+                let next: Page = sqlx::query_as(query)
+                    .bind(90_i32)
+                    .bind(time)
+                    .bind(id)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .unwrap();
+                assert_eq!(next, (1, None, None));
+                continue;
+            }
             assert_eq!(
                 remaining,
                 100001 + protected,

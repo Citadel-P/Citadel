@@ -60,7 +60,7 @@ use citadel_contracts::citadel::swarm::v1::{
     swarm_service_client::SwarmServiceClient,
 };
 use citadel_contracts::citadel::volumes::v1::{
-    CreateVolumeRequest, InspectVolumeRequest, ListVolumesRequest, RemoveVolumeRequest,
+    CreateVolumeRequest, ListVolumesRequest, RemoveVolumeRequest,
     volume_service_client::VolumeServiceClient,
 };
 use citadel_deployments::{
@@ -1971,7 +1971,7 @@ impl citadel_platforms::ImageInventoryPort for AgentClient {
             let response = self
                 .retry_unary(cancellation, || async {
                     let request = self.signer.sign(
-                        ListImagesRequest {},
+                        ListImagesRequest::default(),
                         LIST_IMAGES_METHOD,
                         Some(self.operation_timeout),
                     )?;
@@ -2046,32 +2046,13 @@ impl citadel_platforms::NetworkObservationPort for AgentClient {
     }
 }
 
-impl citadel_platforms::VolumeObservationPort for AgentClient {
-    fn inspect_volume<'a>(
-        &'a self,
-        name: &'a str,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
-        async move {
-            let response = self
-                .retry_unary(cancellation, || async {
-                    let request = self.signer.sign(
-                        InspectVolumeRequest {
-                            name: name.to_owned(),
-                        },
-                        INSPECT_VOLUME_METHOD,
-                        Some(self.operation_timeout),
-                    )?;
-                    self.volume_client()
-                        .inspect(request)
-                        .await
-                        .map(|value| value.into_inner())
-                        .map_err(normalize_status)
-                })
-                .await?;
-            Ok(map_volume(response))
-        }
-        .boxed()
+pub(crate) fn volume_observation(mode: citadel_platforms::VolumeObservation) -> i32 {
+    use citadel_contracts::citadel::volumes::v1::inspect_volume_request::Observation;
+    use citadel_platforms::VolumeObservation;
+    match mode {
+        VolumeObservation::Details => Observation::Details as i32,
+        VolumeObservation::Metadata => Observation::Metadata as i32,
+        VolumeObservation::ContentProtection => Observation::ContentProtection as i32,
     }
 }
 
@@ -2086,7 +2067,7 @@ impl citadel_platforms::SwarmInventoryPort for AgentClient {
                     let request = self.signer.sign(
                         ListSwarmNodesRequest {
                             max_items: 10_000,
-                            include_task_counts: true,
+                            include_task_counts: false,
                         },
                         LIST_SWARM_NODES_METHOD,
                         Some(self.operation_timeout),

@@ -1,3 +1,6 @@
+#[path = "fixtures/workload_image_peer.rs"]
+mod image_peer;
+
 use std::collections::BTreeMap;
 
 use citadel_adapters::persistence::postgres::swarm_services::PostgresSwarmServiceRepository;
@@ -484,7 +487,7 @@ async fn image_scanner_includes_swarm_stacks_and_deduplicates_resources() {
             _: &'a CancellationToken,
         ) -> futures_util::future::BoxFuture<'a, Result<String, String>> {
             self.0.lock().unwrap().push(task.reference.clone());
-            Box::pin(async { Ok("sha256:remote".into()) })
+            Box::pin(async { Ok(image_peer::remote_digest()) })
         }
     }
     let url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL").unwrap();
@@ -498,7 +501,7 @@ async fn image_scanner_includes_swarm_stacks_and_deduplicates_resources() {
     let registry = Uuid::now_v7();
     let actor = ActorId::new(SYSTEM_ACTOR_ID);
     sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,'unix:///'||$2,'Local',1,0,1024,$2,0,'{\"$type\":\"Docker\"}','Online',0)").bind(platform).bind(format!("scanner-{platform}")).execute(&pool).await.unwrap();
-    sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,'{}',$2,$3,'docker.io','Enabled')").bind(registry).bind(SYSTEM_ACTOR_ID).bind(format!("registry-{registry}")).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO registries(id,configuration,createdbyactorid,name,registryhost,status) VALUES($1,json_build_object('$type','DockerHub'),$2,$3,'docker.io','Enabled')").bind(registry).bind(SYSTEM_ACTOR_ID).bind(format!("registry-{registry}")).execute(&pool).await.unwrap();
     let input = citadel_deployments::CreateDeployment {
         name: format!("deployment-{platform}"),
         platform_id: platform,
@@ -540,7 +543,7 @@ async fn image_scanner_includes_swarm_stacks_and_deduplicates_resources() {
     assert_eq!(*inspector.0.lock().unwrap(), vec!["nginx:latest"]);
     assert_eq!(
         cache.get(registry, "nginx").unwrap().digest,
-        "sha256:remote"
+        image_peer::remote_digest()
     );
     sqlx::query("UPDATE platforms SET platformdescriptor='{\"$type\":\"DockerSwarm\",\"clusterId\":\"scanner\",\"controlAvailable\":true}' WHERE id=$1").bind(platform).execute(&pool).await.unwrap();
     inspector.0.lock().unwrap().clear();
@@ -592,7 +595,9 @@ async fn image_scanner_includes_swarm_stacks_and_deduplicates_resources() {
         *inspector.0.lock().unwrap(),
         vec!["nginx:latest", "redis:7-alpine"]
     );
-    sqlx::query("UPDATE swarmservices SET appliedimagedigest='sha256:current',health='Healthy',lastapplieddesiredspechash=desiredspechash WHERE id=$1").bind(service.id).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE swarmservices SET dockerserviceid='service-1',appliedimagedigest=$2,health='Healthy',lastapplieddesiredspechash=desiredspechash WHERE id=$1").bind(service.id).bind(image_peer::deployed_digest()).execute(&pool).await.unwrap();
+    let edge = citadel_adapters::connectors::edge::EdgeRegistry::default();
+    let (done, peer) = image_peer::start(&pool, &edge, platform, vec![], "redis").await;
     let router = Arc::new(
         citadel_adapters::connectors::routing::swarm_services::SwarmServiceRuntimeRouter::new(
             pool.clone(),
@@ -603,6 +608,7 @@ async fn image_scanner_includes_swarm_stacks_and_deduplicates_resources() {
             .unwrap(),
             None,
         )
+        .with_edge(edge)
         .with_image_cache(cache.clone()),
     );
     let checker = citadel_swarm_services::SwarmServiceService::new(
@@ -625,7 +631,13 @@ async fn image_scanner_includes_swarm_stacks_and_deduplicates_resources() {
             .unwrap();
     assert_eq!(
         status, "UpdateAvailable",
-        "cached Notify check works without an automation entitlement or Docker request"
+        "Community Notify compares the cached tag against the applied platform image"
+    );
+    done.send(()).unwrap();
+    assert_eq!(
+        peer.await.unwrap(),
+        (4, 0, 0),
+        "one node list, one task list and two immutable manifest reads"
     );
     sqlx::query("DELETE FROM swarmservices WHERE id=$1")
         .bind(service.id)

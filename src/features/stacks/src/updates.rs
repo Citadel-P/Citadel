@@ -74,7 +74,6 @@ pub fn build_stack_image_checks(
     | StackSpec::WebEditor {
         update_behavior, ..
     }) = spec;
-    let common = spec.common();
     if scheduled && *update_behavior == StackUpdateBehavior::Disabled {
         return Err(validation(
             "Scheduled update checks are disabled for this Stack.",
@@ -99,6 +98,15 @@ pub fn build_stack_image_checks(
             "The Stack release state does not support update checks.".to_owned(),
         ));
     }
+    stack_checks_for_compose(spec, compose_files)
+}
+
+/// Extracts tagged external images from a Stack definition after eligibility was checked.
+pub fn stack_checks_for_compose(
+    spec: &StackSpec,
+    compose_files: &[String],
+) -> Result<Vec<ManualStackImageCheck>, StackError> {
+    let common = spec.common();
     let registry_id = common
         .registry_id
         .filter(|id| !id.is_nil())

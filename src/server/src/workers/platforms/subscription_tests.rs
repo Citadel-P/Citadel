@@ -293,5 +293,5 @@ async fn edge_health(
         .await?
         .into_iter()
         .next()
-        .map(|(_, healthy)| healthy))
+        .map(|observation| observation.healthy))
 }

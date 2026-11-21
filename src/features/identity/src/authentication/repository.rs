@@ -1,5 +1,10 @@
 use super::*;
 
+pub enum BearerGuard {
+    Browser { session: Uuid, now: DateTime<Utc> },
+    Script { run: Uuid, attempt: Uuid },
+}
+
 pub trait IdentityStore: Send + Sync {
     fn script_attempt_active(
         &self,
@@ -87,7 +92,7 @@ pub trait IdentityStore: Send + Sync {
         actor_id: ActorId,
         expected_subject_id: Uuid,
         principal_type: AuthenticatedPrincipalType,
-        credential_id: Option<Uuid>,
+        guard: BearerGuard,
     ) -> BoxFuture<'_, Result<Option<ActorPrincipal>, IdentityError>>;
 
     fn load_run_as_principal(

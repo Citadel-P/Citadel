@@ -193,7 +193,12 @@ async fn list(
         &headers,
     )?;
     let scripts = api_result(
-        authorized_scripts(state.scripts.store().as_ref(), &principal, scripts).await,
+        crate::api::resources::scripts::authorized::script_summaries(
+            state.scripts.store().as_ref(),
+            &principal,
+            scripts,
+        )
+        .await,
         &headers,
     )?;
     let level = if principal.is_administrator() {

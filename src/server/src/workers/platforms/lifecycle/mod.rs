@@ -75,7 +75,14 @@ impl LifecycleWorker {
         progress.recheck_alert = !online;
         let _work = RuntimeWork::PlatformLifecycle.start();
         if !progress.persisted {
-            self.store.set_online(target.id, online).await?;
+            if !self
+                .store
+                .set_online(target.id, online, progress.transition.edge_binding)
+                .await?
+            {
+                progress.recheck_alert = false;
+                return Ok(());
+            }
             progress.persisted = true;
         }
         if online && !progress.recovery_requested {
@@ -137,6 +144,7 @@ impl LifecycleWorker {
 
 fn same_transition(left: &PlatformHealthTransition, right: &PlatformHealthTransition) -> bool {
     left.target.id == right.target.id
+        && left.edge_binding == right.edge_binding
         && left.online == right.online
         && left.target.address == right.target.address
         && left.target.connector_type == right.target.connector_type
@@ -144,12 +152,10 @@ fn same_transition(left: &PlatformHealthTransition, right: &PlatformHealthTransi
 
 fn enqueue(pending: &mut BTreeMap<uuid::Uuid, Pending>, transition: PlatformHealthTransition) {
     let id = transition.target.id;
-    if pending.get(&id).is_some_and(|entry| {
-        let old = &entry.progress.transition;
-        old.online == transition.online
-            && old.target.address == transition.target.address
-            && old.target.connector_type == transition.target.connector_type
-    }) {
+    if pending
+        .get(&id)
+        .is_some_and(|entry| same_transition(&entry.progress.transition, &transition))
+    {
         return;
     }
     pending.insert(

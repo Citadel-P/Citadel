@@ -8,6 +8,56 @@ use super::{
     runtime::{cancelled_error, normalize_docker_error},
 };
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct ImageMetadata {
+    id: Option<String>,
+    descriptor: Option<citadel_docker_api::models::OciDescriptor>,
+    repo_tags: Option<Vec<String>>,
+    os: Option<String>,
+    architecture: Option<String>,
+    variant: Option<String>,
+}
+impl DockerClient {
+    async fn read_image_identity(
+        &self,
+        id: &str,
+    ) -> Result<citadel_platforms::images::ImageIdentity, super::DockerError> {
+        super::transport::validate_identifier(id)?;
+        let bytes = self
+            .bounded_json_bytes(&format!("/images/{}/json", urlencoding::encode(id)))
+            .await?;
+        let image: ImageMetadata = serde_json::from_slice(&bytes)?;
+        let (config_digest, content_digest) =
+            super::mapping::image_digests(image.id.as_deref(), image.descriptor.as_ref());
+        Ok(citadel_platforms::images::ImageIdentity {
+            id: image.id.unwrap_or_default(),
+            config_digest,
+            content_digest,
+            repo_tags: image.repo_tags.unwrap_or_default(),
+            os: image.os.unwrap_or_default(),
+            architecture: image.architecture.unwrap_or_default(),
+            variant: image.variant,
+        })
+    }
+    pub async fn image_digest_catalog(
+        &self,
+    ) -> Result<std::collections::BTreeMap<String, Vec<String>>, super::DockerError> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "PascalCase")]
+        struct Entry {
+            id: String,
+            repo_digests: Option<Vec<String>>,
+        }
+        let _list = citadel_runtime::runtime_metrics::RuntimeWork::DockerImageList.start();
+        let bytes = self.bounded_json_bytes("/images/json?all=true").await?;
+        Ok(serde_json::from_slice::<Vec<Entry>>(&bytes)?
+            .into_iter()
+            .map(|e| (e.id, e.repo_digests.unwrap_or_default()))
+            .collect())
+    }
+}
+
 impl citadel_platforms::images::ImageDeletionPort for DockerClient {
     fn delete_image<'a>(
         &'a self,
@@ -44,6 +94,21 @@ impl ImageInspectionPort for DockerClient {
             let mut ports: Vec<_> = image.config.exposed_ports.into_keys().collect();
             ports.sort();
             Ok(ports)
+        })
+    }
+
+    fn image_identity<'a>(
+        &'a self,
+        id: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<citadel_platforms::images::ImageIdentity, RuntimeCapabilityError>>
+    {
+        Box::pin(async move {
+            tokio::select! {
+                biased;
+                ()=cancellation.cancelled()=>Err(cancelled_error()),
+                result=self.read_image_identity(id)=>result.map_err(normalize_docker_error),
+            }
         })
     }
 

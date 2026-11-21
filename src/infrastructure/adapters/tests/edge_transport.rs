@@ -1,3 +1,6 @@
+#[path = "edge_transport/platform_health.rs"]
+mod platform_health;
+
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use citadel_adapters::connectors::edge::EdgeIntake;
 use citadel_adapters::connectors::edge::EdgeRegistry;

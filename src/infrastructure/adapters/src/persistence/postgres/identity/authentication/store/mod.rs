@@ -531,13 +531,18 @@ SELECT EXISTS (SELECT 1 FROM current_session) AS current_exists,
         actor_id: ActorId,
         expected_subject_id: Uuid,
         principal_type: AuthenticatedPrincipalType,
-        credential_id: Option<Uuid>,
+        guard: citadel_identity::authentication::BearerGuard,
     ) -> BoxFuture<'_, Result<Option<ActorPrincipal>, IdentityError>> {
         Box::pin(async move {
             let expected_actor_type = match principal_type {
                 AuthenticatedPrincipalType::User => "User",
                 AuthenticatedPrincipalType::ServiceAccount => "ServiceAccount",
                 _ => return Ok(None),
+            };
+            use citadel_identity::authentication::BearerGuard;
+            let (session, now, run, attempt) = match guard {
+                BearerGuard::Browser { session, now } => (Some(session), Some(now), None, None),
+                BearerGuard::Script { run, attempt } => (None, None, Some(run), Some(attempt)),
             };
             let row = sqlx::query(
                 r#"
@@ -565,12 +570,15 @@ LEFT JOIN effective_roles er ON er.actorid = a.id
 LEFT JOIN roles r ON r.id = er.roleid
 WHERE subject.actorid = $1 AND subject.id = $2 AND subject.actortype = $3
   AND ($3 <> 'ServiceAccount' OR subject.archivedatutc IS NULL)
+  AND (EXISTS (SELECT 1 FROM refreshtokens WHERE id=$4 AND userid=subject.id AND expiresat>$5)
+       OR EXISTS (SELECT 1 FROM scriptruns WHERE id=$6 AND attemptid=$7 AND runasactorid=subject.actorid
+                  AND status='Running' AND NOT cancelrequested))
 GROUP BY subject.id, subject.name
 "#,
             )
                 .bind(actor_id.value())
                 .bind(expected_subject_id)
-                .bind(expected_actor_type)
+                .bind(expected_actor_type).bind(session).bind(now).bind(run).bind(attempt)
                 .fetch_optional(&self.pool)
                 .await
                 .map_err(storage)?;
@@ -580,7 +588,7 @@ GROUP BY subject.id, subject.name
                     actor_id,
                     name: row.try_get("name").map_err(storage)?,
                     principal_type,
-                    credential_id,
+                    credential_id: None,
                     roles: row.try_get("roles").map_err(storage)?,
                 })
             })

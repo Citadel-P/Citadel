@@ -302,40 +302,6 @@ fn copy_progress_only_invalidates_its_operation_and_resynchronizes_on_reconnect(
 }
 
 #[test]
-fn workload_health_updates_only_matching_platform_and_owner_without_deletions() {
-    let platform = Uuid::now_v7();
-    let other = Uuid::now_v7();
-    let mut change = PublishedRuntimeEvent {
-        platform_id: Some(platform),
-        resource_type: "Platform",
-        resource_id: platform,
-        event_kind: "runtimeChanged",
-        resource_revision: 1,
-        reads: Default::default(),
-        containers: Default::default(),
-        payload: json!({"dockerResourceType":"container", "action":"health_status: unhealthy", "runtimeResourceId":"same-docker-id"}),
-    };
-    let values = vec![
-        json!({"id":"affected","platformId":platform,"probeHealth":{"members":[{"dockerContainerId":"same-docker-id"}]}}),
-        json!({"id":"other-platform","platformId":other,"probeHealth":{"members":[{"dockerContainerId":"same-docker-id"}]}}),
-        json!({"id":"other-owner","platformId":platform,"probeHealth":{"members":[{"dockerContainerId":"other"}]}}),
-    ];
-    let result = workload_rows("StackInfoUpdated", values.clone(), Some(&change)).unwrap();
-    assert_eq!(result.rows[0].rows.len(), 1);
-    assert_eq!(result.rows[0].rows[0]["id"], "affected");
-    assert!(matches!(result.rows[0].style, RowStyle::UpdatePatch));
-    change.payload["action"] = json!("destroy");
-    assert_eq!(
-        workload_rows("StackInfoUpdated", values.clone(), Some(&change))
-            .unwrap()
-            .rows[0]
-            .rows
-            .len(),
-        2
-    );
-}
-
-#[test]
 fn script_updates_target_only_the_action_and_its_run_history() {
     let action = Uuid::now_v7();
     let mut event = PublishedRuntimeEvent {
@@ -445,12 +411,12 @@ fn typed_workload_selection_preserves_full_refreshes_and_truncated_membership() 
         payload: json!({"dockerResourceType":"container", "action":"health_status: unhealthy", "runtimeResourceId":"changed"}),
     };
     let mut health = WorkloadHealth::default();
-    let selection = WorkloadSelection::new(Some(&change));
+    let selection = WorkloadSelection::new(Some(&change), "stackIds");
     assert_eq!(selection.platform, Some(platform));
-    assert!(!selection.includes(Some(platform), &health));
+    assert!(!selection.includes(other, Some(platform), &health));
     health.members_truncated = true;
-    assert!(selection.includes(Some(platform), &health));
-    assert!(!selection.includes(Some(other), &health));
+    assert!(selection.includes(other, Some(platform), &health));
+    assert!(!selection.includes(other, Some(other), &health));
     assert!(matches!(selection.style(), RowStyle::UpdatePatch));
     health.members_truncated = false;
     health.members.push(
@@ -461,11 +427,13 @@ fn typed_workload_selection_preserves_full_refreshes_and_truncated_membership() 
         }))
         .unwrap(),
     );
-    assert!(selection.includes(Some(platform), &health));
+    assert!(selection.includes(other, Some(platform), &health));
     change.payload["action"] = json!("destroy");
-    assert!(
-        WorkloadSelection::new(Some(&change)).includes(Some(platform), &WorkloadHealth::default())
-    );
+    assert!(WorkloadSelection::new(Some(&change), "stackIds").includes(
+        other,
+        Some(platform),
+        &WorkloadHealth::default()
+    ));
     for event in [
         None,
         Some(&PublishedRuntimeEvent {
@@ -477,9 +445,21 @@ fn typed_workload_selection_preserves_full_refreshes_and_truncated_membership() 
             ..change.clone()
         }),
     ] {
-        let selection = WorkloadSelection::new(event);
-        assert!(selection.includes(Some(other), &WorkloadHealth::default()));
+        let selection = WorkloadSelection::new(event, "stackIds");
+        assert!(selection.includes(other, Some(other), &WorkloadHealth::default()));
         assert!(matches!(selection.style(), RowStyle::Update));
         assert!(selection.platform.is_none());
     }
+    change.resource_type = "BackupCoverage";
+    change.payload = json!({"stackIds":[other],"deploymentIds":[]});
+    let scoped = WorkloadSelection::new(Some(&change), "stackIds");
+    assert_eq!(scoped.owners.as_deref(), Some([other].as_slice()));
+    assert!(scoped.includes(other, Some(platform), &health));
+    assert!(!scoped.includes(platform, Some(platform), &health));
+    assert!(matches!(scoped.style(), RowStyle::UpdatePatch));
+    change.payload["resync"] = json!(true);
+    assert!(matches!(
+        WorkloadSelection::new(Some(&change), "stackIds").style(),
+        RowStyle::Update
+    ));
 }

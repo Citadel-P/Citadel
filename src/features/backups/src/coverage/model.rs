@@ -8,7 +8,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -53,6 +53,7 @@ pub struct ContainerStorage {
     pub volumes: Vec<ObservedStorage>,
     pub complete: bool,
 }
+#[cfg_attr(test, derive(Clone))]
 pub struct CoveragePolicy {
     pub id: Uuid,
     pub name: String,
@@ -68,11 +69,12 @@ impl CoveragePolicy {
     }
 }
 #[derive(Default)]
+#[cfg_attr(test, derive(Clone))]
 pub struct CoverageSnapshot {
     pub policies: Vec<CoveragePolicy>,
     pub workloads: Vec<WorkloadStorage>,
     pub containers: Vec<ContainerStorage>,
-    pub successes: Vec<(StorageTarget, DateTime<Utc>)>,
+    pub successes: BTreeMap<StorageTarget, DateTime<Utc>>,
 }
 /// Requested inventory. Policy-owned workloads are also read to preserve shared
 /// volume coverage and uncertainty when their current inventory is incomplete.
@@ -95,13 +97,6 @@ impl CoverageSelection {
         }
         selected
     }
-    pub fn contains_workload(&self, kind: BackupPreviewKind, id: Uuid) -> bool {
-        match kind {
-            BackupPreviewKind::Deployment => self.deployments.contains(&id),
-            BackupPreviewKind::Stack => self.stacks.contains(&id),
-            BackupPreviewKind::SwarmService => self.services.contains(&id),
-        }
-    }
 }
 pub trait CoverageReader: Send + Sync {
     fn snapshot<'a>(
@@ -110,9 +105,9 @@ pub trait CoverageReader: Send + Sync {
         administrator: bool,
         platforms: &'a [Uuid],
         selection: Option<&'a CoverageSelection>,
-    ) -> BoxFuture<'a, Result<CoverageSnapshot, BackupError>>;
+    ) -> BoxFuture<'a, Result<super::IndexedCoverage, BackupError>>;
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct StorageCoverage {
     pub target: StorageTarget,
     pub included: bool,
@@ -120,7 +115,7 @@ pub struct StorageCoverage {
     pub policy_ids: Vec<Uuid>,
     pub last_successful_run_at: Option<DateTime<Utc>>,
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CoverageSummary {
     pub status: Option<Status>,
     pub volumes: Vec<StorageCoverage>,
@@ -212,119 +207,6 @@ pub fn aggregate(
     }
     Some(Status::Warning)
 }
-impl CoverageSnapshot {
-    pub fn evaluate(
-        &self,
-        platform: Uuid,
-        targets: &[ObservedStorage],
-        resource: Option<(BackupPreviewKind, Uuid)>,
-        complete: bool,
-        scheduling_available: bool,
-    ) -> CoverageSummary {
-        let mut related = BTreeSet::new();
-        let mut has_resource_policy = false;
-        for p in &self.policies {
-            if resource.is_some() && source_identity(&p.source) == resource {
-                related.insert(p.id);
-                has_resource_policy = true;
-            }
-        }
-        let mut reasons = BTreeSet::new();
-        if !complete {
-            reasons.insert(CoverageReason::InventoryIncomplete);
-        }
-        let uncertain = self
-            .policies
-            .iter()
-            .filter_map(|p| source_identity(&p.source))
-            .any(|(k, id)| {
-                self.workloads
-                    .iter()
-                    .any(|w| w.kind == k && w.id == id && w.platform_id == platform && !w.complete)
-            });
-        let volumes = targets
-            .iter()
-            .map(|v| {
-                let matched = self
-                    .policies
-                    .iter()
-                    .filter(|p| match &p.source {
-                        BackupSourceSpec::DockerVolume {
-                            platform_id,
-                            volume_name,
-                            docker_node_id,
-                            ..
-                        } => {
-                            v.target.host_path.is_none()
-                                && v.target.platform_id == *platform_id
-                                && v.target.name == *volume_name
-                                && v.target.docker_node_id == *docker_node_id
-                        }
-                        BackupSourceSpec::BindMount {
-                            platform_id,
-                            host_path,
-                            docker_node_id,
-                        } => {
-                            v.target.platform_id == *platform_id
-                                && v.target.host_path.as_ref() == Some(host_path)
-                                && v.target.docker_node_id == *docker_node_id
-                        }
-                        source => source_identity(source).is_some_and(|(kind, id)| {
-                            self.workloads.iter().any(|w| {
-                                w.kind == kind
-                                    && w.id == id
-                                    && w.volumes.iter().any(|candidate| {
-                                        candidate.included && candidate.target == v.target
-                                    })
-                            })
-                        }),
-                    })
-                    .collect::<Vec<_>>();
-                let policy_ids = matched.iter().map(|p| p.id).collect::<Vec<_>>();
-                related.extend(&policy_ids);
-                if !scheduling_available && matched.iter().any(|p| p.enabled && p.scheduled()) {
-                    reasons.insert(CoverageReason::SchedulingUnavailable);
-                }
-                let status = if !v.target.supported() {
-                    Some(Status::NotApplicable)
-                } else if matched.is_empty() {
-                    if uncertain {
-                        None
-                    } else {
-                        Some(Status::Unprotected)
-                    }
-                } else {
-                    aggregate(
-                        matched
-                            .iter()
-                            .map(|p| Some(policy_status(p, &v.target, scheduling_available))),
-                        false,
-                    )
-                };
-                StorageCoverage {
-                    target: v.target.clone(),
-                    included: v.included,
-                    status,
-                    policy_ids,
-                    last_successful_run_at: self
-                        .successes
-                        .iter()
-                        .filter(|(t, _)| *t == v.target)
-                        .map(|(_, at)| *at)
-                        .max(),
-                }
-            })
-            .collect::<Vec<_>>();
-        CoverageSummary {
-            status: aggregate(volumes.iter().map(|v| v.status), !complete),
-            volumes,
-            policy_ids: related.into_iter().collect(),
-            has_resource_policy,
-            reasons: reasons.into_iter().collect(),
-        }
-    }
-}
-
 pub fn workload_includes(
     kind: BackupPreviewKind,
     target: &StorageTarget,

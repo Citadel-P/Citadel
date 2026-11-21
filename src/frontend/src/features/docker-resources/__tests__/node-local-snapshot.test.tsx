@@ -40,10 +40,10 @@ describe('node-local Docker resource snapshots', () => {
       },
     });
 
-    // Images use their actor-authorized snapshot group; volumes/networks use daemon events.
-    await waitFor(() => expect(fake.listenerCount('SwarmNodeLocalResourcesUpdated')).toBe(2));
+    await waitFor(() => expect(fake.listenerCount('VolumesUpdated')).toBe(1));
     await waitFor(() => expect(fake.listenerCount('ImagesInfoUpdated')).toBe(1));
     act(() => fake.emit('ImagesInfoUpdated', { platformId, images: [image('worker')], capabilities: {} }));
+    act(() => fake.emit('VolumesUpdated', { platformId, scope: 'all', volumes: [volume('worker')], capabilities: {} }));
     act(() =>
       fake.emit('SwarmNodeLocalResourcesUpdated', {
         platformId,
@@ -61,6 +61,9 @@ describe('node-local Docker resource snapshots', () => {
     expect(await screen.findByTestId('volumes')).toHaveTextContent('worker');
     expect(await screen.findByTestId('networks')).toHaveTextContent('worker');
     expect(screen.queryByText('manager')).not.toBeInTheDocument();
+    // Rejoining delivers a complete snapshot, including removals while disconnected.
+    act(() => fake.emit('VolumesUpdated', { platformId, scope: 'all', volumes: [], capabilities: {} }));
+    await waitFor(() => expect(screen.getByTestId('volumes')).toBeEmptyDOMElement());
   });
   it('applies scoped node changes without clearing manager or unrelated resources', async () => {
     const fake = new FakeRealtimeConnection();
@@ -84,25 +87,106 @@ describe('node-local Docker resource snapshots', () => {
     await waitFor(() => expect(screen.getByTestId('images')).toHaveTextContent('image-owner'));
     await waitFor(() => expect(screen.getByTestId('networks')).toHaveTextContent('network-owner'));
     act(() =>
-      fake.emit('SwarmNodeLocalResourcesUpdated', {
+      fake.emit('VolumesUpdated', {
         platformId,
-        nodeOnly: true,
+        scope: 'nodes',
         volumes: [volume('worker')],
-      } satisfies SwarmNodeLocalResourcesUpdate),
+      }),
     );
-    expect(screen.getByTestId('volumes')).toHaveTextContent(',worker');
+    await waitFor(() => expect(screen.getByTestId('volumes')).toHaveTextContent(',worker'));
     expect(screen.getByTestId('images')).toHaveTextContent('image-owner');
     expect(screen.getByTestId('networks')).toHaveTextContent('network-owner');
     act(() =>
-      fake.emit('SwarmNodeLocalResourcesUpdated', {
+      fake.emit('VolumesUpdated', {
         platformId,
-        nodeOnly: true,
+        scope: 'nodes',
         volumes: [],
-      } satisfies SwarmNodeLocalResourcesUpdate),
+      }),
     );
-    expect(screen.getByTestId('volumes')).not.toHaveTextContent('worker');
+    await waitFor(() => expect(screen.getByTestId('volumes')).not.toHaveTextContent('worker'));
     expect(screen.getByTestId('images')).toHaveTextContent('image-owner');
   });
+});
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+function VolumesProbe() {
+  const { volumes } = useVolumesGroup(platformId);
+  return <output>{JSON.stringify(volumes)}</output>;
+}
+
+const manager = { id: 'shared', name: 'manager' };
+const worker = { id: 'shared', name: 'worker', dockerNodeId: 'node' };
+const capabilities = { canCreate: true };
+const baseline = { volumes: [manager, worker], capabilities };
+const key = ['listVolumes', { platformId }];
+
+it.each([
+  { scope: 'nodes', expected: [manager] },
+  { scope: 'manager', expected: [worker] },
+  { scope: 'one', id: 'shared', expected: [worker] },
+])('keeps a $scope removal when an older HTTP refetch completes', async ({ expected, ...partial }) => {
+  const fake = new FakeRealtimeConnection();
+  const gate = deferred();
+  const captured = deferred();
+  let refetching = false;
+  server.use(
+    http.get(`http://localhost/api/v1/volumes/${platformId}`, async () => {
+      if (refetching) {
+        captured.resolve();
+        await gate.promise;
+      }
+      return HttpResponse.json(baseline);
+    }),
+  );
+  const { queryClient } = renderCitadel(<VolumesProbe />, {
+    groups: { connectionFactory: () => fake, startConnection: (c) => c.start() },
+  });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(JSON.stringify(baseline)));
+  await waitFor(() => expect(fake.listenerCount('VolumesUpdated')).toBe(1));
+  refetching = true;
+  const refetch = queryClient.refetchQueries({ queryKey: key });
+  await captured.promise;
+  act(() => fake.emit('VolumesUpdated', { platformId: 'other', ...partial, volumes: [] }));
+  expect(queryClient.getQueryData(key)).toMatchObject({ data: baseline });
+  act(() => fake.emit('VolumesUpdated', { platformId, ...partial, volumes: [] }));
+  const after = { volumes: expected, capabilities };
+  expect(queryClient.getQueryData(key)).toMatchObject({ data: after });
+  await act(async () => {
+    gate.resolve();
+    await refetch;
+  });
+  expect(queryClient.getQueryData(key)).toMatchObject({ data: after });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(JSON.stringify(after)));
+});
+
+it('merges newer node removals into the initial HTTP inventory and capabilities', async () => {
+  const fake = new FakeRealtimeConnection();
+  const gate = deferred();
+  const captured = deferred();
+  server.use(
+    http.get(`http://localhost/api/v1/volumes/${platformId}`, async () => {
+      captured.resolve();
+      await gate.promise;
+      return HttpResponse.json(baseline);
+    }),
+  );
+  renderCitadel(<VolumesProbe />, {
+    groups: { connectionFactory: () => fake, startConnection: (c) => c.start() },
+  });
+  await captured.promise;
+  await waitFor(() => expect(fake.listenerCount('VolumesUpdated')).toBe(1));
+  act(() => fake.emit('VolumesUpdated', { platformId, scope: 'nodes', volumes: [] }));
+  gate.resolve();
+  await waitFor(() =>
+    expect(screen.getByRole('status')).toHaveTextContent(JSON.stringify({ volumes: [manager], capabilities })),
+  );
 });
 
 function ResourceProbe() {

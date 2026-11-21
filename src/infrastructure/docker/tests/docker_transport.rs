@@ -24,7 +24,7 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
     let listener = UnixListener::bind(&path).unwrap();
     let server = tokio::spawn(async move {
         let mut usage_calls = 0;
-        for _ in 0..9 {
+        for _ in 0..12 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut bytes = Vec::new();
             let mut buffer = [0; 2048];
@@ -93,6 +93,19 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
     assert_eq!(volumes[1].usage_data.as_ref().unwrap()["Size"], 0);
     assert!(!volumes[1].in_use);
     assert!(volumes[2].usage_data.is_none());
+    use citadel_platforms::VolumeObservation;
+    let metadata = client
+        .observe_volume("data", VolumeObservation::Metadata)
+        .await
+        .unwrap();
+    assert_eq!(metadata.name, "data");
+    assert!(metadata.usage_data.is_none());
+    let protected = client
+        .observe_volume("data", VolumeObservation::ContentProtection)
+        .await
+        .unwrap();
+    assert!(protected.usage_data.is_none());
+    assert_eq!(protected.content_access_allowed, Some(false));
     let inspected =
         citadel_platforms::VolumeObservationPort::inspect_volume(&client, "data", &cancel)
             .await

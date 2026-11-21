@@ -36,7 +36,7 @@ impl ScriptRepository for PostgresScriptRepository {
         actor: ActorId,
         administrator: bool,
         tags: &'a [String],
-    ) -> BoxFuture<'a, Result<Vec<Script>, ScriptError>> {
+    ) -> BoxFuture<'a, Result<Vec<citadel_scripts::ScriptSummary>, ScriptError>> {
         self.list_impl(actor, administrator, tags)
     }
 

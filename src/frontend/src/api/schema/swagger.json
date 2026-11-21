@@ -6473,9 +6473,20 @@
               "$ref": "#/components/schemas/ContainerView"
             },
             "type": "array"
+          },
+          "stackBackupCoverage": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ResourceBackupSummaryView"
+            },
+            "propertyNames": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "object"
           }
         },
         "required": [
+          "stackBackupCoverage",
           "containers",
           "capabilities"
         ],
@@ -23371,7 +23382,7 @@
           },
           "scripts": {
             "items": {
-              "$ref": "#/components/schemas/AuthorizedScript"
+              "$ref": "#/components/schemas/ScriptSummaryView"
             },
             "type": "array"
           }
@@ -23623,6 +23634,70 @@
           "exitCode",
           "logs",
           "errorMessage"
+        ],
+        "type": "object"
+      },
+      "ScriptSummaryView": {
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ResourceCapabilitiesView"
+          },
+          "controlState": {
+            "$ref": "#/components/schemas/ResourceControlState"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "latestRun": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ScriptRunView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "scheduleCron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scheduleEnabled": {
+            "type": "boolean"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/resources.tags.TagSummary"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "enabled",
+          "controlState",
+          "scheduleEnabled",
+          "scheduleCron",
+          "tags",
+          "latestRun",
+          "capabilities"
         ],
         "type": "object"
       },

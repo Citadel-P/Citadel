@@ -171,6 +171,7 @@ impl PostgresContainerAdoption {
                         citadel_contracts::citadel::edge::v1::EdgeCommandKind::ImageInspect,
                         citadel_contracts::citadel::images::v1::InspectImageRequest {
                             id: image.into(),
+                            identity_only: false,
                         },
                         cancel,
                     )

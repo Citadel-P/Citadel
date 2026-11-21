@@ -35,9 +35,12 @@ export const ContainerComponents: RegularResourceComponents = {
     const containers = containersInfo?.containers ?? EMPTY_CONTAINERS;
     const healthNow = useHealthClock();
     const items = useMemo(() => {
-      const visibleContainers = withContainerGroupHealth(filterVisibleContainers(containers), healthNow);
+      const visibleContainers = withContainerGroupHealth(filterVisibleContainers(containers), healthNow).map((c) => ({
+        ...c,
+        stackBackupCoverage: c.stackId ? containersInfo?.stackBackupCoverage?.[c.stackId] : undefined,
+      }));
       return unmanagedOnly ? visibleContainers.filter(isUnmanagedContainer) : visibleContainers;
-    }, [containers, unmanagedOnly, healthNow]);
+    }, [containers, containersInfo?.stackBackupCoverage, unmanagedOnly, healthNow]);
 
     const visibleColumns = useAtomValue(containerColumnsAtom);
     const filteredItems = useContainerHealthFilter(useBackupStatusFilter(items), visibleColumns.health !== false);

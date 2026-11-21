@@ -58,7 +58,7 @@ impl DockerClient {
             // Cancellation drops this future before advancing the retry deadline.
             let _timer = citadel_runtime::runtime_metrics::RuntimeWork::DockerStorage.start();
             match self
-                .sampling_bytes("/system/df?type=image&type=volume")
+                .bounded_json_bytes("/system/df?type=image&type=volume")
                 .await
                 .and_then(|bytes| serde_json::from_slice::<DataUsage>(&bytes).map_err(Into::into))
             {

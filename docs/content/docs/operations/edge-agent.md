@@ -224,7 +224,7 @@ After revocation, start over with a new enrollment if the host should be connect
 
 `Platform stays offline`
 
-Check that the agent container is running and can reach `CITADEL_CORE_URL`.
+Check that the agent container is running and can reach `CITADEL_CORE_URL`. Commands require a live Edge session. Core checks platform health every five seconds and records a disconnect after three consecutive failed checks. It records recovery after two consecutive successful checks.
 
 `Enrollment token is rejected`
 

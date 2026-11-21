@@ -460,28 +460,14 @@ impl PostgresEdgeStore {
             )
             .await?;
         }
-        let offline_platform = changed.as_ref().and_then(|(platform, node, kind, _)| {
-            (kind == "Platform" && node.is_none()).then_some(*platform)
-        });
-        if let Some((platform, node, resource_type, _)) = changed
+        // Session loss immediately fences Agent work. The platform health
+        // monitor confirms manager reachability before changing workload state.
+        if let Some((platform, Some(node), resource_type, _)) = changed
             && resource_type == "Platform"
         {
-            if let Some(node) = node {
-                mark_node_stale(&mut tx, platform, &node).await?;
-            } else {
-                crate::persistence::postgres::platforms::status::platform_offline_in(
-                    &mut tx, platform,
-                )
-                .await?;
-            }
+            mark_node_stale(&mut tx, platform, &node).await?;
         }
         tx.commit().await?;
-        if let Some(platform) = offline_platform {
-            crate::persistence::postgres::platforms::status::reconcile_deployments(
-                &self.pool, platform, None, false,
-            )
-            .await?;
-        }
         Ok(())
     }
     pub async fn persist_inventory(
@@ -530,10 +516,11 @@ impl PostgresEdgeStore {
             )
             .await
             .map_err(|_| EdgeStoreError::Invalid("Edge inventory identity validation failed."))?;
-            crate::persistence::postgres::platforms::inventory::store::persist_snapshot(
+            crate::persistence::postgres::platforms::inventory::store::persist_snapshot_with_health(
                 &mut tx,
                 snapshot,
                 Some(&self.node_policy),
+                false,
             )
             .await
             .map_err(|_| EdgeStoreError::Invalid("Edge inventory persistence failed."))?;
@@ -660,19 +647,6 @@ impl PostgresEdgeStore {
             )
             .await
             .map_err(|_| EdgeStoreError::Invalid("Scoped Edge projection failed."))?;
-        if session.target.node_id.is_none()
-            && matches!(
-                snapshot.inventory,
-                citadel_platforms::jobs::ResourceInventory::Platform(_)
-            )
-        {
-            changed |= crate::persistence::postgres::platforms::status::platform_status(
-                &mut tx,
-                snapshot.platform_id,
-                citadel_primitives::PlatformStatus::Online,
-            )
-            .await?;
-        }
         let identities = if matches!(
             snapshot.inventory,
             citadel_platforms::jobs::ResourceInventory::Containers(_)
@@ -939,11 +913,7 @@ impl PostgresEdgeStore {
             )
             .await?;
         }
-        Ok(if changed.accepted {
-            citadel_platforms::jobs::ProjectionChange::committed(changed.changed)
-        } else {
-            citadel_platforms::jobs::ProjectionChange::Unavailable
-        })
+        Ok(changed.projection())
     }
     pub async fn persist_stats(
         &self,

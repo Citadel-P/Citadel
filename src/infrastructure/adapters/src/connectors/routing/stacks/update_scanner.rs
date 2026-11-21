@@ -10,7 +10,10 @@ use std::{
     sync::Arc,
 };
 
+use super::image_inventory::{BatchObservations, StackImageInventory};
+
 pub struct StackUpdateRuntime {
+    batch: Option<BatchObservations>,
     runtime: StackRuntimeRouter,
     git: Arc<citadel_git::GitRepositoryExecutionService>,
 }
@@ -19,10 +22,21 @@ impl StackUpdateRuntime {
         runtime: StackRuntimeRouter,
         git: Arc<citadel_git::GitRepositoryExecutionService>,
     ) -> Self {
-        Self { runtime, git }
+        Self {
+            runtime,
+            git,
+            batch: None,
+        }
     }
 }
 impl StackUpdateScanner for StackUpdateRuntime {
+    fn image_batch(&self) -> Option<Box<dyn StackUpdateScanner>> {
+        Some(Box::new(Self {
+            runtime: self.runtime.clone(),
+            git: self.git.clone(),
+            batch: Some(Default::default()),
+        }))
+    }
     fn scan_images<'a>(
         &'a self,
         stack: &'a citadel_stacks::Stack,
@@ -211,18 +225,44 @@ impl StackUpdateRuntime {
                 });
             let mut swarm_service_ids = BTreeMap::new();
             let mut deployed_image_ids = BTreeMap::new();
-            let deployed = if stack.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
-                let manager = self
-                    .runtime
-                    .runtime
-                    .swarm(stack.platform_id.ok_or(StackError::NotFound)?, cancel)
+            let swarm = if stack.platform_type == citadel_platforms::PlatformKind::DockerSwarm {
+                Some(match &self.batch {
+                    Some(batch) => batch.swarm(&target, peer.as_ref())?,
+                    None => Default::default(),
+                })
+            } else {
+                None
+            };
+            let deployed = if let Some(inventory) = &swarm {
+                let services = inventory
+                    .services
+                    .get_or_try_init(|| async {
+                        let services = self
+                            .runtime
+                            .runtime
+                            .swarm(target.id, cancel)
+                            .await?
+                            .list_swarm_services(cancel)
+                            .await?;
+                        let mut by_project = BTreeMap::<_, Vec<_>>::new();
+                        for service in services {
+                            if let Some(project) = &service.stack_namespace {
+                                by_project.entry(project.clone()).or_default().push(service);
+                            }
+                        }
+                        Ok::<_, citadel_platforms::RuntimeCapabilityError>(by_project)
+                    })
                     .await
                     .map_err(runtime_failure)?;
-                let services = manager
-                    .list_swarm_services(cancel)
-                    .await
-                    .map_err(runtime_failure)?;
-                let deployed = swarm_deployed_digests(stack.id, &project, &checks, &services)?;
+                let deployed = swarm_deployed_digests(
+                    stack.id,
+                    &project,
+                    &checks,
+                    services
+                        .get(&project)
+                        .map(Vec::as_slice)
+                        .unwrap_or_default(),
+                )?;
                 deployed
                     .into_iter()
                     .map(|(key, (digest, id))| {
@@ -231,58 +271,21 @@ impl StackUpdateRuntime {
                     })
                     .collect()
             } else {
-                let (containers, images) = match &peer {
-                    Some(peer) => (
-                        peer.list_containers(cancel)
-                            .await
-                            .map_err(runtime_failure)?,
-                        peer.list_images(cancel).await.map_err(runtime_failure)?,
-                    ),
-                    None => (
-                        citadel_platforms::ContainerInventoryPort::list_containers(
-                            &self.runtime.docker,
-                            cancel,
-                        )
-                        .await
-                        .map_err(runtime_failure)?,
-                        citadel_platforms::ImageInventoryPort::list_images(
-                            &self.runtime.docker,
-                            cancel,
-                        )
-                        .await
-                        .map_err(runtime_failure)?,
-                    ),
-                };
-                let owned = containers
-                    .iter()
-                    .filter(
-                        |container| match container.labels.get("com.citadel.stack-id") {
-                            Some(id) => id == &owned_id,
-                            None => {
-                                !container.labels.contains_key("com.citadel.deployment-id")
-                                    && container.labels.get("com.docker.compose.project")
-                                        == Some(&project)
-                            }
-                        },
-                    )
-                    .collect::<Vec<_>>();
-                let images = images
-                    .iter()
-                    .map(|image| (image.id.as_str(), image))
-                    .collect::<BTreeMap<_, _>>();
+                let inventory = StackImageInventory::observe(
+                    &self.runtime.docker,
+                    &target,
+                    peer.as_ref(),
+                    self.batch.as_ref(),
+                    (!scheduled).then_some((owned_id.as_str(), project.as_str())),
+                    cancel,
+                )
+                .await?;
                 let mut deployed = BTreeMap::new();
                 for check in &checks {
                     let mut digests = BTreeSet::new();
                     let mut image_ids = BTreeSet::new();
-                    for container in &owned {
-                        if container
-                            .labels
-                            .get("com.docker.compose.service")
-                            .is_none_or(|service| service != &check.service_name)
-                        {
-                            continue;
-                        }
-                        if !image_ids.insert(container.image_id.clone()) {
+                    for id in inventory.service_images(&owned_id, &project, &check.service_name) {
+                        if !image_ids.insert(id.clone()) {
                             continue;
                         }
                         if image_ids.len() > 16 {
@@ -290,14 +293,14 @@ impl StackUpdateRuntime {
                                 "Too many deployed image variants to compare.".into(),
                             ));
                         }
-                        let image = images.get(container.image_id.as_str()).ok_or_else(|| {
+                        let repo_digests = inventory.images.get(id).ok_or_else(|| {
                             StackError::Conflict(format!(
                                 "The deployed image for service '{}' is unavailable.",
                                 check.service_name
                             ))
                         })?;
                         let mut identified = false;
-                        for digest in &image.repo_digests {
+                        for digest in repo_digests {
                             if repository(digest) == repository(&check.image_name)
                                 && let Some((_, digest)) = digest.rsplit_once('@')
                             {
@@ -316,9 +319,7 @@ impl StackUpdateRuntime {
                                 )
                                 .await
                                 .map_err(runtime_failure)?;
-                            digests.insert(
-                                deployed_content_digest(&inspector, &image.id, cancel).await?,
-                            );
+                            digests.insert(deployed_content_digest(&inspector, id, cancel).await?);
                         }
                     }
                     if digests.len() != 1 {
@@ -379,7 +380,6 @@ impl StackUpdateRuntime {
             };
             let platform = stack.platform_id.ok_or(StackError::NotFound)?;
             let mut content_changes = BTreeMap::new();
-            let mut swarm_inventory = None;
             for check in &checks {
                 let key = state_key(&check.service_name, &check.image_name);
                 let current = &deployed[&key];
@@ -396,23 +396,20 @@ impl StackUpdateRuntime {
                         current,
                         remote: latest,
                     };
-                let targets = if let Some(id) = swarm_service_ids.get(&key) {
-                    if swarm_inventory.is_none() {
-                        let manager = self
-                            .runtime
-                            .runtime
-                            .swarm(platform, cancel)
-                            .await
-                            .map_err(runtime_failure)?;
-                        swarm_inventory = Some(
+                let targets = if let (Some(id), Some(inventory)) =
+                    (swarm_service_ids.get(&key), &swarm)
+                {
+                    let (nodes, tasks) = inventory
+                        .placement
+                        .get_or_try_init(|| async {
+                            let manager = self.runtime.runtime.swarm(platform, cancel).await?;
                             tokio::try_join!(
                                 manager.list_swarm_nodes(cancel),
                                 manager.list_swarm_tasks(cancel)
                             )
-                            .map_err(runtime_failure)?,
-                        );
-                    }
-                    let (nodes, tasks) = swarm_inventory.as_ref().unwrap();
+                        })
+                        .await
+                        .map_err(runtime_failure)?;
                     crate::connectors::registries::workload_updates::swarm_targets(id, nodes, tasks)
                         .map_err(runtime_failure)?
                 } else {
@@ -439,6 +436,18 @@ impl StackUpdateRuntime {
                     .map_err(runtime_failure)?;
                 content_changes.insert(key, changed);
             }
+            if self.batch.is_some() {
+                let current = self.runtime.platform(target.id).await?;
+                if current.connector != target.connector
+                    || current.address != target.address
+                    || current.node_id != target.node_id
+                    || matches!(&peer, Some(crate::connectors::agent::execution::AgentExecutionClient::Edge(session)) if session.is_closed())
+                {
+                    return Err(StackError::Conflict(
+                        "The Platform connection changed during the image check.".into(),
+                    ));
+                }
+            }
             Ok(evaluate_manual_stack_updates(
                 &stack.stack_update_state,
                 &checks,
@@ -460,7 +469,7 @@ async fn deployed_content_digest(
     cancel: &CancellationToken,
 ) -> Result<String, StackError> {
     let image = runtime
-        .inspect_image(image_id, cancel)
+        .image_identity(image_id, cancel)
         .await
         .map_err(runtime_failure)?;
     if image.id != image_id {
@@ -498,6 +507,16 @@ pub(crate) async fn stack_image_checks(
             "The Stack has no Registry configured.".into(),
         ));
     }
+    let files = applied_compose_files(Some(git), spec, stack.source.as_ref(), cancel).await?;
+    build_stack_image_checks(stack, scheduled, &files)
+}
+
+pub(crate) async fn applied_compose_files(
+    git: Option<&citadel_git::GitRepositoryExecutionService>,
+    spec: &StackSpec,
+    source: Option<&citadel_stacks::StackReleaseSource>,
+    cancel: &CancellationToken,
+) -> Result<Vec<String>, StackError> {
     let files = match spec {
         StackSpec::WebEditor { compose_file, .. } => vec![compose_file.clone()],
         StackSpec::Git {
@@ -506,9 +525,7 @@ pub(crate) async fn stack_image_checks(
             compose_paths,
             ..
         } => {
-            let source = stack
-                .source
-                .as_ref()
+            let source = source
                 .filter(|source| {
                     source.source_type == citadel_stacks::StackSource::Git
                         && source.git_repository_id == Some(*git_repo_id)
@@ -520,6 +537,7 @@ pub(crate) async fn stack_image_checks(
                     StackError::Conflict("Apply the Stack before checking its images.".into())
                 })?;
             let snapshot = git
+                .ok_or(StackError::NotFound)?
                 .stack_snapshot_files(
                     *git_repo_id,
                     Some(&source.resolved_commit_sha),
@@ -546,10 +564,10 @@ pub(crate) async fn stack_image_checks(
                 .collect::<Result<Vec<_>, _>>()?
         }
     };
-    build_stack_image_checks(stack, scheduled, &files)
+    Ok(files)
 }
 
-fn runtime_failure(_: citadel_platforms::RuntimeCapabilityError) -> StackError {
+pub(super) fn runtime_failure(_: impl std::fmt::Display) -> StackError {
     StackError::Runtime("Could not inspect the Stack's deployed images.".into())
 }
 fn git_failure(_: citadel_git::GitRepositoryExecutionError) -> StackError {

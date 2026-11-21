@@ -128,6 +128,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
             "7fb4c244-485a-4b80-9611-b29e456adf65",
             InspectVolumeRequest {
                 name: prefix.clone(),
+                ..Default::default()
             },
             "/citadel.volumes.v1.VolumeService/Inspect",
         ))
@@ -405,6 +406,7 @@ async fn core_and_direct_clients_manage_disposable_resources_on_docker() {
             "7fb4c244-485a-4b80-9611-b29e456adf65",
             InspectImageRequest {
                 id: "redis:latest".into(),
+                identity_only: false,
             },
             "/citadel.images.v1.ImageService/Inspect",
         ))

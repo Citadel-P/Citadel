@@ -39,6 +39,31 @@ pub struct ImageInspection {
     pub docker_node_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ImageIdentity {
+    pub id: String,
+    pub config_digest: Option<String>,
+    pub content_digest: Option<String>,
+    pub os: String,
+    pub architecture: String,
+    pub variant: Option<String>,
+    pub repo_tags: Vec<String>,
+}
+
+impl From<ImageInspection> for ImageIdentity {
+    fn from(image: ImageInspection) -> Self {
+        Self {
+            id: image.id,
+            config_digest: image.config_digest,
+            content_digest: image.content_digest,
+            os: image.os,
+            architecture: image.architecture,
+            variant: image.variant,
+            repo_tags: image.repo_tags,
+        }
+    }
+}
+
 impl ImageInspection {
     pub fn set_display_reference(&mut self) {
         let Some(reference) = self.repo_tags.first() else {
@@ -82,6 +107,14 @@ pub trait ImageInspectionPort: Send + Sync {
         id: &'a str,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>>;
+
+    fn image_identity<'a>(
+        &'a self,
+        id: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<ImageIdentity, RuntimeCapabilityError>> {
+        Box::pin(async move { self.inspect_image(id, cancellation).await.map(Into::into) })
+    }
 
     fn inspect_image<'a>(
         &'a self,

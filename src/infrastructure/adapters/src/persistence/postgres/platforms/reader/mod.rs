@@ -1,3 +1,4 @@
+mod compose_networks;
 mod health_history;
 mod network_usage;
 mod queries;

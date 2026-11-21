@@ -108,7 +108,7 @@ async fn monitor(
     .await?;
     if let Some(hub) = &realtime {
         for id in ids {
-            hub.publish_container_observation(session.target.platform_id, "healthGap", id);
+            hub.publish_container_observation(session.target.platform_id, "healthGap", id, None);
         }
     }
     let interval = settings.monitoring_interval;
@@ -395,6 +395,7 @@ async fn observe_events(
                             platform_id,
                             &event.action,
                             event.container_id.clone().unwrap_or_default(),
+                            updated.affected_stack(),
                         );
                     }
                 }

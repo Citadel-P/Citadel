@@ -17,6 +17,30 @@ impl RestoreVolumeOwner {
         Self { platform, restore }
     }
 
+    pub(crate) async fn prepare_agent_target(
+        &self,
+        agent: &crate::connectors::agent::execution::AgentExecutionClient,
+        name: &str,
+        overwrite: bool,
+        cancellation: &tokio_util::sync::CancellationToken,
+    ) -> Result<bool, String> {
+        let exists = agent
+            .volume_exists(name, cancellation)
+            .await
+            .map_err(|error| error.to_string())?;
+        if exists && !overwrite {
+            return Err("Target Volume already exists.".into());
+        }
+        if !exists {
+            let volume = agent
+                .create_volume(&self.request(name), cancellation)
+                .await
+                .map_err(|error| error.to_string())?;
+            self.verify(name, &volume)?;
+        }
+        Ok(exists)
+    }
+
     pub fn request(&self, name: &str) -> CreateRuntimeVolume {
         CreateRuntimeVolume {
             name: name.into(),
@@ -153,3 +177,6 @@ mod tests {
         assert!(owner.verify("copy-data", &volume).is_err());
     }
 }
+
+#[cfg(test)]
+mod volume_existence_tests;

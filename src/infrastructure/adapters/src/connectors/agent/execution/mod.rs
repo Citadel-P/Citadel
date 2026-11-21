@@ -222,6 +222,32 @@ impl AgentExecutionClient {
         }
     }
 
+    pub async fn image_digests(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<std::collections::BTreeMap<String, Vec<String>>, RuntimeCapabilityError> {
+        use citadel_contracts::citadel::images::v1::ListImagesRequest;
+        let response = match self {
+            Self::Direct(client) => client.image_digests(cancellation).await?,
+            Self::Edge(session) => {
+                unary(
+                    session,
+                    EdgeCommandKind::ImageList,
+                    ListImagesRequest {
+                        identity_only: true,
+                    },
+                    cancellation,
+                )
+                .await?
+            }
+        };
+        Ok(response
+            .images
+            .into_iter()
+            .map(|image| (image.id, image.repo_digests))
+            .collect())
+    }
+
     pub async fn list_images(
         &self,
         cancellation: &CancellationToken,
@@ -433,19 +459,31 @@ impl AgentExecutionClient {
         }
     }
 
-    pub async fn inspect_volume(
+    pub async fn volume_metadata(
         &self,
         name: &str,
         cancellation: &CancellationToken,
     ) -> Result<citadel_platforms::RuntimeVolumeSummary, RuntimeCapabilityError> {
         use citadel_platforms::VolumeObservationPort;
         match self {
-            Self::Direct(client) => client.inspect_volume(name, cancellation).await,
+            Self::Direct(client) => {
+                client
+                    .observe_volume(
+                        name,
+                        citadel_platforms::VolumeObservation::Metadata,
+                        cancellation,
+                    )
+                    .await
+            }
             Self::Edge(session) => {
                 crate::connectors::edge::EdgeRuntime {
                     session: session.clone(),
                 }
-                .inspect_volume(name, cancellation)
+                .observe_volume(
+                    name,
+                    citadel_platforms::VolumeObservation::Metadata,
+                    cancellation,
+                )
                 .await
             }
         }
@@ -456,34 +494,14 @@ impl AgentExecutionClient {
         name: &str,
         cancellation: &CancellationToken,
     ) -> Result<bool, RuntimeCapabilityError> {
-        match self {
-            Self::Direct(client) => match citadel_platforms::VolumeObservationPort::inspect_volume(
-                client.as_ref(),
-                name,
-                cancellation,
-            )
-            .await
-            {
-                Ok(_) => Ok(true),
-                Err(error) if error.kind == RuntimeErrorKind::NotFound => Ok(false),
-                Err(error) => Err(error),
-            },
-            Self::Edge(session) => {
-                use citadel_contracts::citadel::volumes::v1::{
-                    ListVolumesRequest, ListVolumesResponse,
-                };
-                let response: ListVolumesResponse = unary(
-                    session,
-                    EdgeCommandKind::VolumeList,
-                    ListVolumesRequest {
-                        name: Some(name.into()),
-                        ..Default::default()
-                    },
-                    cancellation,
-                )
-                .await?;
-                Ok(response.volumes.iter().any(|volume| volume.name == name))
-            }
+        let result = match self {
+            Self::Direct(client) => client.named_volume_metadata(name, cancellation).await,
+            Self::Edge(_) => self.volume_metadata(name, cancellation).await,
+        };
+        match result {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind == RuntimeErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error),
         }
     }
     pub(crate) async fn build_image(

@@ -55,7 +55,14 @@ impl CopyStorage for CopyStorageRuntime {
                     .volumes(plan.target_platform(), plan.target_node(target), cancel)
                     .await
                     .map_err(storage_error)?;
-                let volume = match runtime.inspect_volume(&target.target, cancel).await {
+                let volume = match runtime
+                    .observe_volume(
+                        &target.target,
+                        citadel_platforms::VolumeObservation::Metadata,
+                        cancel,
+                    )
+                    .await
+                {
                     Ok(volume) => volume,
                     Err(error) if error.kind == RuntimeErrorKind::NotFound => continue,
                     Err(error) => return Err(storage_error(error)),
@@ -94,16 +101,16 @@ impl CopyStorageRuntime {
                 let runtime=self.runtime.volumes(plan.target_platform(),plan.target_node(volume),cancellation).await.map_err(storage_error)?;
                 if let Some(restores)=restores {
                     let restore=restores.iter().find(|r|r.target==volume.target).ok_or_else(||conflict("Restore receipt is missing."))?;
-                    let target=runtime.inspect_volume(&volume.target,cancellation).await.map_err(|_|conflict("Restored volume is unavailable. No workload was created."))?;
+                    let target=runtime.observe_volume(&volume.target, citadel_platforms::VolumeObservation::Metadata, cancellation).await.map_err(|_|conflict("Restored volume is unavailable. No workload was created."))?;
                     crate::external::backups::restore_storage::RestoreVolumeOwner::new(plan.target_platform(),restore.id).verify(&volume.target,&target).map_err(CopyError::Conflict)?;
                 } else {
                     if plan.request.data_mode == CopyDataMode::CurrentData {
-                        let source=runtime.inspect_volume(&volume.source,cancellation).await.map_err(|_|conflict("A source volume could not be inspected. Bring its Platform or exact Swarm Node online and retry."))?;
+                        let source=runtime.observe_volume(&volume.source, citadel_platforms::VolumeObservation::ContentProtection, cancellation).await.map_err(|_|conflict("A source volume could not be inspected. Bring its Platform or exact Swarm Node online and retry."))?;
                         if source.content_access_allowed != Some(true) || source.driver!="local" || source.scope!="local" || !source.options.is_empty() {
                             return Err(conflict("Only plain local Docker volumes can be copied. Custom drivers and driver options are unsupported."));
                         }
                     }
-                    match runtime.inspect_volume(&volume.target,cancellation).await {
+                    match runtime.observe_volume(&volume.target, citadel_platforms::VolumeObservation::Metadata, cancellation).await {
                         Err(error) if error.kind==RuntimeErrorKind::NotFound => {},
                         Err(_)=>return Err(conflict("Destination volume availability could not be verified.")),
                         Ok(_)=>return Err(conflict("A destination volume already exists. Review again to allocate fresh names.")),
@@ -135,7 +142,7 @@ pub async fn verify_destination(
             .volumes(receipt.platform_id, receipt.node_id.as_deref(), cancel)
             .await
             .map_err(|e| e.to_string())?;
-        let volume=volumes.inspect_volume(&receipt.name,cancel).await.map_err(|_|format!("Copied volume {} is missing or unavailable. Apply was blocked to avoid creating empty replacement storage.",receipt.name))?;
+        let volume=volumes.observe_volume(&receipt.name, citadel_platforms::VolumeObservation::Metadata, cancel).await.map_err(|_|format!("Copied volume {} is missing or unavailable. Apply was blocked to avoid creating empty replacement storage.",receipt.name))?;
         crate::external::backups::restore_storage::RestoreVolumeOwner::new(
             receipt.platform_id,
             receipt.restore_id,

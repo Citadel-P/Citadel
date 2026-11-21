@@ -115,6 +115,39 @@ async fn script_http_streams_executes_cancels_and_persists_real_process_results(
     assert_eq!(defaulted.status(), StatusCode::OK);
     let defaulted = body(defaulted).await;
     assert_eq!(defaulted["timeoutSeconds"], 300);
+    let catalog = request(
+        &app,
+        Method::GET,
+        "/api/v1/scripts",
+        Some(admin.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(catalog.status(), StatusCode::OK);
+    let catalog = body(catalog).await;
+    let summary = catalog["scripts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["id"] == defaulted["id"])
+        .unwrap();
+    for key in ["code", "defaultArgsJson", "webhook"] {
+        assert!(summary.get(key).is_none(), "{key} leaked into catalog");
+    }
+    assert_eq!(summary["name"], defaulted["name"]);
+    let detail = body(
+        request(
+            &app,
+            Method::GET,
+            &format!("/api/v1/scripts/{}", defaulted["id"].as_str().unwrap()),
+            Some(admin.clone()),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(detail["code"], "console.log('ok');");
+    assert!(detail["webhook"].is_object());
     assert_eq!(defaulted["webhook"]["enabled"], false);
     assert_eq!(defaulted["webhook"]["provider"], "GitHub");
     assert_eq!(defaulted["webhook"]["authScheme"], "GitHubHmacSha256");

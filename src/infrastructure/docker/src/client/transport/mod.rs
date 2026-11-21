@@ -17,6 +17,7 @@ mod binary_exec;
 mod health;
 mod owned_exec;
 mod sampling;
+mod swarm_inventory;
 mod terminal;
 pub use binary_exec::{DockerExecError, DockerExecEvent, DockerExecStream};
 

@@ -144,6 +144,11 @@ impl PostgresSwarmServiceRepository {
                 r#"{AUTHORIZED_CTES}{PROJECTION}
 WHERE ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(r.level_mask,0)) >= 1)
   AND ($3::uuid IS NULL OR s.platformid=$3)
+  AND ($5::uuid[] IS NULL OR s.id=ANY($5))
+  AND ($6::text[] IS NULL OR s.dockerserviceid IN (SELECT t.dockerserviceid FROM swarmtaskprojections t WHERE t.platformid=$3 AND t.dockercontainerid=ANY($6))
+       OR EXISTS (SELECT 1 FROM unnest($6) changed(id)
+          WHERE NOT EXISTS (SELECT 1 FROM containers c WHERE c.platformid=$3 AND c.dockercontainerid=changed.id)
+          AND NOT EXISTS (SELECT 1 FROM swarmtaskprojections t WHERE t.platformid=$3 AND t.dockercontainerid=changed.id)))
   AND NOT EXISTS (SELECT 1 FROM unnest($4::text[]) requested(name) WHERE NOT EXISTS (
       SELECT 1 FROM resourcetags filter_link JOIN tags filter_tag ON filter_tag.id=filter_link.tagid
       WHERE filter_link.resourcetype='SwarmService' AND filter_link.resourceid=s.id
@@ -155,6 +160,8 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                 .bind(administrator)
                 .bind(filter.platform_id)
                 .bind(&filter.tags)
+                .bind(filter.resource_ids.as_deref())
+                .bind(filter.container_ids.as_deref())
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?

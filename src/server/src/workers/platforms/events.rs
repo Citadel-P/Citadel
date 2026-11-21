@@ -454,7 +454,12 @@ pub(crate) async fn event_consumer(
                         Ok(ids) => {
                             if let Some(hub) = &realtime {
                                 for id in ids {
-                                    hub.publish_container_observation(target.id, "healthGap", id);
+                                    hub.publish_container_observation(
+                                        target.id,
+                                        "healthGap",
+                                        id,
+                                        None,
+                                    );
                                 }
                             }
                         }
@@ -738,7 +743,12 @@ pub(crate) async fn apply_container_event(
         if updated.changed()
             && let Some(hub) = realtime
         {
-            hub.publish_container_observation(target.id, &event.action, id.to_owned());
+            hub.publish_container_observation(
+                target.id,
+                &event.action,
+                id.to_owned(),
+                updated.affected_stack(),
+            );
         }
     }
     Ok(handled)

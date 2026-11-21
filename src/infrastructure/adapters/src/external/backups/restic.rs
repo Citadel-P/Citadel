@@ -1477,24 +1477,23 @@ impl ResticOperation<'_> {
             .ok_or_else(|| "Backup Run has no Restic snapshot ID.".to_owned())?;
         let name = format!("citadel-restore-{}", claim.run.id.simple());
         let volume = &claim.run.target_volume_name;
-        // A failed inspect is not proof that a volume is absent (the daemon
-        // may be unavailable). Only a successful, complete listing may do that.
-        let listed = self
-            .execute(
-                vec![
-                    "volume".into(),
-                    "ls".into(),
-                    "--filter".into(),
-                    format!("name={volume}").into(),
-                    "--format".into(),
-                    "{{.Name}}".into(),
-                ],
-                vec![],
-                Duration::from_secs(30),
+        // The Docker CLI omits driver warnings from volume listings. Inspect the
+        // exact name against the same CLI target that will perform the restore.
+        let inspection = self
+            .run_observed(
+                ProcessRequest::new(self.executor.docker.clone())
+                    .args(["volume", "inspect", "--format", "{{.Name}}", "--", volume])
+                    .limits(ProcessLimits {
+                        timeout: Duration::from_secs(30),
+                        maximum_stdout_bytes: 4096,
+                        maximum_stderr_bytes: 4096,
+                        output_limit_policy: OutputLimitPolicy::Truncate,
+                    }),
                 cancellation,
             )
-            .await?;
-        let existing = listed_volume_exists(&listed, volume)?;
+            .await
+            .map_err(|error| error.to_string())?;
+        let existing = inspected_volume_exists(&inspection, volume)?;
         if cancellation.is_cancelled() {
             return Err("Restore was cancelled.".into());
         }
@@ -2084,21 +2083,15 @@ impl ResticOperation<'_> {
             )
             .await?;
         let mount_target = format!("/target{root}");
-        let existing = agent
-            .volume_exists(&claim.run.target_volume_name, cancellation)
-            .await
-            .map_err(|error| error.to_string())?;
-        if existing && !claim.run.overwrite_existing {
-            return Err("Target Volume already exists.".to_owned());
-        }
         let owner = RestoreVolumeOwner::new(claim.run.target_platform_id, claim.run.id);
-        if !existing {
-            let volume = agent
-                .create_volume(&owner.request(&claim.run.target_volume_name), cancellation)
-                .await
-                .map_err(|error| error.to_string())?;
-            owner.verify(&claim.run.target_volume_name, &volume)?;
-        }
+        let existing = owner
+            .prepare_agent_target(
+                agent,
+                &claim.run.target_volume_name,
+                claim.run.overwrite_existing,
+                cancellation,
+            )
+            .await?;
         let timeout = self.executor.restore_timeout();
         let container_id = self
             .create_agent_helper(
@@ -2113,7 +2106,7 @@ impl ResticOperation<'_> {
         let result = async {
             if !existing {
                 let volume = agent
-                    .inspect_volume(&claim.run.target_volume_name, cancellation)
+                    .volume_metadata(&claim.run.target_volume_name, cancellation)
                     .await
                     .map_err(|error| error.to_string())?;
                 owner.verify(&claim.run.target_volume_name, &volume)?;
@@ -2809,16 +2802,26 @@ async fn observe_output(
     }
 }
 
-fn listed_volume_exists(
+fn inspected_volume_exists(
     output: &citadel_execution::ProcessOutput,
     name: &str,
 ) -> Result<bool, String> {
-    if !output.succeeded() || output.stdout_truncated || output.stderr_truncated {
-        return Err("Could not determine whether the target Volume exists.".into());
+    if !output.stdout_truncated && !output.stderr_truncated {
+        if output.succeeded() && output.stdout.trim_ascii() == name.as_bytes() {
+            return Ok(true);
+        }
+        if output.exit_code == Some(1)
+            && output.stdout.trim_ascii().is_empty()
+            && output.stderr.trim_ascii()
+                == format!("Error response from daemon: get {name}: no such volume").as_bytes()
+        {
+            return Ok(false);
+        }
+        if !output.succeeded() && !output.stderr.trim_ascii().is_empty() {
+            return Err(redact(&String::from_utf8_lossy(output.stderr.trim_ascii())));
+        }
     }
-    let names = std::str::from_utf8(&output.stdout)
-        .map_err(|_| "Docker returned an invalid Volume listing.".to_owned())?;
-    Ok(names.lines().any(|value| value == name))
+    Err("Could not determine whether the target Volume exists.".into())
 }
 
 /// Local and remote historical backups used different helper mount paths.
@@ -3454,26 +3457,29 @@ mod tests {
     }
 
     #[test]
-    fn restore_requires_a_successful_complete_volume_listing() {
+    fn local_restore_requires_explicit_named_volume_absence() {
         let mut output = citadel_execution::ProcessOutput {
             exit_code: Some(0),
-            stdout: b"target-other\ntarget\n".to_vec(),
+            stdout: b"target\n".to_vec(),
             stderr: vec![],
             stdout_truncated: false,
             stderr_truncated: false,
         };
-        assert_eq!(listed_volume_exists(&output, "target"), Ok(true));
-        assert_eq!(listed_volume_exists(&output, "absent"), Ok(false));
-        output.stdout_truncated = true;
-        assert!(listed_volume_exists(&output, "absent").is_err());
-        output.stdout_truncated = false;
-        output.exit_code = Some(1);
-        assert!(listed_volume_exists(&output, "absent").is_err());
-        output.exit_code = Some(0);
-        output.stdout = vec![0xff];
-        assert!(listed_volume_exists(&output, "absent").is_err());
+        assert_eq!(inspected_volume_exists(&output, "target"), Ok(true));
         output.stdout.clear();
-        assert_eq!(listed_volume_exists(&output, "absent"), Ok(false));
+        assert!(inspected_volume_exists(&output, "target").is_err());
+        output.exit_code = Some(1);
+        output.stderr = b"Error response from daemon: get target: no such volume\n".to_vec();
+        assert_eq!(inspected_volume_exists(&output, "target"), Ok(false));
+        assert!(inspected_volume_exists(&output, "other").is_err());
+        output.stderr_truncated = true;
+        assert!(inspected_volume_exists(&output, "target").is_err());
+        output.stderr_truncated = false;
+        output.stderr = b"driver unavailable".to_vec();
+        assert_eq!(
+            inspected_volume_exists(&output, "target"),
+            Err("driver unavailable".into())
+        );
     }
 
     #[test]

@@ -608,21 +608,35 @@ impl DockerClient {
             .await
     }
     pub async fn inspect_volume(&self, name: &str) -> Result<DockerVolume, DockerError> {
-        validate_identifier(name)?;
-        let mut volume: DockerVolume = self
-            .api_result(
-                VolumeApiClient::new(self.configuration().await?)
-                    .volume_inspect(name)
-                    .await,
-            )
-            .await?
-            .try_into()?;
-        if volume.usage_data.is_none() {
+        self.observe_volume(name, citadel_platforms::VolumeObservation::Details)
+            .await
+    }
+    pub async fn observe_volume(
+        &self,
+        name: &str,
+        observation: citadel_platforms::VolumeObservation,
+    ) -> Result<DockerVolume, DockerError> {
+        use citadel_platforms::VolumeObservation;
+        let mut volume = self.volume_metadata(name).await?;
+        if observation == VolumeObservation::Metadata {
+            return Ok(volume);
+        }
+        if observation == VolumeObservation::Details && volume.usage_data.is_none() {
             volume.usage_data = self.volume_usage().await?.remove(&volume.name);
         }
         self.apply_volume_content_policy(std::slice::from_mut(&mut volume))
             .await?;
         Ok(volume)
+    }
+    async fn volume_metadata(&self, name: &str) -> Result<DockerVolume, DockerError> {
+        validate_identifier(name)?;
+        self.api_result(
+            VolumeApiClient::new(self.configuration().await?)
+                .volume_inspect(name)
+                .await,
+        )
+        .await?
+        .try_into()
     }
     pub async fn create_volume(
         &self,
@@ -769,14 +783,7 @@ impl DockerClient {
         &self,
         filters: Option<&str>,
     ) -> Result<Vec<SwarmTask>, DockerError> {
-        convert_list(
-            self.api_result(
-                TaskApiClient::new(self.configuration().await?)
-                    .task_list(filters)
-                    .await,
-            )
-            .await?,
-        )
+        self.task_inventory(filters).await
     }
     pub async fn list_swarm_service_tasks(&self, id: &str) -> Result<Vec<SwarmTask>, DockerError> {
         validate_identifier(id)?;
@@ -912,14 +919,7 @@ impl DockerClient {
         &self,
         filters: Option<&str>,
     ) -> Result<Vec<SwarmConfig>, DockerError> {
-        convert_list(
-            self.api_result(
-                ConfigApiClient::new(self.configuration().await?)
-                    .config_list(filters)
-                    .await,
-            )
-            .await?,
-        )
+        self.config_inventory(filters).await
     }
     pub async fn inspect_swarm_config(&self, id: &str) -> Result<SwarmConfig, DockerError> {
         validate_identifier(id)?;

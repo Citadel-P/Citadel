@@ -84,7 +84,7 @@ message GetImageRequest {
 	string id = 1;
 }
 message ListImagesRequest {
-
+    bool identity_only = 1;
 }
 
 message HistoryImageRequest {
@@ -206,6 +206,7 @@ message DeleteImageResponseItem {
 
 message InspectImageRequest {
 	string id = 1;
+	bool identity_only = 2;
 }
 
 message InspectImageResponse {

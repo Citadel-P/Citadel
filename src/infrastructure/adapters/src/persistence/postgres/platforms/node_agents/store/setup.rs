@@ -1,4 +1,5 @@
 use super::*;
+use crate::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use citadel_platforms::{
     InventoryProjectionStore, RuntimeInventorySnapshot, node_agents::setup::*,
@@ -109,7 +110,9 @@ impl NodeAgentSetupStore for PostgresNodeAgentLifecycleStore {
         snapshot: RuntimeInventorySnapshot,
     ) -> BoxFuture<'_, Result<(), RuntimeCapabilityError>> {
         Box::pin(async move {
-            crate::persistence::postgres::platforms::inventory::store::PostgresInventoryProjectionStore::new(self.pool.clone()).with_node_policy(self.node_policy.clone())
+            PostgresInventoryProjectionStore::new(self.pool.clone())
+                .with_node_policy(self.node_policy.clone())
+                .with_health_owner()
                 .persist(&snapshot)
                 .await
                 .map(|_| ())

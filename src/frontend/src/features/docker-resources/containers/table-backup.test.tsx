@@ -14,10 +14,6 @@ vi.hoisted(() => {
 });
 vi.mock('@/lib/context/app-context', () => ({ useAppContext: () => ({ currentPlatform: undefined }) }));
 vi.mock('./container-info/image-name', () => ({ ImageName: () => null }));
-vi.mock('@/features/stacks/backup-cell', () => ({
-  StackBackupCell: ({ stackId }: { stackId: string }) => <span data-testid="stack-backup">{stackId}</span>,
-}));
-
 const container = (id: string, stack: string, stackId: string | null): ContainerView =>
   ({
     id,
@@ -41,7 +37,21 @@ it('uses managed stack coverage only for a group with a single stack identity', 
       actions={{}}
       isLoading={false}
       items={[
-        container('db', 'wordpress', 'wordpress-id'),
+        {
+          ...container('db', 'wordpress', 'wordpress-id'),
+          stackBackupCoverage: {
+            status: Status.Failed,
+            platformId: 'platform',
+            unavailable: false,
+            hasResourcePolicy: true,
+            canConfigure: false,
+            canConfigureBindMount: false,
+            policies: [],
+            volumes: [],
+            warnings: [],
+            reasons: [],
+          },
+        },
         container('web', 'wordpress', 'wordpress-id'),
         container('unmanaged', 'external', null),
         container('conflicting-one', 'ambiguous', 'stack-one'),
@@ -50,9 +60,9 @@ it('uses managed stack coverage only for a group with a single stack identity', 
     />,
   );
   expect(screen.getByRole('columnheader', { name: 'Backup' })).toBeVisible();
-  expect(screen.getAllByTestId('stack-backup')).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: 'Backups: Backup failed' })).toHaveLength(1);
   const row = screen.getByRole('button', { name: 'wordpress' }).closest('tr')!;
-  expect(within(row).getByTestId('stack-backup')).toHaveTextContent('wordpress-id');
+  expect(within(row).getByRole('button', { name: 'Backups: Backup failed' })).toBeVisible();
   const external = screen.getByRole('button', { name: 'external' }).closest('tr')!;
   expect(within(external).getByRole('button', { name: 'Backups: Coverage unavailable' })).toBeVisible();
 });

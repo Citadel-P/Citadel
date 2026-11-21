@@ -1,4 +1,4 @@
-import { AuthorizedScript } from '@/api/generated/api.types';
+import { ScriptSummaryView } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { CitadelIcons } from '@/lib/icons';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
@@ -8,7 +8,7 @@ import { useScriptsGroup } from './hooks/useScriptsGroup';
 
 const EMPTY_SCRIPTS: never[] = [];
 
-export const ScriptComponents: RequiredComponents<AuthorizedScript> = {
+export const ScriptComponents: RequiredComponents<ScriptSummaryView> = {
   Icon: CitadelIcons.Script,
   Content: ({ items, actions, isLoading }) => <ScriptsTable items={items} actions={actions} isLoading={isLoading} />,
   header: {
@@ -21,14 +21,14 @@ export const ScriptComponents: RequiredComponents<AuthorizedScript> = {
   },
   DropdownActions: ScriptDropdownActions,
   GroupActions: ({ items }) => <ActionBar type="Script" items={items} actions={Object.values(ScriptGroupActions)} />,
-  useData(): ResourceDataHookResult<AuthorizedScript> {
+  useData(): ResourceDataHookResult<ScriptSummaryView> {
     const { scripts, isLoading, capabilities, error, refetch, isFetching } = useScriptsGroup();
     return { error, refetch, isFetching, items: scripts ?? EMPTY_SCRIPTS, isLoading, capabilities };
   },
   filterItems: filterScripts,
 };
 
-function filterScripts(items: AuthorizedScript[], search: string) {
+function filterScripts(items: ScriptSummaryView[], search: string) {
   if (!search.trim()) return items;
 
   const s = search.toLowerCase();

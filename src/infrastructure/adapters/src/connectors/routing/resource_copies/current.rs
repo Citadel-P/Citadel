@@ -193,7 +193,11 @@ impl CopyStorageRuntime {
             crate::external::backups::restore_storage::RestoreVolumeOwner::new(platform, job.id);
         let execution = async {
             let source = volumes
-                .inspect_volume(&job.source, cancel)
+                .observe_volume(
+                    &job.source,
+                    citadel_platforms::VolumeObservation::ContentProtection,
+                    cancel,
+                )
                 .await
                 .map_err(storage_error)?;
             if source.content_access_allowed != Some(true)
@@ -203,7 +207,14 @@ impl CopyStorageRuntime {
             {
                 return Err(conflict("Only ordinary local volumes can be copied."));
             }
-            match volumes.inspect_volume(&job.target, cancel).await {
+            match volumes
+                .observe_volume(
+                    &job.target,
+                    citadel_platforms::VolumeObservation::Metadata,
+                    cancel,
+                )
+                .await
+            {
                 Err(e) if e.kind == RuntimeErrorKind::NotFound => {}
                 Err(e) => return Err(storage_error(e)),
                 Ok(_) => {
@@ -272,7 +283,11 @@ impl CopyStorageRuntime {
             };
             // The created helper pins both mounts against Docker removal/recreation.
             let source = volumes
-                .inspect_volume(&job.source, cancel)
+                .observe_volume(
+                    &job.source,
+                    citadel_platforms::VolumeObservation::ContentProtection,
+                    cancel,
+                )
                 .await
                 .map_err(storage_error)?;
             if source.content_access_allowed != Some(true)
@@ -288,7 +303,11 @@ impl CopyStorageRuntime {
                 .verify(
                     &job.target,
                     &volumes
-                        .inspect_volume(&job.target, cancel)
+                        .observe_volume(
+                            &job.target,
+                            citadel_platforms::VolumeObservation::Metadata,
+                            cancel,
+                        )
                         .await
                         .map_err(storage_error)?,
                 )

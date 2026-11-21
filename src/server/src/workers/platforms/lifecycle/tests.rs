@@ -17,6 +17,7 @@ fn target() -> ReconciliationTarget {
 fn transition(target: &ReconciliationTarget, online: bool) -> PlatformHealthTransition {
     PlatformHealthTransition {
         target: target.clone(),
+        edge_binding: None,
         online,
     }
 }

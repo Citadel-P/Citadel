@@ -76,7 +76,10 @@ impl ApplicationGroupReader {
                 return Ok(());
             }
             Platforms => ResourceType::Platform,
-            Containers(platform) | Images(platform) | DockerDaemon(platform) => {
+            Containers(platform)
+            | Images(platform)
+            | Volumes(platform)
+            | DockerDaemon(platform) => {
                 self.platforms
                     .platform_kind(*platform)
                     .await

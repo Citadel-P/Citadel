@@ -9,6 +9,8 @@ use uuid::Uuid;
 
 #[derive(Debug, Default)]
 pub(crate) struct CommittedReads {
+    // Internal ownership evidence. Readers authorize these IDs before publishing badges.
+    pub(crate) affected_stacks: Vec<Uuid>,
     pub(crate) budget: Budget,
     pub(crate) _payload: Option<tokio::sync::OwnedSemaphorePermit>,
     pub(crate) processes: tokio::sync::Mutex<
@@ -141,9 +143,14 @@ pub(crate) async fn telemetry<'a>(
 }
 
 impl CommittedReads {
-    pub(crate) fn new(budget: Budget, payload: tokio::sync::OwnedSemaphorePermit) -> Self {
+    pub(crate) fn new(
+        budget: Budget,
+        payload: tokio::sync::OwnedSemaphorePermit,
+        affected_stacks: Vec<Uuid>,
+    ) -> Self {
         Self {
             _payload: Some(payload),
+            affected_stacks,
             processes: Default::default(),
             identities: Cache::new(budget.clone()),
             telemetry: Cache::new(budget.clone()),

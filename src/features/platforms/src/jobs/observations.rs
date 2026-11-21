@@ -63,11 +63,13 @@ pub trait RuntimeProjectionStore: Send + Sync {
 }
 
 pub trait PlatformLifecycleStore: Send + Sync {
+    /// False when the Edge binding that supplied the observation is no longer current.
     fn set_online<'a>(
         &'a self,
         platform: Uuid,
         online: bool,
-    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>>;
+        edge_binding: Option<Uuid>,
+    ) -> BoxFuture<'a, Result<bool, RuntimeCapabilityError>>;
     fn reconcile_deployments<'a>(
         &'a self,
         platform: Uuid,

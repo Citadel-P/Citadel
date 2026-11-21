@@ -81,17 +81,22 @@ impl NetworkObservationPort for Runtime<'_> {
 }
 
 impl VolumeObservationPort for Runtime<'_> {
-    fn inspect_volume<'a>(
+    fn observe_volume<'a>(
         &'a self,
         name: &'a str,
+        observation: citadel_platforms::VolumeObservation,
         cancel: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
         match self {
             Runtime::Local(runtime) => {
-                VolumeObservationPort::inspect_volume(*runtime, name, cancel)
+                VolumeObservationPort::observe_volume(*runtime, name, observation, cancel)
             }
-            Runtime::Agent(runtime) => VolumeObservationPort::inspect_volume(runtime, name, cancel),
-            Runtime::Edge(runtime) => VolumeObservationPort::inspect_volume(runtime, name, cancel),
+            Runtime::Agent(runtime) => {
+                VolumeObservationPort::observe_volume(runtime, name, observation, cancel)
+            }
+            Runtime::Edge(runtime) => {
+                VolumeObservationPort::observe_volume(runtime, name, observation, cancel)
+            }
         }
     }
 }

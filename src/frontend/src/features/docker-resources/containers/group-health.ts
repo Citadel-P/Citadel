@@ -15,7 +15,10 @@ export type ContainerGroupHealth = {
   total: number;
   members?: HealthMember[];
 };
-export type ContainerHealthItem = ContainerView & { stackHealth?: ContainerGroupHealth };
+export type ContainerHealthItem = ContainerView & {
+  stackBackupCoverage?: ContainerView['backupCoverage'];
+  stackHealth?: ContainerGroupHealth;
+};
 
 export function groupHealth(
   containers: HealthContainer[],

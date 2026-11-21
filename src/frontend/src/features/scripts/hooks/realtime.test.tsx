@@ -86,6 +86,8 @@ it('script details follow committed snapshots and rejoin without HTTP invalidati
   const { queryClient } = renderCitadel(<Script />, { groups: groups(fake) });
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Processing'));
   await waitFor(() => expect(fake.listenerCount('ScriptInfoUpdated')).toBe(1));
+  act(() => fake.emit('ScriptSummaryUpdated', { id, controlState: 'Idle' }, 'update'));
+  expect(screen.getByRole('status')).toHaveTextContent('Processing');
   act(() => fake.emit('ScriptInfoUpdated', { id, controlState: 'Idle' }, 'update'));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Idle'));
   expect(queryClient.getQueryData(['getScript', { id }])).toEqual({ data: { id, controlState: 'Idle' } });

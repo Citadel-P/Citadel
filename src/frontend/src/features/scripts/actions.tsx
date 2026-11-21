@@ -1,4 +1,4 @@
-import { AuthorizedScript, ResourceControlState } from '@/api/generated/api.types';
+import { ScriptSummaryView, ResourceControlState } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { useSelectedResources, useTaskSheet } from '@/lib/atoms';
 import { useMutate, useRead } from '@/lib/hooks';
@@ -18,7 +18,7 @@ export const invalidateScriptQueries = async (queryClient: ReturnType<typeof use
   }
 };
 
-const singleSelection = (resources: AuthorizedScript | AuthorizedScript[]) => {
+const singleSelection = (resources: ScriptSummaryView | ScriptSummaryView[]) => {
   const selected = Array.isArray(resources) ? resources[0] : resources;
   const multiSelect = Array.isArray(resources) && resources.length > 1;
   return { selected, multiSelect };
@@ -26,7 +26,7 @@ const singleSelection = (resources: AuthorizedScript | AuthorizedScript[]) => {
 
 const useScriptRunTaskSheet = () => useTaskSheet('Script');
 
-const { dropdown, group, info } = createActionsBuilder<AuthorizedScript>()
+const { dropdown, group, info } = createActionsBuilder<ScriptSummaryView>()
   .addAction({
     key: 'edit',
     type: 'command',
@@ -105,7 +105,7 @@ const { dropdown, group, info } = createActionsBuilder<AuthorizedScript>()
       const selected = Array.isArray(resources) ? resources : [resources];
       const queryClient = useQueryClient();
       const remove = useMutate('deleteScript');
-      const [, setSelectedResources] = useSelectedResources<AuthorizedScript>('Script');
+      const [, setSelectedResources] = useSelectedResources<ScriptSummaryView>('Script');
       const location = useLocation();
       const navigate = useNavigate();
       const isCurrentResource = selected.some(

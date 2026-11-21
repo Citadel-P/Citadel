@@ -125,6 +125,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
                 &DeploymentFilter {
                     tags: vec![tag_filter],
                     platform_id: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -140,6 +141,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
                 &DeploymentFilter {
                     tags: vec!["missing-tag".to_owned()],
                     platform_id: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -242,6 +244,7 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
             &DeploymentFilter {
                 tags: Vec::new(),
                 platform_id: Some(other_platform_id),
+                ..Default::default()
             },
         )
         .await
@@ -667,6 +670,59 @@ async fn deployment_health_uses_current_owned_observations_and_authorized_reads(
         .unwrap();
     assert_eq!(read.probe_health.status, Health::Healthy);
     assert_eq!(read.probe_health.members[0].container_id, Some(id));
+    let other = store
+        .create(
+            actor,
+            true,
+            &CreateDeployment {
+                name: format!("other-{}", Uuid::now_v7()),
+                platform_id: platform,
+                description: None,
+                spec: local_spec(None),
+                tag_ids: vec![],
+                duplicate_source: None,
+            },
+        )
+        .await
+        .unwrap();
+    let by_container = DeploymentFilter {
+        platform_id: Some(platform),
+        container_ids: Some(vec!["current".into()]),
+        ..Default::default()
+    };
+    let by_resource = DeploymentFilter {
+        resource_ids: Some(vec![deployment.id]),
+        ..Default::default()
+    };
+    for filter in [by_container, by_resource] {
+        let rows = store.list_authorized(actor, true, &filter).await.unwrap();
+        assert_eq!(
+            rows.iter().map(|r| r.id).collect::<Vec<_>>(),
+            [deployment.id]
+        );
+        assert!(
+            store
+                .list_authorized(ActorId::new(Uuid::nil()), false, &filter)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+    // A container can disappear between a notification and its authorized read.
+    let recovery = store
+        .list_authorized(
+            actor,
+            true,
+            &DeploymentFilter {
+                platform_id: Some(platform),
+                container_ids: Some(vec!["disappeared".into()]),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(recovery.iter().any(|r| r.id == other.id));
+
     assert!(
         store
             .get_authorized(ActorId::new(Uuid::nil()), false, deployment.id)
