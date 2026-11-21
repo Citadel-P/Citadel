@@ -1,3 +1,4 @@
+import { useReconcileBackupRepository } from './cache';
 import { useRemoveResourceAction } from '@/components/custom/useSettledResourceAction';
 import { BackupRepositoryView } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
@@ -84,10 +85,12 @@ const { dropdown, group, info } = createActionsBuilder<BackupRepositoryView>()
     useHandler: ({ resources }) => {
       const selected = Array.isArray(resources) ? resources : [resources];
       const archive = useMutate('archiveBackupRepository');
+      const reconcile = useReconcileBackupRepository();
       return useRemoveResourceAction(selected, {
         type: 'BackupRepository',
         listPath: '/backup-repositories',
         mutate: (item) => archive.mutateAsync({ id: item.id }),
+        onRemoved: () => reconcile(),
         message: (count, total) => `${count} of ${total} ${total === 1 ? 'repository' : 'repositories'} archived`,
       });
     },

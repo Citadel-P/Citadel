@@ -48,6 +48,7 @@ function setup() {
           connectionState: RealtimeConnectionState.Connected,
           joinGroup,
           leaveGroup,
+          isGroupLive: () => true,
           capacityGroups: new Set(),
           retryGroup: vi.fn(),
         },

@@ -1,3 +1,4 @@
+import { useReconcileBackupRepository } from '../backup-repositories/cache';
 import {
   BackupRepositoryFormInput,
   createDefaultInput,
@@ -144,8 +145,9 @@ function RepositoryDialog({
   input: BackupRepositoryFormInput;
   setInput: Dispatch<SetStateAction<BackupRepositoryFormInput>>;
 }) {
-  const create = useMutate('createBackupRepository');
-  const update = useMutate('updateBackupRepository');
+  const reconcile = useReconcileBackupRepository();
+  const create = useMutate('createBackupRepository', { onSuccess: () => reconcile() });
+  const update = useMutate('updateBackupRepository', { onSuccess: (_, { id }) => reconcile(id) });
   const { canRun, run, pending: pendingOperation } = useRepositoryOperations(editing);
   const [updatingCredentials, setUpdatingCredentials] = useState(false);
   const saving = create.isPending || update.isPending;

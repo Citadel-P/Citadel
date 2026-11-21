@@ -1,3 +1,4 @@
+import { useReconcileBuildProject } from '../cache';
 import {
   BuildArgSpec,
   WebhookConfig,
@@ -472,8 +473,9 @@ export const BuildForm = ({
   const { hasCapability: hasLicenseCapability } = useLicenseEntitlements();
   const automatedOperationsEnabled = hasLicenseCapability(LicenseCapability.AutomatedOperations);
   const elasticBuildExecutionEnabled = hasLicenseCapability(LicenseCapability.ElasticBuildExecution);
-  const createBuild = useMutate('createBuildProject');
-  const updateBuild = useMutate('updateBuildProject');
+  const reconcile = useReconcileBuildProject();
+  const createBuild = useMutate('createBuildProject', { onSuccess: () => reconcile() });
+  const updateBuild = useMutate('updateBuildProject', { onSuccess: (_, { id }) => reconcile(id) });
   const currentGitRepositoryId = update.gitRepositoryId ?? resource?.gitRepositoryId ?? defaultBuild.gitRepositoryId;
   const { data: gitRefsData, isFetching: isFetchingGitRefs } = useRead(
     'getGitRepositoryRefs',

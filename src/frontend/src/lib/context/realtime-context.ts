@@ -8,6 +8,7 @@ type RealtimeGroupTransport = {
   connection: RealtimeConnection | null;
   connectionState: RealtimeConnectionState;
   capacityGroups: ReadonlySet<string>;
+  isGroupLive: (groupName: string) => boolean;
   retryGroup: (groupName: string) => Promise<void>;
   joinGroup: (groupName: string, setup?: (hub: RealtimeConnection) => void) => Promise<void>;
   leaveGroup: (groupName: string, remove?: (hub: RealtimeConnection) => void) => Promise<void>;

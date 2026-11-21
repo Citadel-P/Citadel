@@ -1,3 +1,4 @@
+import { useReconcileBackupPolicy } from '../cache';
 import {
   BackupCoverageStatus,
   BackupSourceSpec,
@@ -156,8 +157,9 @@ export function BackupPolicyForm({
   const initialSource = useMemo(() => (mode === 'add' ? backupSourceFromSearch(search) : undefined), [mode, search]);
   const draftId = id ?? (initialSource ? `new:${sourceKey(initialSource)}` : 'new');
   const queryClient = useQueryClient();
-  const createPolicy = useMutate('createBackupPolicy');
-  const updatePolicy = useMutate('updateBackupPolicy');
+  const reconcile = useReconcileBackupPolicy();
+  const createPolicy = useMutate('createBackupPolicy', { onSuccess: () => reconcile() });
+  const updatePolicy = useMutate('updateBackupPolicy', { onSuccess: (_, { id }) => reconcile(id) });
   const [update, setUpdate] = useState<Partial<BackupPolicyFormValue>>({});
   const { data: profileResponse } = useRead('getCurrentProfile');
   const isAdministrator = profileResponse?.data.authorization.isAdministrator === true;

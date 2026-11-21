@@ -1,3 +1,4 @@
+import { useReconcileBackupPolicy } from './cache';
 import { invalidatePolicyCoverage } from './coverage';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRemoveResourceAction } from '@/components/custom/useSettledResourceAction';
@@ -72,11 +73,12 @@ const { dropdown, group, info } = createActionsBuilder<BackupPolicyView>()
       const selected = Array.isArray(resources) ? resources : [resources];
       const client = useQueryClient();
       const archive = useMutate('archiveBackupPolicy');
+      const reconcile = useReconcileBackupPolicy();
       return useRemoveResourceAction(selected, {
         type: 'BackupPolicy',
         listPath: '/backup-policies',
         mutate: (item) => archive.mutateAsync({ id: item.id }),
-        onRemoved: () => invalidatePolicyCoverage(client),
+        onRemoved: () => Promise.all([reconcile(), invalidatePolicyCoverage(client)]),
         message: (count, total) => `${count} of ${total} ${total === 1 ? 'policy' : 'policies'} archived`,
       });
     },

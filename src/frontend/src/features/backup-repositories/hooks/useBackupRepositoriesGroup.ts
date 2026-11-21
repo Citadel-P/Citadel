@@ -1,3 +1,4 @@
+import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { RealtimeConnection } from '@/lib/realtime-connection';
@@ -7,7 +8,11 @@ import { useCollectionRows } from '@/hooks/useCollectionRows';
 const allRepositories = () => true;
 
 export const useBackupRepositoriesGroup = () => {
-  const { data, isLoading, error, refetch, isFetching } = useRead('listBackupRepositories');
+  const groupName = 'backup-repositories';
+  const structuralSharing = useCollectionStructuralSharing(groupName);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listBackupRepositories', undefined, {
+    structuralSharing,
+  });
   const reload = useCallback(async () => {
     const result = await refetch();
     return result.isSuccess ? result.data.data.repositories : undefined;
@@ -34,7 +39,7 @@ export const useBackupRepositoriesGroup = () => {
   );
 
   useRealtimeGroup({
-    groupName: 'backup-repositories',
+    groupName,
     onJoinedGroup,
     setupEventListeners,
     removeEventListeners,

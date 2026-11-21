@@ -27,6 +27,8 @@ import { Switch } from '@/components/ui/switch';
 import { useTaskSheet } from '@/lib/atoms';
 import { byteTransform } from '@/lib/bytes.helper';
 import type { DateTimeFormatter } from '@/lib/date-time';
+import { useQueryReconciliation } from '@/hooks/useQueryReconciliation';
+import { useReconcileBackupPolicy } from '../cache';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useMutate, useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
@@ -43,8 +45,24 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
   const openedLinkedRun = useRef<string | undefined>(undefined);
   const [restoreRun, setRestoreRun] = useState<BackupRunView | undefined>();
   const formatDateTime = useProfileDateTimeFormatter();
-  const cancelRun = useMutate('cancelBackupRun');
-  const cancelRestoreRun = useMutate('cancelBackupRestoreRun');
+  const reconcile = useQueryReconciliation();
+  const policy = useReconcileBackupPolicy();
+  const policyId = resource.id;
+  const cancelRun = useMutate('cancelBackupRun', {
+    onSuccess: (_, { id }) =>
+      Promise.all([
+        policy(policyId),
+        reconcile(`backup-runs:${policyId}`, 'listBackupRuns', { query: { policyId } }),
+        reconcile(`backup-run:${id}`, 'getBackupRun', { id }),
+      ]),
+  });
+  const cancelRestoreRun = useMutate('cancelBackupRestoreRun', {
+    onSuccess: (_, { id }) =>
+      Promise.all([
+        reconcile(`backup-restore-runs:${policyId}`, 'listBackupRestoreRuns', { query: { policyId } }),
+        reconcile(`backup-restore-run:${id}`, 'getBackupRestoreRun', { id }),
+      ]),
+  });
   const { open: openSheet } = useTaskSheet('BackupPolicy');
   const readArgs = useMemo(() => ({ query: { policyId: resource.id, limit: 50 } }), [resource.id]);
   const { data, isLoading } = useRead('listBackupRuns', readArgs);

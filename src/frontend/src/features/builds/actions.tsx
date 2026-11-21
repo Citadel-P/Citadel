@@ -1,3 +1,4 @@
+import { useReconcileBuildProject, useReconcileBuildRun } from './cache';
 import { useRemoveResourceAction } from '@/components/custom/useSettledResourceAction';
 import { AuthorizedProject, QueueBuildTrigger } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
@@ -60,7 +61,8 @@ const { dropdown, group, info } = createActionsBuilder<AuthorizedProject>()
     requiredCapabilities: ['canExecute'],
     useHandler: ({ resources }) => {
       const { selected, multiSelect } = singleSelection(resources);
-      const queueRun = useMutate('queueBuildRun');
+      const reconcile = useReconcileBuildRun();
+      const queueRun = useMutate('queueBuildRun', { onSuccess: (run, { id }) => reconcile(id, run.data.id) });
       const navigate = useNavigate();
       const startPendingRef = useRef(false);
       const blocked = selected ? isBuildProjectActive(selected) : false;
@@ -100,10 +102,12 @@ const { dropdown, group, info } = createActionsBuilder<AuthorizedProject>()
     useHandler: ({ resources }) => {
       const selected = Array.isArray(resources) ? resources : [resources];
       const archive = useMutate('archiveBuildProject');
+      const reconcile = useReconcileBuildProject();
       return useRemoveResourceAction(selected, {
         type: 'Build',
         listPath: '/builds',
         mutate: (item) => archive.mutateAsync({ id: item.id }),
+        onRemoved: () => reconcile(),
         message: (count, total) => `${count} of ${total} ${total === 1 ? 'build' : 'builds'} archived`,
       });
     },

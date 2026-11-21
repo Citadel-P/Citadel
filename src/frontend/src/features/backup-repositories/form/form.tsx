@@ -1,3 +1,4 @@
+import { useReconcileBackupRepository } from '../cache';
 import {
   BackupRepositoryFormInput,
   createDefaultInput,
@@ -83,8 +84,11 @@ export function BackupRepositoryForm({
 }) {
   const id = useParams().id;
   const [update, setUpdate] = useState<Partial<BackupRepositoryFormInput>>({});
-  const { mutateAsync: createBackupRepository } = useMutate('createBackupRepository');
-  const { mutateAsync: updateBackupRepository } = useMutate('updateBackupRepository');
+  const reconcile = useReconcileBackupRepository();
+  const { mutateAsync: createBackupRepository } = useMutate('createBackupRepository', { onSuccess: () => reconcile() });
+  const { mutateAsync: updateBackupRepository } = useMutate('updateBackupRepository', {
+    onSuccess: (_, { id }) => reconcile(id),
+  });
 
   const { save: handleSave, isPending } = useSaveResource<BackupRepositoryFormInput, any>({
     mode,

@@ -1,3 +1,4 @@
+import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
 import { useCollectionRows } from '@/hooks/useCollectionRows';
 import { ScriptSummaryView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
@@ -12,7 +13,11 @@ export const useScriptsGroup = () => {
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const { data, isLoading, error, refetch, isFetching } = useRead('listScripts', readArgs);
+  const groupName = 'scripts';
+  const structuralSharing = useCollectionStructuralSharing(groupName);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listScripts', readArgs, {
+    structuralSharing,
+  });
   const capabilities = data?.data.capabilities;
   const matchesActiveFilters = useCallback(
     (script: ScriptSummaryView) => {
@@ -50,7 +55,7 @@ export const useScriptsGroup = () => {
   );
 
   useRealtimeGroup({
-    groupName: 'scripts',
+    groupName,
     onJoinedGroup,
     setupEventListeners,
     removeEventListeners,

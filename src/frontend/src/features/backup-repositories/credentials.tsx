@@ -1,3 +1,4 @@
+import { useReconcileBackupRepository } from './cache';
 import { BackupRepositoryView } from '@/api/generated/api.types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,8 @@ export function RepositoryCredentials({
   onUpdated?: (repository: BackupRepositoryView) => void;
   onPendingChange?: (pending: boolean) => void;
 }) {
-  const mutation = useMutate('updateBackupRepositoryCredentials');
+  const reconcile = useReconcileBackupRepository();
+  const mutation = useMutate('updateBackupRepositoryCredentials', { onSuccess: (_, { id }) => reconcile(id) });
   // Untouched selections come directly from the latest repository. Keep a snapshot
   // only while editing so a refresh cannot silently overwrite another rotation.
   const [draft, setDraft] = useState<{ base: string; values: Credentials } | null>(null);

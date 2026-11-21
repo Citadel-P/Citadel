@@ -1,3 +1,4 @@
+import { useReconcileScript } from '../cache';
 import {
   ScriptInput,
   RunInput,
@@ -98,8 +99,9 @@ export function ScriptForm({
   );
   const duplicate = duplicateData?.data;
   const { open: openSheet } = useTaskSheet('Script');
-  const createScript = useMutate('createScript');
-  const updateScript = useMutate('updateScript');
+  const reconcile = useReconcileScript();
+  const createScript = useMutate('createScript', { onSuccess: () => reconcile() });
+  const updateScript = useMutate('updateScript', { onSuccess: (_, { id }) => reconcile(id) });
   const [update, setUpdate] = useState<Partial<ScriptFormValue>>({});
   useEffect(() => {
     if (!duplicateFrom || !duplicate || loadedDuplicate.current === duplicateFrom) return;

@@ -1,3 +1,4 @@
+import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
 import { useCollectionRows } from '@/hooks/useCollectionRows';
 import { BackupPolicyView } from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
@@ -17,7 +18,11 @@ export const useBackupPoliciesGroup = () => {
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const { data, isLoading, error, refetch, isFetching } = useRead('listBackupPolicies', readArgs);
+  const groupName = 'backup-policies';
+  const structuralSharing = useCollectionStructuralSharing(groupName);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listBackupPolicies', readArgs, {
+    structuralSharing,
+  });
   const capabilities = data?.data.capabilities;
   const matchesActiveFilters = useCallback(
     (policy: BackupPolicyView) => {
@@ -56,7 +61,7 @@ export const useBackupPoliciesGroup = () => {
   );
 
   useRealtimeGroup({
-    groupName: 'backup-policies',
+    groupName,
     onJoinedGroup,
     setupEventListeners,
     removeEventListeners,

@@ -12,7 +12,7 @@ async function settleResources<T>(items: T[], mutate: (item: T) => Promise<unkno
 export function useSettledResourceAction<T extends { id: string }>(
   items: T[],
   mutate: (item: T) => Promise<unknown>,
-  completed: (succeeded: T[]) => void,
+  completed: (succeeded: T[]) => void | Promise<unknown>,
 ) {
   const running = useRef(false);
   const [isPending, setPending] = useState(false);
@@ -24,7 +24,7 @@ export function useSettledResourceAction<T extends { id: string }>(
       running.current = true;
       setPending(true);
       try {
-        completed(await settleResources(items, mutate));
+        await completed(await settleResources(items, mutate));
       } finally {
         running.current = false;
         setPending(false);
@@ -39,7 +39,7 @@ export function useRemoveResourceAction<T extends { id: string }>(
     type: ResourceType;
     listPath: string;
     mutate: (item: T) => Promise<unknown>;
-    onRemoved?: () => void;
+    onRemoved?: () => void | Promise<unknown>;
     message: (success: number, total: number) => string;
   },
 ) {
@@ -53,13 +53,13 @@ export function useRemoveResourceAction<T extends { id: string }>(
       path.current = null;
     };
   }, [location.pathname]);
-  return useSettledResourceAction(items, options.mutate, (succeeded) => {
+  return useSettledResourceAction(items, options.mutate, async (succeeded) => {
     const ids = new Set(succeeded.map((item) => item.id));
     setSelected((current) => current.filter((item) => !ids.has(item.id)));
     if (succeeded.some((item) => path.current === `${options.listPath}/edit/${item.id}`))
       navigate(options.listPath, { replace: true });
     if (ids.size) {
-      options.onRemoved?.();
+      await options.onRemoved?.();
       toast.success(options.message(ids.size, items.length));
     }
   });

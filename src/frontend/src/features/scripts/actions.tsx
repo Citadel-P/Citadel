@@ -1,3 +1,4 @@
+import { useReconcileScript } from './cache';
 import { useRemoveResourceAction } from '@/components/custom/useSettledResourceAction';
 import { ScriptSummaryView, ResourceControlState } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
@@ -92,10 +93,12 @@ const { dropdown, group, info } = createActionsBuilder<ScriptSummaryView>()
     useHandler: ({ resources }) => {
       const selected = Array.isArray(resources) ? resources : [resources];
       const remove = useMutate('deleteScript');
+      const reconcile = useReconcileScript();
       return useRemoveResourceAction(selected, {
         type: 'Script',
         listPath: '/scripts',
         mutate: (item) => remove.mutateAsync({ id: item.id }),
+        onRemoved: () => reconcile(),
         message: (count, total) => `${count} of ${total} ${total === 1 ? 'script' : 'scripts'} deleted`,
       });
     },

@@ -24,6 +24,7 @@ type RealtimeProviderProps = {
 type GroupState = {
   state: 'pending' | 'joining' | 'joined' | 'capacity';
   references: number;
+  joinedConnection?: RealtimeConnection;
   joinPromise?: Promise<void>;
 };
 
@@ -131,6 +132,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
         .then(() => {
           if (current() && group.state === 'joining') {
             group.state = 'joined';
+            group.joinedConnection = conn;
             markCapacity(name, false);
           }
         })
@@ -241,6 +243,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
           return;
         }
 
+        for (const group of groupStates.current.values()) group.joinedConnection = undefined;
         setConnectionState(RealtimeConnectionState.Reconnecting);
         markInterrupted(isBrowserOffline() ? 'offline' : 'reconnecting');
       });
@@ -571,7 +574,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       const group = groupStates.current.get(groupName) ?? { state: 'pending', references: 0 };
       group.references++;
       groupStates.current.set(groupName, group);
-      if (group.state === 'joined') return;
+      if (group.state === 'joined' && group.joinedConnection === conn) return;
       try {
         await requestGroupJoin(conn, groupName, group);
       } catch (err) {
@@ -585,6 +588,16 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
     },
     [ensureConnectionReady, markCapacity, requestGroupJoin],
   );
+
+  const isGroupLive = useCallback((name: string) => {
+    const connection = activeConnectionRef.current;
+    const group = groupStates.current.get(name);
+    return (
+      connection?.state === RealtimeConnectionState.Connected &&
+      group?.state === 'joined' &&
+      group.joinedConnection === connection
+    );
+  }, []);
 
   const retryGroup = useCallback(
     async (name: string) => {
@@ -639,7 +652,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
     <RealtimeContext.Provider
       value={{
         groups: realtimeEnabled
-          ? { connection, connectionState, joinGroup, leaveGroup, retryGroup, capacityGroups }
+          ? { connection, connectionState, joinGroup, leaveGroup, retryGroup, capacityGroups, isGroupLive }
           : undefined,
         // Application-info discovery is startup, not a failed connection.
         liveConnectionState:

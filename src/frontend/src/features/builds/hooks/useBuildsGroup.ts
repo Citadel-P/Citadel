@@ -1,3 +1,4 @@
+import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
 import { useCollectionRows } from '@/hooks/useCollectionRows';
 import { AuthorizedProject } from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
@@ -18,7 +19,11 @@ export const useBuildsGroup = () => {
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const { data, isLoading, error, refetch, isFetching } = useRead('listBuildProjects', readArgs);
+  const groupName = 'build-projects';
+  const structuralSharing = useCollectionStructuralSharing(groupName);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listBuildProjects', readArgs, {
+    structuralSharing,
+  });
   const capabilities = data?.data.capabilities;
   const matchesActiveFilters = useCallback(
     (project: AuthorizedProject) => {
@@ -57,7 +62,7 @@ export const useBuildsGroup = () => {
   );
 
   useRealtimeGroup({
-    groupName: 'build-projects',
+    groupName,
     onJoinedGroup,
     setupEventListeners,
     removeEventListeners,

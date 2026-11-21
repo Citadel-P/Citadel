@@ -1,6 +1,7 @@
 import { BackupRepositoryStatus, ResourceControlState, type BackupRepositoryView } from '@/api/generated/api.types';
 import { useMutate } from '@/lib/hooks';
 import { useMutationState, useQueryClient } from '@tanstack/react-query';
+import { useReconcileBackupRepository } from './cache';
 import { toast } from 'sonner';
 import { getRepositoryOperationContext } from './input';
 
@@ -36,6 +37,7 @@ export function canOperateRepository(
 
 export function useRepositoryOperations(repository: BackupRepositoryView | null | undefined) {
   const client = useQueryClient();
+  const reconcile = useReconcileBackupRepository();
   const key = ['backup-repository-maintenance', repository?.id];
   const pending = useMutationState({
     filters: { mutationKey: key, status: 'pending' },
@@ -43,6 +45,7 @@ export function useRepositoryOperations(repository: BackupRepositoryView | null 
   })[0];
   const options = (operation: RepositoryOperation) => ({
     mutationKey: [...key, operation],
+    onSuccess: (_: unknown, { id }: { id: string }) => reconcile(id),
   });
   const validate = useMutate(operationKeys.validate, options('validate'));
   const initialize = useMutate(operationKeys.initialize, options('initialize'));
