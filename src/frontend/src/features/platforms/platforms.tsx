@@ -1,3 +1,6 @@
+import { useRealtimeContext } from '@/lib/context/realtime-context';
+import { Button } from '@/components/ui/button';
+import { useState } from 'react';
 import { ResourceCardsSkeleton } from '@/pages/resource-skeleton';
 import { useNavigate } from 'react-router';
 import { AlertMessage } from '@/components/custom/alert-message';
@@ -20,9 +23,32 @@ export const Platforms = ({
   >;
 }) => {
   const navigate = useNavigate();
+  const { groups } = useRealtimeContext();
+  const [retrying, setRetrying] = useState(false);
+  const retry = async () => {
+    if (!groups) return;
+    setRetrying(true);
+    try {
+      await groups.retryGroup('platforms');
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   return (
     <>
+      {groups?.capacityGroups.has('platforms') && (
+        <AlertMessage
+          type="warning"
+          action={
+            <Button variant="outline" size="sm" disabled={retrying} onClick={() => void retry().catch(console.warn)}>
+              {retrying ? 'Retrying…' : 'Retry live updates'}
+            </Button>
+          }>
+          Live updates paused because the platform list exceeds the snapshot limit. Displayed platforms may be out of
+          date.
+        </AlertMessage>
+      )}
       {isLoading && !items?.length && <ResourceCardsSkeleton />}
       {(!items || !items.length) &&
         !isLoading &&

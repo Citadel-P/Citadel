@@ -18,7 +18,10 @@ import { BuildFormComponents } from '@/features/builds/form';
 import { BuildPoolFormComponents } from '@/features/build-pools/form';
 import { useActivitiesGroup } from '@/features/activities/hooks/useActivitiesGroup';
 import { Route, Routes } from 'react-router';
-import { ComponentProps } from 'react';
+import { ComponentProps, useCallback, useState } from 'react';
+import { Platforms } from '@/features/platforms/platforms';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
+import { GROUP_CAPACITY_ERROR, type RealtimeConnection } from '@/lib/realtime-connection';
 
 afterEach(() => vi.useRealTimers());
 
@@ -163,6 +166,70 @@ it('uses existing daemon handlers to remove Volumes and Networks without refetch
   rendered.unmount();
 });
 
+it('recovers the shared Platforms list after capacity rejection while another group stays live', async () => {
+  const fake = new FakeRealtimeConnection();
+  let oversized = false;
+  fake.invoke.mockImplementation(async (method, name) => {
+    if (method === 'JoinGroup' && name === 'platforms' && oversized) throw new Error(GROUP_CAPACITY_ERROR);
+  });
+  server.use(http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [], capabilities: {} })));
+  function PlatformOwner({ page = false }: { page?: boolean }) {
+    const { platformsMessage } = usePlatformsGroup({ useTagFilter: false });
+    return (
+      <>
+        <output>
+          {page ? 'page' : 'global'}: {platformsMessage?.[0]?.name}
+        </output>
+        {page && <Platforms items={[]} actions={{}} isLoading={false} isFiltered />}
+      </>
+    );
+  }
+  function App() {
+    const [page, setPage] = useState(true);
+    const [other, setOther] = useState('waiting');
+    useRealtimeGroup({
+      groupName: 'alert-events',
+      setupEventListeners: useCallback((conn: RealtimeConnection) => conn.on('OtherUpdate', setOther), []),
+      removeEventListeners: useCallback((conn: RealtimeConnection) => conn.off('OtherUpdate', setOther), []),
+    });
+    return (
+      <>
+        <PlatformOwner />
+        {page && <PlatformOwner page />}
+        <button onClick={() => setPage(!page)}>toggle page</button>
+        <output>{other}</output>
+      </>
+    );
+  }
+  const { user, rerender } = renderCitadel(<App />, {
+    groups: { connectionFactory: () => fake, startConnection: (connection) => connection.start() },
+  });
+  const wireCount = (method: string, name: string) =>
+    fake.invoke.mock.calls.filter(([m, n]) => m === method && n === name).length;
+  await waitFor(() => expect(wireCount('JoinGroup', 'platforms')).toBe(1));
+  oversized = true;
+  act(() => fake.emit('RealtimeGroupCapacity', 'platforms'));
+  expect(await screen.findByRole('button', { name: 'Retry live updates' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'toggle page' }));
+  expect(wireCount('LeaveGroup', 'platforms')).toBe(0);
+  await user.click(screen.getByRole('button', { name: 'toggle page' }));
+  await waitFor(() => expect(wireCount('JoinGroup', 'platforms')).toBe(2));
+  act(() => fake.emit('OtherUpdate', 'still live'));
+  expect(screen.getByText('still live')).toBeVisible();
+  oversized = false;
+  await user.click(screen.getByRole('button', { name: 'Retry live updates' }));
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry live updates' })).toBeNull());
+  act(() => fake.emit('PlatformsUpdated', [{ id: 'p1', name: 'Recovered' }]));
+  expect(screen.getByText('global: Recovered')).toBeVisible();
+  expect(screen.getByText('page: Recovered')).toBeVisible();
+  expect(wireCount('JoinGroup', 'platforms')).toBe(3);
+  expect(wireCount('JoinGroup', 'alert-events')).toBe(1);
+  expect(wireCount('LeaveGroup', 'alert-events')).toBe(0);
+  await user.click(screen.getByRole('button', { name: 'toggle page' }));
+  expect(wireCount('LeaveGroup', 'platforms')).toBe(0);
+  rerender(<></>);
+  expect(wireCount('LeaveGroup', 'platforms')).toBe(1);
+});
 it('delivers Platform statistics through the existing PlatformStatsUpdated handler', async () => {
   const read = vi.fn(() =>
     HttpResponse.json({

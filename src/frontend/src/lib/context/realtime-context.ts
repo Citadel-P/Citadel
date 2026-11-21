@@ -7,6 +7,8 @@ export type LiveConnectionState = 'connecting' | 'connected' | 'reconnecting' | 
 type RealtimeGroupTransport = {
   connection: RealtimeConnection | null;
   connectionState: RealtimeConnectionState;
+  capacityGroups: ReadonlySet<string>;
+  retryGroup: (groupName: string) => Promise<void>;
   joinGroup: (groupName: string, setup?: (hub: RealtimeConnection) => void) => Promise<void>;
   leaveGroup: (groupName: string, remove?: (hub: RealtimeConnection) => void) => Promise<void>;
 };

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { AlertEventStatus, AlertEventView, Count } from '@/api/generated/api.types';
+import { AlertEventStatus, AlertEventView, Count, type ServerAlertsHttpEvents } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { RealtimeConnection } from '@/lib/realtime-connection';
@@ -53,6 +53,20 @@ export function useAlertEventsGroup() {
       const ids = new Set(items.map((event) => event.id));
       setRecent((prev) => ({ items, received: prev.received.filter((id) => ids.has(id)) }));
       const byId = new Map(items.map((event) => [event.id, event]));
+      // Pages (including the notification seed) outlive the bounded live window.
+      // Replace only existing rows so pagination and filter membership stay intact.
+      for (const list of queryClient.getQueryCache().findAll({ queryKey: ['listAlertEvents'] })) {
+        const cached = queryClient.getQueryData<{ data: ServerAlertsHttpEvents }>(list.queryKey);
+        const page = cached?.data?.pagedResult;
+        if (!cached || !page?.items.some((row) => byId.has(row.id))) continue;
+        if (list.state.fetchStatus === 'fetching') {
+          void queryClient.cancelQueries({ queryKey: list.queryKey, exact: true }, { revert: false });
+        }
+        queryClient.setQueryData(list.queryKey, {
+          ...cached,
+          data: { ...cached.data, pagedResult: { ...page, items: page.items.map((row) => byId.get(row.id) ?? row) } },
+        });
+      }
       const details = queryClient.getQueryCache().findAll({ queryKey: ['getAlertEvent'], type: 'active' });
       for (const detail of details) {
         const id = (detail.queryKey[1] as { id: string }).id;

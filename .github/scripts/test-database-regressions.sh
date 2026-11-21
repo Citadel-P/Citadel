@@ -127,7 +127,8 @@ docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_runtime_p
   for test_name in \
     workers::platforms::state_delta_tests::lifecycle_events_use_no_docker_reads_and_unknown_identity_stays_container_scoped \
     workers::platforms::state_delta_tests::local_and_direct_bursts_commit_once_and_publish_six_ids \
-    workers::platforms::inventory_tests::daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up; do
+    workers::platforms::inventory_tests::daemon_bursts_coalesce_and_events_during_refresh_schedule_one_follow_up \
+    workers::statistics::tests::partial_agent_readings_preserve_disk_history_and_cross_the_alert_threshold; do
     run_cargo test --locked --workspace --lib "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
     run_cargo test --locked --workspace --lib "$test_name" -- --ignored --exact --test-threads=1
   done

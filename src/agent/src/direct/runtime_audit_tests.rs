@@ -36,7 +36,7 @@ async fn fixture_with_metadata_delay(
             .parse()
             .unwrap(),
         Duration::from_secs(3),
-        "/host",
+        std::env::temp_dir(),
     )
     .unwrap();
     let router=Router::new().fallback({ let calls=calls.clone(); move |req:axum::extract::Request| { let calls=calls.clone(); let fail=fail.clone(); async move {
@@ -197,48 +197,47 @@ async fn both_stats_rpcs_share_one_six_container_cycle_and_cancel_independently(
     server.await.unwrap();
 }
 #[tokio::test]
-async fn partial_generation_reaches_containers_and_platform_waits_for_complete_totals() {
+async fn persistent_container_failure_keeps_platform_metadata_and_successful_readings_flowing() {
     let fail = Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let (runtime, calls, server) = fixture(fail.clone()).await;
+    let (runtime, _, server) = fixture(fail.clone()).await;
     let mut containers = runtime
         .stream_containers_stats(Request::new(StreamContainersStatsRequest {
-            fetch_interval_ms: 2000,
+            fetch_interval_ms: 200,
         }))
         .await
         .unwrap()
         .into_inner();
     let mut platform = runtime
         .stream_platform_stats(Request::new(PlatformStatsRequest {
-            fetch_interval_ms: 2000,
+            fetch_interval_ms: 200,
         }))
         .await
         .unwrap()
         .into_inner();
-    let batch = containers.next().await.unwrap().unwrap();
-    assert_eq!(batch.containers.len(), 5);
-    assert!(!batch.containers.contains_key("c0"));
-    assert!(
-        tokio::time::timeout(Duration::from_millis(100), platform.next())
-            .await
-            .is_err()
-    );
-    let reads = || {
-        calls
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|path| path.contains("/stats?"))
-            .count()
-    };
-    assert_eq!(reads(), 6);
-    fail.store(false, std::sync::atomic::Ordering::SeqCst);
-    let recovered = tokio::time::timeout(Duration::from_secs(5), platform.next())
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
-    assert!(recovered.stat.is_some());
-    assert_eq!(reads(), 12);
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        for _ in 0..6 {
+            let (batch, metadata) = tokio::join!(containers.next(), platform.next());
+            let batch = batch.unwrap().unwrap();
+            assert_eq!(batch.containers.len(), 5);
+            assert!(!batch.containers.contains_key("c0"));
+            let metadata = metadata.unwrap().unwrap();
+            assert_eq!(metadata.containers_running, 6);
+            assert_eq!(metadata.image_used_bytes, Some(0));
+            assert_eq!(metadata.volume_used_bytes, Some(0));
+            let stat = metadata.stat.unwrap();
+            assert_eq!(stat.container_count, 6);
+            #[cfg(target_os = "linux")]
+            assert!(stat.disk_usage.is_some() && stat.disk_total_bytes.unwrap() > 0);
+        }
+        fail.store(false, std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(
+            containers.next().await.unwrap().unwrap().containers.len(),
+            6
+        );
+    })
+    .await
+    .expect("both streams must continue during partial collection");
     runtime.shutdown.cancel();
     server.await.unwrap();
 }

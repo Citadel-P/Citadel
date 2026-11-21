@@ -43,7 +43,14 @@ function setup() {
   const result = render(
     <RealtimeContext.Provider
       value={{
-        groups: { connection, connectionState: RealtimeConnectionState.Connected, joinGroup, leaveGroup },
+        groups: {
+          connection,
+          connectionState: RealtimeConnectionState.Connected,
+          joinGroup,
+          leaveGroup,
+          capacityGroups: new Set(),
+          retryGroup: vi.fn(),
+        },
         liveConnectionState: 'connected',
         retryConnection: async () => {},
       }}>

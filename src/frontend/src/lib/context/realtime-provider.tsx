@@ -24,7 +24,7 @@ type RealtimeProviderProps = {
 type GroupState = {
   state: 'pending' | 'joining' | 'joined' | 'capacity';
   references: number;
-  joinPromise?: Promise<unknown>;
+  joinPromise?: Promise<void>;
 };
 
 type CancellationRef = { current: boolean };
@@ -109,6 +109,49 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
   const rebuildGenerationRef = useRef(0);
   const groupStates = useRef<Map<string, GroupState>>(new Map());
 
+  const [capacityGroups, setCapacityGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const markCapacity = useCallback((name: string, limited: boolean) => {
+    setCapacityGroups((current) => {
+      if (current.has(name) === limited) return current;
+      const next = new Set(current);
+      if (limited) next.add(name);
+      else next.delete(name);
+      return next;
+    });
+  }, []);
+
+  const requestGroupJoin = useCallback(
+    (conn: RealtimeConnection, name: string, group: GroupState) => {
+      if (group.joinPromise) return group.joinPromise;
+      const retryingCapacity = group.state === 'capacity';
+      group.state = 'joining';
+      const current = () => groupStates.current.get(name) === group && activeConnectionRef.current === conn;
+      const promise = conn
+        .invoke('JoinGroup', name)
+        .then(() => {
+          if (current() && group.state === 'joining') {
+            group.state = 'joined';
+            markCapacity(name, false);
+          }
+        })
+        .catch((error: unknown) => {
+          const limited = error instanceof Error && error.message === GROUP_CAPACITY_ERROR;
+          if (current()) {
+            group.state = limited || retryingCapacity ? 'capacity' : 'pending';
+            markCapacity(name, group.state === 'capacity');
+          }
+          // The subscription still owns its reference while the server cannot serve the snapshot.
+          if (!limited) throw error;
+        })
+        .finally(() => {
+          if (group.joinPromise === promise) group.joinPromise = undefined;
+        });
+      group.joinPromise = promise;
+      return promise;
+    },
+    [markCapacity],
+  );
+
   const markConnected = useCallback(() => {
     setConnectionState(RealtimeConnectionState.Connected);
     setLiveConnectionState('connected');
@@ -163,7 +206,8 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       conn.on('RealtimeGroupCapacity', (name: string) => {
         const group = groupStates.current.get(name);
         if (group && activeConnectionRef.current === conn) {
-          groupStates.current.set(name, { ...group, state: 'capacity', joinPromise: undefined });
+          group.state = 'capacity';
+          markCapacity(name, true);
         }
       });
 
@@ -207,46 +251,15 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
           return;
         }
 
-        const joinPromise = conn.invoke('JoinGroup', groupName);
-        groupStates.current.set(groupName, { ...group, state: 'joining', joinPromise });
-
         try {
-          await joinPromise;
-
-          const current = groupStates.current.get(groupName);
-          if (current?.joinPromise === joinPromise) {
-            groupStates.current.set(groupName, {
-              ...current,
-              state: 'joined',
-              joinPromise: undefined,
-            });
-          }
+          await requestGroupJoin(conn, groupName, group);
         } catch (err) {
-          const current = groupStates.current.get(groupName);
-          if (current?.joinPromise === joinPromise) {
-            if (err instanceof Error && err.message === GROUP_CAPACITY_ERROR) {
-              groupStates.current.set(groupName, { ...current, state: 'capacity', joinPromise: undefined });
-              return;
-            }
-            groupStates.current.set(groupName, {
-              ...current,
-              state: 'pending',
-              joinPromise: undefined,
-            });
-
-            setTimeout(() => {
-              const pendingGroup = groupStates.current.get(groupName);
-              if (
-                activeConnectionRef.current === conn &&
-                conn.state === RealtimeConnectionState.Connected &&
-                pendingGroup?.state === 'pending'
-              ) {
-                void rejoinGroup(groupName);
-              }
-            }, 2_000);
-          }
-
           console.error(`Failed to rejoin group ${groupName}:`, err);
+          setTimeout(() => {
+            if (groupStates.current.get(groupName) === group && group.state === 'pending') {
+              void rejoinGroup(groupName);
+            }
+          }, 2_000);
         }
       };
 
@@ -349,6 +362,8 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       webSocketFactory,
       markConnected,
       markInterrupted,
+      markCapacity,
+      requestGroupJoin,
       queryClient,
       reconcileLiveQueries,
       realtimeEnabled,
@@ -553,34 +568,33 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
         console.error('setup callback threw:', err);
       }
 
-      const group = groupStates.current.get(groupName);
-      if (group) {
-        if (group.state === 'capacity') throw new Error(GROUP_CAPACITY_ERROR);
-        groupStates.current.set(groupName, { ...group, references: group.references + 1 });
-        await group.joinPromise;
-        return;
-      }
-
-      const joinPromise = conn.invoke('JoinGroup', groupName);
-      groupStates.current.set(groupName, { state: 'joining', references: 1, joinPromise });
-
+      const group = groupStates.current.get(groupName) ?? { state: 'pending', references: 0 };
+      group.references++;
+      groupStates.current.set(groupName, group);
+      if (group.state === 'joined') return;
       try {
-        await joinPromise;
-        const current = groupStates.current.get(groupName);
-        if (current) {
-          groupStates.current.set(groupName, {
-            ...current,
-            state: 'joined',
-            joinPromise: undefined,
-          });
-        }
+        await requestGroupJoin(conn, groupName, group);
       } catch (err) {
         console.error('JoinGroup failed:', err);
-        groupStates.current.delete(groupName);
+        if (--group.references === 0 && groupStates.current.get(groupName) === group) {
+          groupStates.current.delete(groupName);
+          markCapacity(groupName, false);
+        }
         throw err;
       }
     },
-    [ensureConnectionReady],
+    [ensureConnectionReady, markCapacity, requestGroupJoin],
+  );
+
+  const retryGroup = useCallback(
+    async (name: string) => {
+      const conn = activeConnectionRef.current;
+      const group = groupStates.current.get(name);
+      if (conn?.state === RealtimeConnectionState.Connected && group?.state === 'capacity') {
+        await requestGroupJoin(conn, name, group);
+      }
+    },
+    [requestGroupJoin],
   );
 
   const leaveGroup = useCallback(
@@ -603,11 +617,12 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
       }
 
       if (group.references > 1) {
-        groupStates.current.set(groupName, { ...group, references: group.references - 1 });
+        group.references--;
         return;
       }
 
       groupStates.current.delete(groupName);
+      markCapacity(groupName, false);
 
       if (connection?.state === RealtimeConnectionState.Connected) {
         try {
@@ -617,13 +632,15 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
         }
       }
     },
-    [connection],
+    [connection, markCapacity],
   );
 
   return (
     <RealtimeContext.Provider
       value={{
-        groups: realtimeEnabled ? { connection, connectionState, joinGroup, leaveGroup } : undefined,
+        groups: realtimeEnabled
+          ? { connection, connectionState, joinGroup, leaveGroup, retryGroup, capacityGroups }
+          : undefined,
         // Application-info discovery is startup, not a failed connection.
         liveConnectionState:
           realtimeTransport === undefined ? 'connecting' : realtimeEnabled ? liveConnectionState : 'disconnected',

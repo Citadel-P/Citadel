@@ -27,12 +27,12 @@ export const useRealtimeGroup = ({
   const joinGroup = groups?.joinGroup;
   const leaveGroup = groups?.leaveGroup;
   const [isLoading, setIsLoading] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
+  const [subscription, setSubscription] = useState<{ connection: RealtimeConnection; groupName: typeof groupName }>();
 
   const onJoinedRef = useRef(onJoinedGroup);
   const onErrorRef = useRef(onSubscriptionError);
 
-  const lastStateRef = useRef({ isLoading: false, isConnected: false });
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     onJoinedRef.current = onJoinedGroup;
@@ -40,21 +40,34 @@ export const useRealtimeGroup = ({
   }, [onJoinedGroup, onSubscriptionError]);
 
   const state = connectionState;
+  const limited =
+    !skip &&
+    enabled &&
+    (typeof groupName === 'string' ? [groupName] : groupName)?.some((name) => groups?.capacityGroups.has(name));
+  const live =
+    !!subscription &&
+    subscription.groupName === groupName &&
+    subscription.connection === connection &&
+    !skip &&
+    enabled &&
+    !limited &&
+    state === RealtimeConnectionState.Connected;
+
+  useEffect(() => {
+    if (limited) onErrorRef.current?.(new Error(GROUP_CAPACITY_ERROR));
+  }, [limited]);
+
+  useEffect(() => {
+    if (live) onJoinedRef.current?.(subscription.connection);
+  }, [subscription, live]);
 
   useEffect(() => {
     const setLoading = (val: boolean) => {
-      if (lastStateRef.current.isLoading !== val) {
-        lastStateRef.current.isLoading = val;
+      if (loadingRef.current !== val) {
+        loadingRef.current = val;
         setIsLoading(val);
       }
     };
-    const setConnected = (val: boolean) => {
-      if (lastStateRef.current.isConnected !== val) {
-        lastStateRef.current.isConnected = val;
-        setIsConnected(val);
-      }
-    };
-
     const groupNames = typeof groupName === 'string' ? [groupName] : (groupName ?? []);
     if (
       skip ||
@@ -66,7 +79,9 @@ export const useRealtimeGroup = ({
       state !== RealtimeConnectionState.Connected
     ) {
       setLoading(false);
-      setConnected(false);
+      // A disconnected or disabled group releases its subscription.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSubscription(undefined);
       return;
     }
 
@@ -75,20 +90,9 @@ export const useRealtimeGroup = ({
     let listenersRemoved = false;
     let disposed = false;
 
-    const limited = new Set<string>();
-    const onCapacity = (name: string) => {
-      if (!disposed && groupNames.includes(name) && !limited.has(name)) {
-        limited.add(name);
-        setConnected(false);
-        onErrorRef.current?.(new Error(GROUP_CAPACITY_ERROR));
-      }
-    };
-    connection.on('RealtimeGroupCapacity', onCapacity);
-
     const removeListeners = () => {
       if (listenersRemoved) return;
       listenersRemoved = true;
-      connection.off('RealtimeGroupCapacity', onCapacity);
       removeEventListeners?.(connection);
     };
 
@@ -103,13 +107,8 @@ export const useRealtimeGroup = ({
         setLoading(true);
         setupEventListeners(connection);
         for (const currentGroupName of groupNames) {
-          try {
-            await joinGroup(currentGroupName);
-            joined.push(currentGroupName);
-          } catch (error) {
-            if (!(error instanceof Error) || error.message !== GROUP_CAPACITY_ERROR) throw error;
-            onCapacity(currentGroupName);
-          }
+          await joinGroup(currentGroupName);
+          joined.push(currentGroupName);
           if (disposed) break;
         }
 
@@ -119,17 +118,17 @@ export const useRealtimeGroup = ({
           return;
         }
 
-        setConnected(limited.size === 0);
+        setSubscription({ connection, groupName });
         setLoading(false);
-
-        if (limited.size === 0) onJoinedRef.current?.(connection);
       } catch (err) {
         if (!disposed) onErrorRef.current?.(err);
         console.error('[Realtime] join failed', err);
         await leaveJoinedGroups();
         removeListeners();
-        setConnected(false);
-        setLoading(false);
+        if (!disposed) {
+          setSubscription(undefined);
+          setLoading(false);
+        }
       }
     };
 
@@ -142,5 +141,5 @@ export const useRealtimeGroup = ({
     };
   }, [groupName, skip, enabled, state, connection, joinGroup, leaveGroup, setupEventListeners, removeEventListeners]);
 
-  return { isLoading, isConnected };
+  return { isLoading, isConnected: live, isCapacityLimited: !!limited };
 };
