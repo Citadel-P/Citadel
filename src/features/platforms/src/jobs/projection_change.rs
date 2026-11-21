@@ -6,13 +6,21 @@ pub enum ProjectionChange {
     /// Accepted observation; freshness may advance without a semantic revision.
     Unchanged,
     Changed,
+    /// Stack observed in the committed container mutation, including a deleted row.
+    ChangedWithStack(uuid::Uuid),
 }
 impl ProjectionChange {
     pub fn accepted(self) -> bool {
         self != Self::Unavailable
     }
     pub fn changed(self) -> bool {
-        self == Self::Changed
+        matches!(self, Self::Changed | Self::ChangedWithStack(_))
+    }
+    pub fn affected_stack(self) -> Option<uuid::Uuid> {
+        match self {
+            Self::ChangedWithStack(id) => Some(id),
+            _ => None,
+        }
     }
     pub fn committed(changed: bool) -> Self {
         if changed {

@@ -86,3 +86,39 @@ it.each([0, 1, 3])('opens one group per containers page with 30 managed Stack ba
   );
   expect(joined).toEqual(Array.from({ length: count }, () => `containers:${platformId}`));
 });
+
+it('updates a surviving stack badge after deletion and discards it with its last child', async () => {
+  const fake = new FakeRealtimeConnection();
+  const containers = ['a', 'b'].map((id) => ({ id, containerId: id, stackId: 'stack' }));
+  server.use(
+    http.get(`http://localhost/api/v1/platforms/${platformId}/containers`, () =>
+      HttpResponse.json({ containers, stackBackupCoverage: { stack: { status: 'Warning' } } }),
+    ),
+  );
+  const { queryClient } = renderCitadel(<Containers />, {
+    groups: { connectionFactory: () => fake, startConnection: (c) => c.start() },
+  });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Warning'));
+  await waitFor(() => expect(fake.listenerCount('ContainersChanged')).toBe(1));
+  const remove = (id: string, status: string) =>
+    act(() =>
+      fake.emit('ContainersChanged', {
+        platformId,
+        containerId: id,
+        containers: [],
+        stackIds: ['stack'],
+        stackBackupCoverage: { stack: { status } },
+      }),
+    );
+  remove('b', 'Protected');
+  const key = ['listContainers', { id: platformId }];
+  expect(queryClient.getQueryData(key)).toMatchObject({
+    data: {
+      containers: [containers[0]],
+      stackBackupCoverage: { stack: { status: 'Protected' } },
+    },
+  });
+  remove('a', 'Unavailable');
+  expect(queryClient.getQueryData(key)).toMatchObject({ data: { containers: [], stackBackupCoverage: {} } });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('{}'));
+});

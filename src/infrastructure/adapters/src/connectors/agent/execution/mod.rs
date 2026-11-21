@@ -494,25 +494,14 @@ impl AgentExecutionClient {
         name: &str,
         cancellation: &CancellationToken,
     ) -> Result<bool, RuntimeCapabilityError> {
-        match self {
-            Self::Direct(client) => client.volume_exists(name, cancellation).await,
-            Self::Edge(session) => {
-                use citadel_contracts::citadel::volumes::v1::{
-                    ListVolumesRequest, ListVolumesResponse,
-                };
-                let response: ListVolumesResponse = unary(
-                    session,
-                    EdgeCommandKind::VolumeList,
-                    ListVolumesRequest {
-                        name: Some(name.into()),
-                        names_only: true,
-                        ..Default::default()
-                    },
-                    cancellation,
-                )
-                .await?;
-                Ok(response.volumes.iter().any(|volume| volume.name == name))
-            }
+        let result = match self {
+            Self::Direct(client) => client.named_volume_metadata(name, cancellation).await,
+            Self::Edge(_) => self.volume_metadata(name, cancellation).await,
+        };
+        match result {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind == RuntimeErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error),
         }
     }
     pub(crate) async fn build_image(

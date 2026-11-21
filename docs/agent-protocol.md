@@ -18,9 +18,10 @@ active filesystem-cache component within the existing Docker working set.
 Direct and Edge preserve absence; Core does not infer zero or subtract shared
 memory from Docker's general `file` counter.
 
-Volume name lookups use the signed or session-scoped Volume List operation with
+Volume name inventories use the signed or session-scoped Volume List operation with
 `names_only`. The Agent applies the requested filters and returns the matching
-names without collecting disk usage or container attachments.
+names without collecting disk usage or container attachments. Existence checks use
+a named metadata inspection. Only an explicit NotFound establishes absence.
 
 ## Transports
 

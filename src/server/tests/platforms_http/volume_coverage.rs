@@ -383,3 +383,151 @@ async fn volume_realtime_preserves_actor_scoped_coverage_on_join_deltas_and_back
     );
     super::realtime_groups::cleanup(f).await;
 }
+
+struct ScheduledBackups;
+impl BackupEntitlements for ScheduledBackups {
+    fn automated_operations(&self) -> BoxFuture<'_, Result<bool, BackupError>> {
+        Box::pin(async { Ok(true) })
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn committed_container_deletion_recomputes_authorized_surviving_stack_coverage() {
+    use citadel_adapters::persistence::postgres::platforms::status::container_event_committed;
+    let f = fixture().await;
+    let mut reader = super::realtime_groups::reader(&f);
+    reader.backup_coverage = Some(Arc::new(BackupCoverageService {
+        backups: Arc::new(BackupService::new(reader.backups.clone(), Arc::new(NoExecution),
+            Arc::new(citadel_adapters::persistence::postgres::backups::source_planner::PostgresBackupSourcePlanner::new(f.pool.clone())),
+            Duration::minutes(5),
+            Arc::new(citadel_adapters::security::identity::backup_authorization::IdentityBackupRunAuthorizer::new(reader.identity.clone())),
+        ).with_entitlements(Arc::new(ScheduledBackups))),
+        identity: reader.identity.clone(),
+        volume_coverage: f.lookup_state.platforms.volume_coverage.clone(),
+    }));
+    sqlx::query("UPDATE platforms SET platformdescriptor=$2 WHERE id=$1")
+        .bind(f.platform_id)
+        .bind(json!({"$type":"DockerStandalone"}))
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    let [stack, release, secret, repo, policy, run] = std::array::from_fn(|_| Uuid::now_v7());
+    sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,stacksource,driftpolicy,stackupdatestate,controlstate) VALUES($1,'coverage-stack',$2,'WebEditor','{}','{}','Idle')")
+        .bind(stack).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,createdbyactorid,spec,status,version) VALUES($1,$2,$3,$4,'{}','Degraded','1')")
+        .bind(release).bind(stack).bind(f.platform_id).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    sqlx::query("UPDATE stacks SET currentstackreleaseid=$1 WHERE id=$2")
+        .bind(release)
+        .bind(stack)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    for name in ["a", "b"] {
+        sqlx::query("INSERT INTO containers(id,stackid,platformid,dockercontainerid,name,stack,dockerimageid,created,updated,state,ports,mounts) VALUES($1,$2,$3,$4,$4,'coverage-stack','image',1,1,'exited','[]',$5)")
+            .bind(Uuid::now_v7()).bind(stack).bind(f.platform_id).bind(name).bind(json!([{"type":"volume","name":name}])).execute(&f.pool).await.unwrap();
+    }
+    sqlx::query("INSERT INTO secretdefinitions(id,name,providertype) VALUES($1,'coverage-password','InternalEncrypted')")
+        .bind(secret).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO backuprepositories(id,name,normalizedname,passwordsecretid,spec,status,type,createdbyactorid) VALUES($1,'coverage','coverage',$2,'{}','Ready','FileSystem',$3)")
+        .bind(repo).bind(secret).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO backuppolicies(id,name,normalizedname,backuprepositoryid,createdbyactorid,runasactorid,source,enabled,cron) VALUES($1,'daily','daily',$2,$3,$3,$4,true,'0 0 * * *')")
+        .bind(policy).bind(repo).bind(SYSTEM_ACTOR_ID).bind(json!({"$type":"DockerVolume","platformId":f.platform_id,"volumeName":"a"})).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO backupruns(id,backuppolicyid,backuprepositoryid,policynamesnapshot,repositorytypesnapshot,snapshotavailability,sourcesnapshot,status,trigger,triggeredbyactorid,completedat) SELECT $1,id,backuprepositoryid,name,'FileSystem','Available',source,'Succeeded','Schedule',createdbyactorid,CURRENT_TIMESTAMP FROM backuppolicies WHERE id=$2")
+        .bind(run).bind(policy).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO backuprunitems(id,backuprunid,platformid,volumename,status,resticsnapshotid,completedat) VALUES($1,$2,$3,'a','Succeeded','snapshot',CURRENT_TIMESTAMP)")
+        .bind(Uuid::now_v7()).bind(run).bind(f.platform_id).execute(&f.pool).await.unwrap();
+    let group = Group::parse(&format!("containers:{}", f.platform_id)).unwrap();
+    let key = stack.to_string();
+    let joined = reader.read(&f.administrator, &group, None).await.unwrap();
+    let full = &joined.events[0].arguments[0];
+    assert_eq!(
+        full["stackBackupCoverage"][&key]["status"], "Warning",
+        "{full}"
+    );
+    assert_eq!(
+        full["containers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|c| c["stackId"] == key)
+            .count(),
+        2
+    );
+
+    let limited = super::lookup::subject(&f).await;
+    super::lookup::grant(
+        &f,
+        limited.actor_id.value(),
+        citadel_primitives::ResourceType::Platform,
+        f.platform_id,
+        0,
+    )
+    .await;
+    let limited_join = reader.read(&limited, &group, None).await.unwrap();
+    assert!(
+        !serde_json::to_string(&limited_join.events)
+            .unwrap()
+            .contains(&key)
+    );
+    assert!(
+        !serde_json::to_string(&limited_join.events)
+            .unwrap()
+            .contains("coverage-stack")
+    );
+    let hub = citadel_server::realtime::RealtimeHub::new(
+        8,
+        Arc::new(citadel_server::metrics::Metrics::default()),
+    );
+    let mut events = hub.subscribe();
+    for name in ["b", "a"] {
+        let committed = container_event_committed(
+            &f.pool,
+            f.platform_id,
+            None,
+            name,
+            None,
+            None,
+            chrono::Utc::now().timestamp(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(committed.affected_stack(), Some(stack));
+        hub.publish_container_observation(
+            f.platform_id,
+            "destroy",
+            name.into(),
+            committed.affected_stack(),
+        );
+        let event = events.recv().await.unwrap();
+        let snapshot = reader
+            .read(&f.administrator, &group, Some(&event))
+            .await
+            .unwrap();
+        assert_eq!(snapshot.events.len(), 1);
+        assert_eq!(snapshot.events[0].target, "ContainersChanged");
+        let patch = &snapshot.events[0].arguments[0];
+        assert_eq!(patch["containerId"], name);
+        assert_eq!(patch["containers"], json!([]));
+        assert_eq!(patch["stackIds"], json!([stack]));
+        if name == "b" {
+            assert_eq!(
+                patch["stackBackupCoverage"][&key]["status"], "Protected",
+                "{patch}"
+            );
+        }
+        let status: String = sqlx::query_scalar("SELECT status FROM stackreleases WHERE id=$1")
+            .bind(release)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+        assert_eq!(status, "Degraded");
+        let limited_patch = reader.read(&limited, &group, Some(&event)).await.unwrap();
+        assert!(
+            !serde_json::to_string(&limited_patch.events)
+                .unwrap()
+                .contains(&key)
+        );
+    }
+    super::realtime_groups::cleanup(f).await;
+}

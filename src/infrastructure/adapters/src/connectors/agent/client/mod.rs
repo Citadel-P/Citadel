@@ -60,7 +60,7 @@ use citadel_contracts::citadel::swarm::v1::{
     swarm_service_client::SwarmServiceClient,
 };
 use citadel_contracts::citadel::volumes::v1::{
-    CreateVolumeRequest, InspectVolumeRequest, ListVolumesRequest, RemoveVolumeRequest,
+    CreateVolumeRequest, ListVolumesRequest, RemoveVolumeRequest,
     volume_service_client::VolumeServiceClient,
 };
 use citadel_deployments::{
@@ -2053,39 +2053,6 @@ pub(crate) fn volume_observation(mode: citadel_platforms::VolumeObservation) -> 
         VolumeObservation::Details => Observation::Details as i32,
         VolumeObservation::Metadata => Observation::Metadata as i32,
         VolumeObservation::ContentProtection => Observation::ContentProtection as i32,
-    }
-}
-
-impl citadel_platforms::VolumeObservationPort for AgentClient {
-    fn observe_volume<'a>(
-        &'a self,
-        name: &'a str,
-        observation: citadel_platforms::VolumeObservation,
-        cancellation: &'a CancellationToken,
-    ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
-        async move {
-            let response = self
-                .retry_unary(cancellation, || async {
-                    let request = self.signer.sign(
-                        InspectVolumeRequest {
-                            name: name.to_owned(),
-                            observation: crate::connectors::agent::client::volume_observation(
-                                observation,
-                            ),
-                        },
-                        INSPECT_VOLUME_METHOD,
-                        Some(self.operation_timeout),
-                    )?;
-                    self.volume_client()
-                        .inspect(request)
-                        .await
-                        .map(|value| value.into_inner())
-                        .map_err(normalize_status)
-                })
-                .await?;
-            Ok(map_volume(response))
-        }
-        .boxed()
     }
 }
 

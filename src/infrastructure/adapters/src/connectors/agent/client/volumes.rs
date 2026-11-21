@@ -1,10 +1,10 @@
 //! Volume inventory requests and Docker-shaped cluster volume mappings.
 use super::{
-    AgentClient, LIST_VOLUMES_METHOD, ListVolumesRequest, RuntimeCapabilityError,
-    RuntimeVolumeSummary, map_volume, normalize_status,
+    AgentClient, INSPECT_VOLUME_METHOD, LIST_VOLUMES_METHOD, ListVolumesRequest,
+    RuntimeCapabilityError, RuntimeVolumeSummary, map_volume, normalize_status,
 };
 use citadel_contracts::citadel::shared_models::v1::ClusterVolumeMessage;
-use citadel_contracts::citadel::volumes::v1::ListVolumesResponse;
+use citadel_contracts::citadel::volumes::v1::{InspectVolumeRequest, ListVolumesResponse};
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
@@ -34,29 +34,46 @@ pub(super) fn cluster(v: ClusterVolumeMessage) -> Value {
 }
 
 impl AgentClient {
-    pub(crate) async fn volume_exists(
+    async fn inspect_volume_once(
+        &self,
+        name: &str,
+        observation: citadel_platforms::VolumeObservation,
+    ) -> Result<RuntimeVolumeSummary, RuntimeCapabilityError> {
+        let request = self.signer.sign(
+            InspectVolumeRequest {
+                name: name.to_owned(),
+                observation: super::volume_observation(observation),
+            },
+            INSPECT_VOLUME_METHOD,
+            Some(self.operation_timeout),
+        )?;
+        self.volume_client()
+            .inspect(request)
+            .await
+            .map(|value| map_volume(value.into_inner()))
+            .map_err(normalize_status)
+    }
+
+    pub(crate) async fn named_volume_metadata(
         &self,
         name: &str,
         cancellation: &CancellationToken,
-    ) -> Result<bool, RuntimeCapabilityError> {
-        Ok(self
-            .volume_list(true, Some(name), cancellation)
-            .await?
-            .volumes
-            .iter()
-            .any(|v| v.name == name))
+    ) -> Result<RuntimeVolumeSummary, RuntimeCapabilityError> {
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => Err(super::cancelled_error()),
+            result = self.inspect_volume_once(name, citadel_platforms::VolumeObservation::Metadata) => result,
+        }
     }
     async fn volume_list(
         &self,
         names_only: bool,
-        name: Option<&str>,
         cancellation: &CancellationToken,
     ) -> Result<ListVolumesResponse, RuntimeCapabilityError> {
         self.retry_unary(cancellation, || async {
             let request = self.signer.sign(
                 ListVolumesRequest {
                     names_only,
-                    name: name.map(str::to_owned),
                     ..Default::default()
                 },
                 LIST_VOLUMES_METHOD,
@@ -78,7 +95,7 @@ impl citadel_platforms::VolumeInventoryPort for AgentClient {
     ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>> {
         Box::pin(async move {
             Ok(self
-                .volume_list(true, None, cancellation)
+                .volume_list(true, cancellation)
                 .await?
                 .volumes
                 .into_iter()
@@ -92,12 +109,26 @@ impl citadel_platforms::VolumeInventoryPort for AgentClient {
     ) -> BoxFuture<'a, Result<Vec<RuntimeVolumeSummary>, RuntimeCapabilityError>> {
         Box::pin(async move {
             Ok(self
-                .volume_list(false, None, cancellation)
+                .volume_list(false, cancellation)
                 .await?
                 .volumes
                 .into_iter()
                 .map(map_volume)
                 .collect())
+        })
+    }
+}
+
+impl citadel_platforms::VolumeObservationPort for AgentClient {
+    fn observe_volume<'a>(
+        &'a self,
+        name: &'a str,
+        observation: citadel_platforms::VolumeObservation,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            self.retry_unary(cancellation, || self.inspect_volume_once(name, observation))
+                .await
         })
     }
 }

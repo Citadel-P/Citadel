@@ -29,7 +29,22 @@ pub(crate) struct ContainerEventChange {
     pub accepted: bool,
     pub identity: Option<Uuid>,
     pub deployments: Vec<Uuid>,
+    pub stack: Option<Uuid>,
     pub operation_id: Option<Uuid>,
+}
+
+impl ContainerEventChange {
+    pub(super) fn projection(&self) -> ProjectionChange {
+        if !self.accepted {
+            ProjectionChange::Unavailable
+        } else if self.changed
+            && let Some(id) = self.stack
+        {
+            ProjectionChange::ChangedWithStack(id)
+        } else {
+            ProjectionChange::committed(self.changed)
+        }
+    }
 }
 
 pub(crate) async fn removed_bindings(
@@ -150,11 +165,7 @@ pub async fn container_event_committed_at(
     if changed.changed {
         reconcile_deployments(pool, platform, Some(&changed.deployments), true).await?;
     }
-    Ok(if changed.accepted {
-        ProjectionChange::committed(changed.changed)
-    } else {
-        ProjectionChange::Unavailable
-    })
+    Ok(changed.projection())
 }
 pub(crate) async fn container_event_in(
     tx: &mut Transaction<'_, Postgres>,
@@ -267,6 +278,7 @@ async fn container_effects(
             changed: true,
             accepted: true,
             identity: Some(row.get("id")),
+            stack: row.try_get("stackid")?,
             deployments: vec![],
             operation_id: row.get("containeroperationid"),
         });
@@ -292,6 +304,7 @@ async fn container_effects(
         changed: true,
         accepted: true,
         identity: Some(row.try_get("id")?),
+        stack: row.try_get("stackid")?,
         deployments: removed.affected_deployments.unwrap_or_default(),
         operation_id: None,
     })
@@ -764,11 +777,7 @@ pub async fn container_observation_committed(
     if changed.changed {
         reconcile_deployments(pool, platform, Some(&changed.deployments), true).await?;
     }
-    Ok(if changed.accepted {
-        ProjectionChange::committed(changed.changed)
-    } else {
-        ProjectionChange::Unavailable
-    })
+    Ok(changed.projection())
 }
 
 /// One authoritative metadata/state upsert shared by Local, Direct and Edge.

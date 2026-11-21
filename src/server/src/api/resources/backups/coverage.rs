@@ -409,42 +409,43 @@ impl BackupCoverageService {
     pub async fn enrich_containers(
         &self,
         principal: &ActorPrincipal,
+        platform: Uuid,
+        affected_stacks: &[Uuid],
         views: &mut [crate::api::resources::platforms::views::ContainerView],
     ) -> BTreeMap<Uuid, ResourceBackupSummaryView> {
-        if views.is_empty() {
-            return BTreeMap::new();
-        }
-        let platforms = views
+        let mut stacks: BTreeSet<_> = views
             .iter()
-            .map(|v| v.platform_id)
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        let mut stacks: BTreeMap<_, _> = views
-            .iter()
-            .filter_map(|v| Some((v.stack_id?, v.platform_id)))
+            .filter_map(|v| v.stack_id)
+            .chain(affected_stacks.iter().copied())
             .collect();
         if !stacks.is_empty() && !principal.is_administrator() {
-            let ids = stacks.keys().copied().collect::<Vec<_>>();
+            let ids = stacks.iter().copied().collect::<Vec<_>>();
             let grants = self
                 .identity
                 .permissions_for_resources(principal, ResourceType::Stack, &ids)
                 .await
                 .unwrap_or_default();
-            stacks.retain(|id, _| {
+            stacks.retain(|id| {
                 grants
                     .get(id)
                     .and_then(Option::as_ref)
                     .is_some_and(|p| p.level.grants(PermissionLevel::Read))
             });
         }
+        if stacks.is_empty() && views.is_empty() {
+            return BTreeMap::new();
+        }
         let selection = CoverageSelection {
-            stacks: stacks.keys().copied().collect(),
+            stacks: stacks.iter().copied().collect(),
             containers: views.iter().map(|v| v.id).collect(),
             ..Default::default()
         };
-        let context = self.context(principal, &platforms, &selection).await;
+        let context = self.context(principal, &[platform], &selection).await;
         for view in views {
+            if view.stack_id.is_some_and(|id| !stacks.contains(&id)) {
+                view.stack_id = None;
+                view.stack = None;
+            }
             view.backup_coverage = Some(if view.projection_stale_since.is_some() {
                 unavailable(view.platform_id)
             } else {
@@ -462,7 +463,7 @@ impl BackupCoverageService {
         }
         stacks
             .into_iter()
-            .map(|(id, platform)| {
+            .map(|id| {
                 (
                     id,
                     context.as_ref().map_or_else(

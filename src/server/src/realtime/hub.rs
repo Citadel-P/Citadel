@@ -96,7 +96,13 @@ struct RealtimeHubInner {
     pending_observations: std::sync::Mutex<Option<Observations>>,
 }
 
-type Observations = BTreeMap<(Uuid, String, String), BTreeSet<String>>;
+type Observations = BTreeMap<(Uuid, String, String), PendingObservations>;
+
+#[derive(Default)]
+struct PendingObservations {
+    ids: BTreeSet<String>,
+    stacks: BTreeSet<Uuid>,
+}
 
 impl RealtimeHub {
     #[must_use]
@@ -195,15 +201,26 @@ impl RealtimeHub {
         action: &str,
         ids: &[String],
     ) -> u64 {
+        self.publish_container_membership(platform_id, action, ids, &BTreeSet::new())
+    }
+
+    fn publish_container_membership(
+        &self,
+        platform_id: Uuid,
+        action: &str,
+        ids: &[String],
+        stacks: &BTreeSet<Uuid>,
+    ) -> u64 {
         if ids.is_empty() || self.inner.sender.receiver_count() == 0 {
             return self.current_revision();
         }
-        self.publish(
+        self.publish_with_stacks(
             Some(platform_id),
             PLATFORM_RESOURCE_TYPE,
             platform_id,
             "runtimeChanged",
             json!({"dockerResourceType":"container", "action":action,"runtimeResourceIds":ids}),
+            stacks.iter().copied().collect(),
         )
     }
 
@@ -235,9 +252,15 @@ impl RealtimeHub {
 
     /// Coalesce committed Docker observations within a fixed window. This does
     /// not delay mutation claims, audit events, logs, or terminal streams.
-    pub fn publish_container_observation(&self, platform_id: Uuid, action: &str, id: String) {
+    pub fn publish_container_observation(
+        &self,
+        platform_id: Uuid,
+        action: &str,
+        id: String,
+        stack: Option<Uuid>,
+    ) {
         if !id.is_empty() {
-            self.publish_observation(platform_id, "container", action, id);
+            self.publish_observation(platform_id, "container", action, id, stack);
         }
     }
 
@@ -245,13 +268,20 @@ impl RealtimeHub {
     /// runtime ID marks a full container read, never a fictitious Docker ID.
     pub fn publish_inventory_observation(&self, platform_id: Uuid, resource: &str) {
         if matches!(resource, "container" | "image" | "network" | "volume") {
-            self.publish_observation(platform_id, resource, "update", String::new());
+            self.publish_observation(platform_id, resource, "update", String::new(), None);
         } else {
             self.publish_runtime_change(platform_id, resource, "update", platform_id.to_string());
         }
     }
 
-    fn publish_observation(&self, platform_id: Uuid, resource: &str, action: &str, id: String) {
+    fn publish_observation(
+        &self,
+        platform_id: Uuid,
+        resource: &str,
+        action: &str,
+        id: String,
+        stack: Option<Uuid>,
+    ) {
         if !matches!(resource, "container" | "image" | "network" | "volume") {
             self.publish_runtime_change(platform_id, resource, action, id);
             return;
@@ -263,12 +293,17 @@ impl RealtimeHub {
         let mut pending = self.inner.pending_observations.lock().unwrap();
         let schedule = pending.is_none();
         let changes = pending.get_or_insert_with(Default::default);
-        changes
+        let batch = changes
             .entry((platform_id, resource.to_owned(), action.to_owned()))
-            .or_default()
-            .insert(id);
+            .or_default();
+        batch.ids.insert(id);
+        batch.stacks.extend(stack);
         // Bound retained IDs even during a sustained event burst.
-        let flush = (changes.values().map(BTreeSet::len).sum::<usize>() >= 1024)
+        let flush = (changes
+            .values()
+            .map(|b| b.ids.len() + b.stacks.len())
+            .sum::<usize>()
+            >= 1024)
             .then(|| std::mem::take(changes));
         drop(pending);
         if let Some(changes) = flush {
@@ -291,12 +326,13 @@ impl RealtimeHub {
     }
 
     fn flush_observations(&self, changes: Observations) {
-        for ((platform, resource, action), ids) in changes {
-            if resource == "container" && !ids.contains("") {
-                self.publish_container_changes(
+        for ((platform, resource, action), batch) in changes {
+            if resource == "container" && !batch.ids.contains("") {
+                self.publish_container_membership(
                     platform,
                     &action,
-                    &ids.into_iter().collect::<Vec<_>>(),
+                    &batch.ids.into_iter().collect::<Vec<_>>(),
+                    &batch.stacks,
                 );
             } else {
                 // These groups reread the committed inventory for this resource.
@@ -426,11 +462,33 @@ impl RealtimeHub {
         event_kind: &'static str,
         payload: Value,
     ) -> u64 {
+        self.publish_with_stacks(
+            platform_id,
+            resource_type,
+            resource_id,
+            event_kind,
+            payload,
+            Vec::new(),
+        )
+    }
+
+    fn publish_with_stacks(
+        &self,
+        platform_id: Option<Uuid>,
+        resource_type: &'static str,
+        resource_id: Uuid,
+        event_kind: &'static str,
+        payload: Value,
+        stacks: Vec<Uuid>,
+    ) -> u64 {
         if event_kind == "runtimeChanged" {
             citadel_runtime::runtime_metrics::RuntimeWork::RealtimeRuntimeInvalidation.units(1);
         }
         let revision = self.inner.revision.fetch_add(1, Ordering::AcqRel) + 1;
-        let reservation = self.inner.budget.value(&payload);
+        let reservation = self
+            .inner
+            .budget
+            .value(&payload, stacks.capacity() * size_of::<Uuid>());
         let (event_kind, payload, reads) = match reservation {
             Ok(permit) => (
                 event_kind,
@@ -438,6 +496,7 @@ impl RealtimeHub {
                 Arc::new(super::shared_reads::CommittedReads::new(
                     self.inner.budget.clone(),
                     permit,
+                    stacks,
                 )),
             ),
             Err(_) if payload["dockerResourceType"] == "containerStats" => {
@@ -481,11 +540,13 @@ mod stats_notification_tests {
         let ids: Vec<_> = (0..5).map(|i| format!("docker-{i}")).collect();
         let mut a = hub.subscribe();
         let mut b = hub.subscribe();
+        let owners = [Uuid::from_u128(1), Uuid::from_u128(2)];
         for id in &ids {
-            hub.publish_container_observation(platform, "die", id.clone());
-            hub.publish_container_observation(platform, "die", id.clone());
+            for owner in owners {
+                hub.publish_container_observation(platform, "die", id.clone(), Some(owner));
+            }
         }
-        hub.publish_container_observation(other, "die", "other".into());
+        hub.publish_container_observation(other, "die", "other".into(), None);
         hub.publish_container_changes(platform, "update", &ids);
         assert_eq!(a.try_recv().unwrap().container_ids().unwrap(), ids);
         assert_eq!(b.try_recv().unwrap().container_ids().unwrap(), ids);
@@ -503,13 +564,21 @@ mod stats_notification_tests {
                 Arc::ptr_eq(&event, &same),
                 "all connections share one invalidation"
             );
+            if event.platform_id == Some(platform) {
+                assert_eq!(event.reads.affected_stacks, owners);
+                for owner in owners {
+                    assert!(!event.payload.to_string().contains(&owner.to_string()));
+                }
+            } else {
+                assert!(event.reads.affected_stacks.is_empty());
+            }
             seen.insert(event.platform_id.unwrap(), event.container_ids().unwrap());
         }
         assert_eq!(seen[&platform], ids);
         assert_eq!(seen[&other], vec!["other"]);
         assert!(a.try_recv().is_err());
         // The next fixed window must start after the previous batch was drained.
-        hub.publish_container_observation(platform, "start", "new".into());
+        hub.publish_container_observation(platform, "start", "new".into(), None);
         let event = tokio::time::timeout(std::time::Duration::from_secs(2), a.recv())
             .await
             .unwrap()
@@ -523,7 +592,7 @@ mod stats_notification_tests {
         let platform = Uuid::now_v7();
         let mut receiver = hub.subscribe();
         for i in 0..1025 {
-            hub.publish_container_observation(platform, "die", i.to_string());
+            hub.publish_container_observation(platform, "die", i.to_string(), None);
         }
         assert_eq!(
             receiver.try_recv().unwrap().container_ids().unwrap().len(),
@@ -544,11 +613,11 @@ mod stats_notification_tests {
         let other = Uuid::now_v7();
         for _ in 0..100 {
             for resource in ["image", "network", "volume"] {
-                hub.publish_observation(platform, resource, "update", "one".into());
+                hub.publish_observation(platform, resource, "update", "one".into(), None);
             }
         }
-        hub.publish_observation(platform, "image", "delete", "one".into());
-        hub.publish_observation(other, "image", "update", "one".into());
+        hub.publish_observation(platform, "image", "delete", "one".into(), None);
+        hub.publish_observation(other, "image", "update", "one".into(), None);
         hub.publish_resource_change("License", Uuid::nil(), "updated");
         assert_eq!(receiver.try_recv().unwrap().resource_type, "License");
         hub.publish_runtime_change(platform, "image", "processing", "one");
@@ -578,7 +647,7 @@ mod stats_notification_tests {
         let hub = RealtimeHub::new(8, Arc::new(Metrics::default()));
         let mut receiver = hub.subscribe();
         let platform = Uuid::now_v7();
-        hub.publish_container_observation(platform, "update", "one".into());
+        hub.publish_container_observation(platform, "update", "one".into(), None);
         hub.publish_inventory_observation(platform, "container");
         let event = tokio::time::timeout(std::time::Duration::from_secs(2), receiver.recv())
             .await

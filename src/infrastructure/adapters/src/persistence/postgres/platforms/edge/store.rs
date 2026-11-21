@@ -913,11 +913,7 @@ impl PostgresEdgeStore {
             )
             .await?;
         }
-        Ok(if changed.accepted {
-            citadel_platforms::jobs::ProjectionChange::committed(changed.changed)
-        } else {
-            citadel_platforms::jobs::ProjectionChange::Unavailable
-        })
+        Ok(changed.projection())
     }
     pub async fn persist_stats(
         &self,

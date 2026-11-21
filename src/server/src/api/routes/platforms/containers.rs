@@ -36,7 +36,11 @@ pub(super) async fn list_containers(
         &headers,
     )?;
     let stack_backup_coverage = match &state.backup_coverage {
-        Some(service) => service.enrich_containers(&principal, &mut containers).await,
+        Some(service) => {
+            service
+                .enrich_containers(&principal, platform_id, &[], &mut containers)
+                .await
+        }
         None => Default::default(),
     };
     api_result(

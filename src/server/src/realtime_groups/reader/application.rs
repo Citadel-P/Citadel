@@ -704,14 +704,22 @@ impl ApplicationGroupReader {
                         );
                     }
                     let stack_coverage = match &self.backup_coverage {
-                        Some(service) => service.enrich_containers(p, &mut containers).await,
+                        Some(service) => {
+                            service
+                                .enrich_containers(
+                                    p,
+                                    id.unwrap(),
+                                    &e.unwrap().reads.affected_stacks,
+                                    &mut containers,
+                                )
+                                .await
+                        }
                         None => Default::default(),
                     };
                     crate::api::resources::platforms::container_views::enrich_container_owner_names(&self.platforms, p, &mut containers).await.map_err(failure)?;
                     let mut changes = std::collections::BTreeMap::new();
-                    let mut stack_ids = std::collections::BTreeSet::new();
+                    let stack_ids: Vec<_> = stack_coverage.keys().copied().collect();
                     for c in containers {
-                        stack_ids.extend(c.stack_id);
                         changes
                             .entry(c.container_id.clone())
                             .or_insert_with(Vec::new)
@@ -744,7 +752,11 @@ impl ApplicationGroupReader {
                         .map_err(failure)?;
                 let mut containers = containers;
                 let stack_coverage = match &self.backup_coverage {
-                    Some(service) => service.enrich_containers(p, &mut containers).await,
+                    Some(service) => {
+                        service
+                            .enrich_containers(p, id.unwrap(), &[], &mut containers)
+                            .await
+                    }
                     None => Default::default(),
                 };
                 for container in &mut containers {
