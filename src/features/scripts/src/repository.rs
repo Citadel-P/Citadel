@@ -25,7 +25,7 @@ pub trait ScriptRepository: Send + Sync {
         actor: ActorId,
         administrator: bool,
         tags: &'a [String],
-    ) -> BoxFuture<'a, Result<Vec<Script>, ScriptError>>;
+    ) -> BoxFuture<'a, Result<Vec<crate::ScriptSummary>, ScriptError>>;
     fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<Script, ScriptError>>;
     fn update<'a>(
         &'a self,

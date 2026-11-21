@@ -7,6 +7,9 @@ use citadel_stacks::StackReleaseStatus;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
+mod lifecycle;
+pub(crate) use lifecycle::set_health;
+pub use lifecycle::{platform_offline, platform_online};
 mod state_delta;
 pub use state_delta::container_state_deltas_committed;
 pub(crate) use state_delta::{container_state_deltas_in, reconcile_state_deployments};
@@ -294,30 +297,6 @@ async fn container_effects(
     })
 }
 
-pub async fn platform_online(pool: &PgPool, platform: Uuid) -> Result<()> {
-    let mut tx = pool.begin().await?;
-    platform_status(
-        &mut tx,
-        platform,
-        citadel_primitives::PlatformStatus::Online,
-    )
-    .await?;
-    tx.commit().await?;
-    reconcile_deployments(pool, platform, None, false)
-        .await
-        .map(|_| ())
-}
-
-pub async fn platform_offline(pool: &PgPool, platform: Uuid) -> Result<()> {
-    let write = ProjectionWrite::begin(platform, None, ProjectionKind::Containers).await;
-    let mut tx = pool.begin().await?;
-    platform_offline_in(&mut tx, platform).await?;
-    tx.commit().await?;
-    write.committed();
-    reconcile_deployments(pool, platform, None, false)
-        .await
-        .map(|_| ())
-}
 pub(crate) async fn platform_offline_in(
     tx: &mut Transaction<'_, Postgres>,
     platform: Uuid,
@@ -370,8 +349,29 @@ pub async fn reconcile_deployments(
     if ids.is_some_and(<[Uuid]>::is_empty) {
         return Ok(0);
     }
-    let deployments: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM deployments WHERE platformid=$1 AND ($2::uuid[] IS NULL OR id=ANY($2)) AND controlstate='Idle' ORDER BY id")
-        .bind(platform).bind(ids).fetch_all(pool).await?;
+    let deployments: Vec<Uuid> = if ids.is_none() && !activities {
+        // Catch-up also runs on unchanged inventory. Acquire parent locks only for
+        // possible transitions, then re-read the winning container under that lock.
+        let rows: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
+            "SELECT d.id, d.status, latest.state FROM deployments d
+             LEFT JOIN LATERAL (SELECT state FROM containers WHERE deploymentid=d.id
+                                ORDER BY updated DESC,id DESC LIMIT 1) latest ON TRUE
+             WHERE d.platformid=$1 AND d.controlstate='Idle' AND d.status <> 'Applying'
+             ORDER BY d.id",
+        )
+        .bind(platform)
+        .fetch_all(pool)
+        .await?;
+        rows.into_iter()
+            .filter_map(|(id, old, state)| {
+                let next = observed_deployment_status(state.as_deref(), &old, false);
+                (next.as_str() != old).then_some(id)
+            })
+            .collect()
+    } else {
+        sqlx::query_scalar("SELECT id FROM deployments WHERE platformid=$1 AND ($2::uuid[] IS NULL OR id=ANY($2)) AND controlstate='Idle' ORDER BY id")
+            .bind(platform).bind(ids).fetch_all(pool).await?
+    };
     let mut changed = 0;
     for id in deployments {
         let _parent =
@@ -415,13 +415,11 @@ async fn reconcile_deployment(
         .bind(id).fetch_optional(&mut *tx).await?;
     // Redeploy can link a replacement before inventory prunes the old row
     // or its delayed deletion event arrives. Prefer the surviving runtime.
-    let next = if let Some((state, _)) = &container {
-        deployment_status(state)
-    } else if !activities && old == DeploymentStatus::Created {
-        return Ok(false);
-    } else {
-        DeploymentStatus::Degraded
-    };
+    let next = observed_deployment_status(
+        container.as_ref().map(|(state, _)| state.as_str()),
+        old.as_str(),
+        activities,
+    );
     if next == old {
         return Ok(false);
     }
@@ -611,6 +609,20 @@ pub(super) async fn activity(
         .await
         .map_err(|e| sqlx::Error::Protocol(e.to_string()))
 }
+fn observed_deployment_status(
+    state: Option<&str>,
+    old: &str,
+    activities: bool,
+) -> DeploymentStatus {
+    match state {
+        Some(state) => deployment_status(state),
+        None if !activities && old == DeploymentStatus::Created.as_str() => {
+            DeploymentStatus::Created
+        }
+        None => DeploymentStatus::Degraded,
+    }
+}
+
 pub(super) fn deployment_status(state: &str) -> DeploymentStatus {
     match state.to_ascii_lowercase().as_str() {
         "running" => DeploymentStatus::Healthy,

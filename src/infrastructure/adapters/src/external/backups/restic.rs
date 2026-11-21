@@ -2113,7 +2113,7 @@ impl ResticOperation<'_> {
         let result = async {
             if !existing {
                 let volume = agent
-                    .inspect_volume(&claim.run.target_volume_name, cancellation)
+                    .volume_metadata(&claim.run.target_volume_name, cancellation)
                     .await
                     .map_err(|error| error.to_string())?;
                 owner.verify(&claim.run.target_volume_name, &volume)?;

@@ -43,7 +43,7 @@ impl DockerClient {
         &self,
     ) -> Result<Vec<SamplingContainer>, DockerError> {
         let _iteration = RuntimeWork::DockerContainerList.start();
-        let bytes = self.sampling_bytes("/containers/json?all=true").await?;
+        let bytes = self.bounded_json_bytes("/containers/json?all=true").await?;
         Ok(serde_json::from_slice(&bytes)?)
     }
 
@@ -53,18 +53,18 @@ impl DockerClient {
         let image_count = {
             let _list = RuntimeWork::DockerList.start();
             let _timer = RuntimeWork::DockerImageList.start();
-            let bytes = self.sampling_bytes("/images/json?all=true").await?;
+            let bytes = self.bounded_json_bytes("/images/json?all=true").await?;
             serde_json::from_slice::<Vec<ImageEntry>>(&bytes)?.len()
         };
         let network_count = {
             let _timer = RuntimeWork::DockerNetworkList.start();
-            let bytes = self.sampling_bytes("/networks").await?;
+            let bytes = self.bounded_json_bytes("/networks").await?;
             serde_json::from_slice::<Vec<NetworkEntry>>(&bytes)?.len()
         };
         let volume_count = {
             let _list = RuntimeWork::DockerList.start();
             let _timer = RuntimeWork::DockerVolumeList.start();
-            let bytes = self.sampling_bytes("/volumes").await?;
+            let bytes = self.bounded_json_bytes("/volumes").await?;
             serde_json::from_slice::<VolumeList>(&bytes)?
                 .volumes
                 .unwrap_or_default()
@@ -77,7 +77,7 @@ impl DockerClient {
         ))
     }
 
-    pub(in crate::client) async fn sampling_bytes(
+    pub(in crate::client) async fn bounded_json_bytes(
         &self,
         path: &str,
     ) -> Result<Vec<u8>, DockerError> {

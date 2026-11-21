@@ -3,6 +3,43 @@ use citadel_platforms::jobs::{ResourceInventory, ResourceSnapshot};
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
+async fn direct_swarm_setup_snapshot_cannot_report_platform_recovery() {
+    use citadel_adapters::persistence::postgres::platforms::{
+        node_agents::store::PostgresNodeAgentLifecycleStore, status::platform_offline,
+    };
+    use citadel_platforms::node_agents::setup::NodeAgentSetupStore;
+
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new().connect(&url).await.unwrap();
+    let platform = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,name,platformdescriptor,status,cpucount,imagecount,memtotal,networkcount,volumecount) VALUES($1,$2,'Agent',$2,'{\"$type\":\"DockerSwarm\"}','Online',0,0,0,0,0)")
+        .bind(platform).bind(platform.to_string()).execute(&pool).await.unwrap();
+    let inventory = snapshot(platform, false);
+    platform_offline(&pool, platform).await.unwrap();
+    let setup = PostgresNodeAgentLifecycleStore::new(pool.clone(), Default::default());
+    setup.persist_inventory(inventory).await.unwrap();
+
+    let status: String = sqlx::query_scalar("SELECT status FROM platforms WHERE id=$1")
+        .bind(platform)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "Offline");
+    let events: Vec<String> = sqlx::query_scalar("SELECT eventtype FROM activityevents WHERE resourceid=$1 AND eventtype IN ('PlatformConnected','PlatformDisconnected')")
+        .bind(platform).fetch_all(&pool).await.unwrap();
+    assert_eq!(events, ["PlatformDisconnected"]);
+    let saved: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM swarmnodeprojections WHERE platformid=$1)")
+            .bind(platform)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(saved);
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn scoped_discovery_updates_counts_without_statistics_or_created_alerts() {
     let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
     MigrationRunner::migrate(&url).await.unwrap();

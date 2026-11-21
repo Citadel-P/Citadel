@@ -22,7 +22,7 @@ pub(super) async fn read(
         .iter()
         .map(|(_, _, id)| id.as_str())
         .collect();
-    let rows=sqlx::query("SELECT id,platformid,'Deployment' AS kind,spec FROM deployments WHERE platformid=ANY($1) AND ($2 OR id=ANY($3)) UNION ALL SELECT s.id,r.platformid,'Stack',NULL FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=ANY($1) AND ($2 OR s.id=ANY($4)) UNION ALL SELECT id,platformid,'SwarmService',NULL FROM swarmservices WHERE platformid=ANY($1) AND ($2 OR id=ANY($5))")
+    let rows=sqlx::query("SELECT id,platformid,'Deployment' AS kind, COALESCE(spec::jsonb->'Volumes',spec::jsonb->'volumes') AS volumes FROM deployments WHERE platformid=ANY($1) AND ($2 OR id=ANY($3)) UNION ALL SELECT s.id,r.platformid,'Stack',NULL FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=ANY($1) AND ($2 OR s.id=ANY($4)) UNION ALL SELECT id,platformid,'SwarmService',NULL FROM swarmservices WHERE platformid=ANY($1) AND ($2 OR id=ANY($5))")
         .bind(platforms).bind(all).bind(&selected.deployments).bind(&selected.stacks).bind(&selected.services).fetch_all(pool).await.map_err(storage)?;
     let mut declared = BTreeMap::<Uuid, BTreeSet<String>>::new();
     for row in rows {
@@ -33,14 +33,14 @@ pub(super) async fn read(
             _ => Kind::SwarmService,
         };
         if kind == Kind::Deployment {
-            let spec = citadel_deployments::DeploymentSpec::from_storage_value(
-                row.try_get("spec").map_err(storage)?,
-            )
-            .map_err(storage)?;
+            let volumes = row
+                .try_get::<Option<sqlx::types::Json<Option<Vec<String>>>>, _>("volumes")
+                .map_err(storage)?
+                .and_then(|value| value.0)
+                .unwrap_or_default();
             declared.insert(
                 id,
-                spec.volumes
-                    .unwrap_or_default()
+                volumes
                     .iter()
                     .filter_map(|s| super::super::source_planner::named_deployment_volume(s))
                     .collect(),

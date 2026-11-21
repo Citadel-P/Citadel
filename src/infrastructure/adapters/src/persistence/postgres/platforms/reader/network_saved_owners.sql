@@ -1,9 +1,8 @@
 workloads AS (
-    SELECT 1 kind,d.id,d.name,COALESCE(d.spec->'Networks',d.spec->'networks','[]'::jsonb) refs,NULL::text compose,NULL::text projectname,d.status,d.controlstate
+    SELECT 1 kind,d.id,d.name,COALESCE(d.spec->'Networks',d.spec->'networks','[]'::jsonb) refs,NULL::uuid releaseid,d.status,d.controlstate
     FROM deployments d WHERE d.platformid=$3
     UNION ALL
-    SELECT 2,s.id,s.name,'[]'::jsonb,
-        CASE WHEN octet_length(r.spec->>'composeFile')<=4194304 THEN r.spec->>'composeFile' END,r.spec->>'projectName',r.status,s.controlstate
+    SELECT 2,s.id,s.name,'[]'::jsonb,r.id,r.status,s.controlstate
     FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=$3
     UNION ALL
-    SELECT 20,s.id,s.name,COALESCE(s.spec->'networkIds','[]'::jsonb),NULL,NULL,
+    SELECT 20,s.id,s.name,COALESCE(s.spec->'networkIds','[]'::jsonb),NULL,

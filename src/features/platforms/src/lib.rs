@@ -3,7 +3,8 @@ mod capabilities;
 pub use capabilities::{
     ContainerInventoryPort, ContainerStatsPort, ImageInventoryPort, NetworkInventoryPort,
     NetworkMutationPort, NetworkObservationPort, PlatformInfoPort, PlatformStatsPort,
-    SwarmInventoryPort, VolumeInventoryPort, VolumeMutationPort, VolumeObservationPort,
+    SwarmInventoryPort, VolumeInventoryPort, VolumeMutationPort, VolumeObservation,
+    VolumeObservationPort,
 };
 pub mod model;
 pub use model::{ConnectorKind, PlatformKind};

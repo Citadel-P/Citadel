@@ -1029,6 +1029,10 @@ pub(crate) struct PlatformsResponse {
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ContainersResponse {
+    pub(crate) stack_backup_coverage: std::collections::BTreeMap<
+        Uuid,
+        crate::api::resources::backups::coverage::ResourceBackupSummaryView,
+    >,
     pub(crate) containers: Vec<ContainerView>,
     pub(crate) capabilities: PlatformCapabilitiesView,
 }

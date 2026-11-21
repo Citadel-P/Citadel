@@ -1,4 +1,4 @@
-import { AuthorizedScript, ResourceControlState } from '@/api/generated/api.types';
+import { ScriptSummaryView, ResourceControlState } from '@/api/generated/api.types';
 import { RowActionMenu } from '@/components/custom/dropdown-with-dialog';
 import { LastRunCell } from '@/components/custom/last-run-cell';
 import { Timestamp } from '@/components/custom/timestamp';
@@ -21,14 +21,14 @@ export function ScriptsTable({
   actions,
   isLoading,
 }: {
-  items: AuthorizedScript[];
+  items: ScriptSummaryView[];
   isLoading: boolean;
   actions: Record<
     string,
-    React.FC<{ resource: AuthorizedScript; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: ScriptSummaryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >;
 }) {
-  const [, setSelectedResources] = useSelectedResources<AuthorizedScript>('Script');
+  const [, setSelectedResources] = useSelectedResources<ScriptSummaryView>('Script');
   const formatDateTime = useProfileDateTimeFormatter();
   const cols = useMemo(() => columns(actions ?? {}, formatDateTime), [actions, formatDateTime]);
 
@@ -38,10 +38,10 @@ export function ScriptsTable({
 const columns = (
   actions: Record<
     string,
-    React.FC<{ resource: AuthorizedScript; onAction?: (actionKey: string, actionData?: ActionData) => void }>
+    React.FC<{ resource: ScriptSummaryView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
   >,
   formatDateTime: DateTimeFormatter,
-): ColumnDef<StockFeatures, AuthorizedScript>[] => [
+): ColumnDef<StockFeatures, ScriptSummaryView>[] => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -99,7 +99,7 @@ const columns = (
   },
 ];
 
-const ScriptNameRow = ({ script }: { script: AuthorizedScript }) => {
+const ScriptNameRow = ({ script }: { script: ScriptSummaryView }) => {
   return (
     <div className="flex min-w-0 items-center gap-1">
       <StateIndicator
@@ -114,7 +114,7 @@ const ScriptNameRow = ({ script }: { script: AuthorizedScript }) => {
   );
 };
 
-const ScheduleCell = ({ script }: { script: AuthorizedScript }) => {
+const ScheduleCell = ({ script }: { script: ScriptSummaryView }) => {
   if (!script.scheduleEnabled) return <span className="text-sm text-muted-foreground">Off</span>;
 
   return (

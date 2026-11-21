@@ -354,15 +354,7 @@ fn validate_identity(
     Ok(())
 }
 
-pub(crate) async fn persist_snapshot(
-    transaction: &mut Transaction<'_, Postgres>,
-    snapshot: &RuntimeInventorySnapshot,
-    node_policy: Option<&citadel_platforms::node_agents::NodeAgentReconciliationPolicy>,
-) -> Result<(), RuntimeCapabilityError> {
-    persist_snapshot_with_health(transaction, snapshot, node_policy, true).await
-}
-
-async fn persist_snapshot_with_health(
+pub(crate) async fn persist_snapshot_with_health(
     transaction: &mut Transaction<'_, Postgres>,
     snapshot: &RuntimeInventorySnapshot,
     node_policy: Option<&citadel_platforms::node_agents::NodeAgentReconciliationPolicy>,

@@ -35,9 +35,10 @@ pub(super) async fn list_containers(
             .map_err(platform_error),
         &headers,
     )?;
-    if let Some(service) = &state.backup_coverage {
-        containers = service.enrich_containers(&principal, containers).await;
-    }
+    let stack_backup_coverage = match &state.backup_coverage {
+        Some(service) => service.enrich_containers(&principal, &mut containers).await,
+        None => Default::default(),
+    };
     api_result(
         crate::api::resources::platforms::container_views::enrich_container_owner_names(
             &state.platforms,
@@ -57,6 +58,7 @@ pub(super) async fn list_containers(
     }
     Ok(no_store(
         Json(ContainersResponse {
+            stack_backup_coverage,
             containers,
             capabilities,
         })

@@ -7,7 +7,7 @@ use serde_json::Value;
 fn json(value: impl Serialize) -> Result<Value, DockerError> {
     Ok(serde_json::to_value(value)?)
 }
-fn version(value: Option<Box<wire::ObjectVersion>>) -> ObjectVersion {
+pub(super) fn version(value: Option<Box<wire::ObjectVersion>>) -> ObjectVersion {
     ObjectVersion {
         index: value.and_then(|v| v.index).unwrap_or_default(),
     }
@@ -207,27 +207,34 @@ impl TryFrom<wire::ImageSummary> for ImageSummary {
         })
     }
 }
+pub(super) fn image_digests(
+    id: Option<&str>,
+    descriptor: Option<&wire::OciDescriptor>,
+) -> (Option<String>, Option<String>) {
+    // Classic Docker IDs hash the config. Containerd IDs can instead hash
+    // an index or manifest; never label those as configuration digests.
+    match descriptor {
+        None => (id.map(str::to_owned), None),
+        Some(descriptor)
+            if matches!(
+                descriptor.media_type.as_deref().unwrap_or_default(),
+                "application/vnd.oci.image.index.v1+json"
+                    | "application/vnd.docker.distribution.manifest.list.v2+json"
+                    | "application/vnd.oci.image.manifest.v1+json"
+                    | "application/vnd.docker.distribution.manifest.v2+json"
+            ) =>
+        {
+            (None, descriptor.digest.clone())
+        }
+        Some(_) => (None, None),
+    }
+}
 impl TryFrom<wire::ImageInspect> for ImageInspect {
     type Error = DockerError;
     fn try_from(v: wire::ImageInspect) -> Result<Self, Self::Error> {
         let c = v.config.unwrap_or_default();
-        // Classic Docker IDs hash the config. Containerd IDs can instead hash
-        // an index or manifest; never label those as configuration digests.
-        let (config_digest, content_digest) = match v.descriptor.as_deref() {
-            None => (v.id.clone(), None),
-            Some(descriptor)
-                if matches!(
-                    descriptor.media_type.as_deref().unwrap_or_default(),
-                    "application/vnd.oci.image.index.v1+json"
-                        | "application/vnd.docker.distribution.manifest.list.v2+json"
-                        | "application/vnd.oci.image.manifest.v1+json"
-                        | "application/vnd.docker.distribution.manifest.v2+json"
-                ) =>
-            {
-                (None, descriptor.digest.clone())
-            }
-            Some(_) => (None, None),
-        };
+        let (config_digest, content_digest) =
+            image_digests(v.id.as_deref(), v.descriptor.as_deref());
         Ok(Self {
             id: v.id.unwrap_or_default(),
             config_digest,

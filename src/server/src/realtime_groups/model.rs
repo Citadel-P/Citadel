@@ -86,7 +86,10 @@ impl Group {
                 Topic::ContainerInfo(reference) => {
                     contains("containerIds", Uuid::parse_str(reference).ok())
                 }
-                Topic::Containers(..) | Topic::SwarmServices(..) | Topic::DockerDaemon(..) => {
+                Topic::Containers(..)
+                | Topic::SwarmServices(..)
+                | Topic::Volumes(..)
+                | Topic::DockerDaemon(..) => {
                     (event.resource_type == "License" || event.payload["resync"] == true)
                         || self.id() == event.platform_id
                 }
@@ -106,6 +109,16 @@ impl Group {
             };
         }
 
+        if let Topic::Volumes(id) = self.topic() {
+            return event.resource_type == "Platform"
+                && ((event.event_kind == "connectionChanged"
+                    && (event.platform_id == Some(*id) || event.affects_resource(Some(*id))))
+                    || (event.platform_id == Some(*id)
+                        && matches!(
+                            event.payload["dockerResourceType"].as_str(),
+                            Some("volume" | "platformInventory" | "swarm" | "nodeAgentCoverage")
+                        )));
+        }
         if let Some(patches) = event
             .payload
             .get("containerPatches")

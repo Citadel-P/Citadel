@@ -20,7 +20,7 @@ impl CoverageReader for CoverageFixture {
         _: bool,
         _: &'a [Uuid],
         _: Option<&'a CoverageSelection>,
-    ) -> BoxFuture<'a, Result<CoverageSnapshot, BackupError>> {
+    ) -> BoxFuture<'a, Result<IndexedCoverage, BackupError>> {
         Box::pin(async { panic!("volume reads must use their coverage projection") })
     }
 }
@@ -141,6 +141,28 @@ async fn volume_realtime_preserves_actor_scoped_coverage_on_join_deltas_and_back
     sqlx::query("INSERT INTO swarmnodevolumeprojections(platformid,dockernodeid,volumename,observedat,resource) VALUES($1,'node-1','data',NOW(),$2)")
         .bind(f.platform_id).bind(serde_json::to_value(&node_volume).unwrap()).execute(&f.pool).await.unwrap();
     let group = Group::parse(&format!("docker-daemon:{}", f.platform_id)).unwrap();
+    let volume_group = Group::parse(&format!("volumes:{}", f.platform_id)).unwrap();
+    let joined_volumes = reader
+        .read(&f.administrator, &volume_group, None)
+        .await
+        .unwrap();
+    assert_eq!(joined_volumes.events.len(), 1);
+    let joined_volume = &joined_volumes.events[0];
+    assert_eq!(joined_volume.target, "VolumesUpdated");
+    assert_eq!(joined_volume.arguments[0]["scope"], "all");
+    assert_eq!(
+        joined_volume.arguments[0]["volumes"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert!(
+        reader
+            .read(&unauthorized, &volume_group, None)
+            .await
+            .is_err()
+    );
     let joined = reader.read(&f.administrator, &group, None).await.unwrap();
     let manager = joined
         .rows
@@ -177,6 +199,10 @@ async fn volume_realtime_preserves_actor_scoped_coverage_on_join_deltas_and_back
         Arc::new(citadel_server::metrics::Metrics::default()),
     );
     let mut events = hub.subscribe();
+    hub.publish_runtime_change(f.platform_id, "containerStats", "update", "");
+    assert!(!volume_group.affected_by(&events.recv().await.unwrap()));
+    hub.publish_runtime_change(f.platform_id, "network", "create", "bridge");
+    assert!(!volume_group.affected_by(&events.recv().await.unwrap()));
     hub.publish_resource_observation(
         f.platform_id,
         None,
@@ -187,6 +213,17 @@ async fn volume_realtime_preserves_actor_scoped_coverage_on_join_deltas_and_back
         },
     );
     let delta = events.recv().await.unwrap();
+    assert!(volume_group.affected_by(&delta));
+    let scoped = reader
+        .read(&actor, &volume_group, Some(&delta))
+        .await
+        .unwrap();
+    assert_eq!(scoped.events[0].arguments[0]["scope"], "one");
+    assert_eq!(scoped.events[0].arguments[0]["id"], "data");
+    assert_eq!(
+        scoped.events[0].arguments[0]["volumes"][0]["backupCoverage"]["policyCount"],
+        0
+    );
     let admin = reader
         .read(&f.administrator, &group, Some(&delta))
         .await
@@ -317,6 +354,17 @@ async fn volume_realtime_preserves_actor_scoped_coverage_on_join_deltas_and_back
         .unwrap();
     hub.publish_backup_coverage(None);
     let change = events.recv().await.unwrap();
+    let scoped = reader
+        .read(&actor, &volume_group, Some(&change))
+        .await
+        .unwrap();
+    assert!(
+        scoped
+            .events
+            .iter()
+            .all(|e| e.target == "VolumesUpdated" && e.arguments[0]["scope"] == "nodes")
+    );
+    assert_eq!(scoped.events.len(), 1);
     let offline = reader
         .read(&f.administrator, &group, Some(&change))
         .await

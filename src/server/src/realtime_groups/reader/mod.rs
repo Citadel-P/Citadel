@@ -8,6 +8,7 @@ mod runtime;
 mod terminal;
 #[cfg(test)]
 mod tests;
+mod volumes;
 
 use super::*;
 use crate::realtime::topic::Topic;

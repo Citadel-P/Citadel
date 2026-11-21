@@ -1,88 +1,61 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { VolumesResponse } from '@/api/generated/api.types';
-import {
-  useDockerDaemonGroup,
-  VolumeEvent,
-  SwarmNodeLocalResourcesUpdate,
-} from '@/features/platforms/hooks/useDockerDaemonGroup';
+import { useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { VolumesResponse } from '@/api/generated/api.types';
+import type { ResourceResponse } from '@/api/types';
+import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
+import type { RealtimeConnection } from '@/lib/realtime-connection';
+
+type VolumeUpdate = { platformId: string; volumes: VolumesResponse['volumes'] } & (
+  | { scope: 'all'; capabilities: VolumesResponse['capabilities'] }
+  | { scope: 'manager' | 'nodes' }
+  | { scope: 'one'; id: string }
+);
 
 export const useVolumesGroup = (platformId?: string) => {
+  const queryClient = useQueryClient();
   const { data, isLoading, error, refetch, isFetching } = useRead('listVolumes', { platformId });
-  const [volumes, setVolumes] = useState<VolumesResponse | undefined>(data?.data);
-  const capabilities = data?.data.capabilities;
-
-  const lastDataRef = useRef<VolumesResponse | undefined>(data?.data);
-  const nodeSnapshotRef = useRef<SwarmNodeLocalResourcesUpdate>(undefined);
-
-  useEffect(() => {
-    if (data?.data && data.data !== lastDataRef.current) {
-      lastDataRef.current = data.data;
-      setVolumes(
-        nodeSnapshotRef.current
-          ? {
-              ...data.data,
-              volumes: nodeSnapshotRef.current.nodeOnly
-                ? [...data.data.volumes.filter((v) => !v.dockerNodeId), ...(nodeSnapshotRef.current.volumes ?? [])]
-                : (nodeSnapshotRef.current.volumes ?? data.data.volumes),
-            }
-          : data.data,
-      );
-    }
-  }, [data?.data]);
-
-  const onVolumeEvent = useCallback((event: VolumeEvent) => {
-    setVolumes((prev) => {
-      if (!prev?.volumes) return prev;
-
-      const { volume, eventType, actorId } = event;
-      const existingIndex = prev.volumes.findIndex((v) => v.id === actorId && !v.dockerNodeId);
-
-      switch (eventType) {
-        case 'create':
-          if (existingIndex === -1) {
-            return {
-              ...prev,
-              volumes: [volume, ...prev.volumes],
-            };
-          }
-          return { ...prev, volumes: prev.volumes.map((value, index) => (index === existingIndex ? volume : value)) };
-
-        case 'destroy':
-          if (existingIndex !== -1) {
-            return {
-              ...prev,
-              volumes: prev.volumes.filter((v) => v.id !== actorId || !!v.dockerNodeId),
-            };
-          }
-          break;
-
-        default:
-          break;
-      }
-
-      return prev;
-    });
-  }, []);
-
-  const onSwarmNodeLocalResourcesUpdated = useCallback(
-    (snapshot: SwarmNodeLocalResourcesUpdate) => {
-      if (snapshot.platformId !== platformId || !snapshot.volumes) return;
-      const values = snapshot.volumes;
-      nodeSnapshotRef.current = snapshot;
-      setVolumes((current) =>
-        current
-          ? {
-              ...current,
-              volumes: snapshot.nodeOnly ? [...current.volumes.filter((v) => !v.dockerNodeId), ...values] : values,
-            }
-          : current,
-      );
+  const onUpdate = useCallback(
+    (update: VolumeUpdate) => {
+      if (!platformId || update.platformId !== platformId) return;
+      const key = ['listVolumes', { platformId }] as const;
+      if (update.scope === 'all') void queryClient.cancelQueries({ queryKey: key, exact: true });
+      queryClient.setQueryData<ResourceResponse<'listVolumes'>>(key, (current) => {
+        if (update.scope === 'all') {
+          return {
+            ...current,
+            data: { volumes: update.volumes, capabilities: update.capabilities },
+          } as ResourceResponse<'listVolumes'>;
+        }
+        if (!current) return current;
+        const previous = current.data.volumes;
+        let volumes: VolumesResponse['volumes'];
+        if (update.scope === 'nodes') volumes = [...previous.filter((v) => !v.dockerNodeId), ...update.volumes];
+        else if (update.scope === 'manager') volumes = [...update.volumes, ...previous.filter((v) => v.dockerNodeId)];
+        else if (update.scope === 'one') {
+          const existing = previous.some((v) => !v.dockerNodeId && v.id === update.id);
+          volumes = existing
+            ? previous.flatMap((v) => (!v.dockerNodeId && v.id === update.id ? update.volumes : [v]))
+            : [...update.volumes, ...previous];
+        } else return current;
+        return { ...current, data: { ...current.data, volumes } };
+      });
     },
-    [platformId],
+    [platformId, queryClient],
   );
-
-  useDockerDaemonGroup(platformId, { onVolumeEvent, onSwarmNodeLocalResourcesUpdated });
-
-  return { error, refetch, isFetching, volumes, isLoading, capabilities };
+  const setupEventListeners = useCallback(
+    (connection: RealtimeConnection) => connection.on('VolumesUpdated', onUpdate),
+    [onUpdate],
+  );
+  const removeEventListeners = useCallback(
+    (connection: RealtimeConnection) => connection.off('VolumesUpdated', onUpdate),
+    [onUpdate],
+  );
+  useRealtimeGroup({
+    groupName: `volumes:${platformId}`,
+    setupEventListeners,
+    removeEventListeners,
+    skip: !platformId,
+  });
+  return { error, refetch, isFetching, volumes: data?.data, isLoading, capabilities: data?.data.capabilities };
 };

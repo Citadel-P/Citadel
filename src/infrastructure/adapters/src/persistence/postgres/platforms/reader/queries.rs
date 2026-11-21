@@ -5,6 +5,7 @@ use crate::persistence::postgres::authorization::AUTHORIZED_CTE;
 #[derive(Clone)]
 pub struct PostgresPlatformReader {
     pool: PgPool,
+    compose_networks: std::sync::Arc<super::compose_networks::ComposeNetworks>,
     history: std::sync::Arc<crate::persistence::postgres::platforms::history_admission::Admission>,
 }
 
@@ -17,7 +18,11 @@ impl PostgresPlatformReader {
                 citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
             ),
         );
-        Self { pool, history }
+        Self {
+            pool,
+            history,
+            compose_networks: Default::default(),
+        }
     }
     pub fn with_admission(
         pool: PgPool,
@@ -25,7 +30,11 @@ impl PostgresPlatformReader {
             crate::persistence::postgres::platforms::history_admission::Admission,
         >,
     ) -> Self {
-        Self { pool, history }
+        Self {
+            pool,
+            history,
+            compose_networks: Default::default(),
+        }
     }
 }
 
@@ -61,6 +70,7 @@ impl PlatformReader for PostgresPlatformReader {
     > {
         Box::pin(network_usage::read(
             &self.pool,
+            &self.compose_networks,
             actor,
             administrator,
             platform,

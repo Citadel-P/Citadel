@@ -1,4 +1,4 @@
-import { AuthorizedScript, ResourceCapabilitiesView } from '@/api/generated/api.types';
+import { ScriptSummaryView, ResourceCapabilitiesView } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,9 +12,9 @@ export const useScriptsGroup = () => {
     [selectedTagNames],
   );
   const { data, isLoading, error, refetch, isFetching } = useRead('listScripts', readArgs);
-  const [scripts, setScripts] = useState<AuthorizedScript[] | undefined>();
+  const [scripts, setScripts] = useState<ScriptSummaryView[] | undefined>();
   const [capabilities, setCapabilities] = useState<ResourceCapabilitiesView | undefined>();
-  const lastFetchedRef = useRef<AuthorizedScript[]>([]);
+  const lastFetchedRef = useRef<ScriptSummaryView[]>([]);
 
   useEffect(() => {
     if (!data) return;
@@ -28,7 +28,7 @@ export const useScriptsGroup = () => {
   }, [data]);
 
   const matchesActiveFilters = useCallback(
-    (script: AuthorizedScript) => {
+    (script: ScriptSummaryView) => {
       if (selectedTagNames.length === 0) return true;
 
       const tagNames = new Set((script.tags ?? []).map((tag) => tag.name.trim().toLowerCase()));
@@ -38,7 +38,7 @@ export const useScriptsGroup = () => {
   );
 
   const handleScriptInfoUpdated = useCallback(
-    (script: AuthorizedScript, scriptName: string) => {
+    (script: ScriptSummaryView, scriptName: string) => {
       setScripts((prev) => {
         if (!prev) return prev;
         if (scriptName === 'create') {
@@ -65,14 +65,14 @@ export const useScriptsGroup = () => {
 
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
-      hubConnection.on('ScriptInfoUpdated', handleScriptInfoUpdated);
+      hubConnection.on('ScriptSummaryUpdated', handleScriptInfoUpdated);
     },
     [handleScriptInfoUpdated],
   );
 
   const removeEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
-      hubConnection.off('ScriptInfoUpdated', handleScriptInfoUpdated);
+      hubConnection.off('ScriptSummaryUpdated', handleScriptInfoUpdated);
     },
     [handleScriptInfoUpdated],
   );

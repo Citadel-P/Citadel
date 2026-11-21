@@ -34,15 +34,29 @@ pub(super) fn cluster(v: ClusterVolumeMessage) -> Value {
 }
 
 impl AgentClient {
+    pub(crate) async fn volume_exists(
+        &self,
+        name: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<bool, RuntimeCapabilityError> {
+        Ok(self
+            .volume_list(true, Some(name), cancellation)
+            .await?
+            .volumes
+            .iter()
+            .any(|v| v.name == name))
+    }
     async fn volume_list(
         &self,
         names_only: bool,
+        name: Option<&str>,
         cancellation: &CancellationToken,
     ) -> Result<ListVolumesResponse, RuntimeCapabilityError> {
         self.retry_unary(cancellation, || async {
             let request = self.signer.sign(
                 ListVolumesRequest {
                     names_only,
+                    name: name.map(str::to_owned),
                     ..Default::default()
                 },
                 LIST_VOLUMES_METHOD,
@@ -64,7 +78,7 @@ impl citadel_platforms::VolumeInventoryPort for AgentClient {
     ) -> BoxFuture<'a, Result<Vec<String>, RuntimeCapabilityError>> {
         Box::pin(async move {
             Ok(self
-                .volume_list(true, cancellation)
+                .volume_list(true, None, cancellation)
                 .await?
                 .volumes
                 .into_iter()
@@ -78,7 +92,7 @@ impl citadel_platforms::VolumeInventoryPort for AgentClient {
     ) -> BoxFuture<'a, Result<Vec<RuntimeVolumeSummary>, RuntimeCapabilityError>> {
         Box::pin(async move {
             Ok(self
-                .volume_list(false, cancellation)
+                .volume_list(false, None, cancellation)
                 .await?
                 .volumes
                 .into_iter()

@@ -2844,6 +2844,7 @@ export interface ContainerView {
 export interface ContainersResponse {
   capabilities: PlatformCapabilitiesView;
   containers: ContainerView[];
+  stackBackupCoverage: Partial<Record<string, ResourceBackupSummaryView>>;
 }
 
 export interface Count {
@@ -7261,7 +7262,7 @@ export interface ScriptInput {
 
 export interface ScriptList {
   capabilities: ResourceCapabilitiesView;
-  scripts: AuthorizedScript[];
+  scripts: ScriptSummaryView[];
 }
 
 export interface ScriptProgress {
@@ -7320,6 +7321,20 @@ export interface ScriptRunView {
   trigger: ScriptRunTrigger;
   /** @format uuid */
   triggeredByActorId: string | null;
+}
+
+export interface ScriptSummaryView {
+  capabilities: ResourceCapabilitiesView;
+  controlState: ResourceControlState;
+  description: string | null;
+  enabled: boolean;
+  /** @format uuid */
+  id: string;
+  latestRun: ScriptRunView | null;
+  name: string;
+  scheduleCron: string | null;
+  scheduleEnabled: boolean;
+  tags: ResourcesTagsTagSummary[];
 }
 
 export interface ScriptView {

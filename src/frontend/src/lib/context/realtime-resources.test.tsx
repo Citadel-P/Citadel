@@ -133,7 +133,7 @@ it('uses the unchanged Deployment hook to apply a named event without refetching
   rendered.unmount();
 });
 
-it('uses existing daemon handlers to remove Volumes and Networks without refetching', async () => {
+it('uses resource events to remove Volumes and Networks without refetching', async () => {
   const volumes = vi.fn(() =>
     HttpResponse.json({ volumes: [{ id: 'volume-one', name: 'volume-one' }], capabilities: {} }),
   );
@@ -157,7 +157,7 @@ it('uses existing daemon handlers to remove Volumes and Networks without refetch
   expect(await screen.findByText('networks: 1')).toBeVisible();
   connect(socket);
   await waitFor(() => expect(socket.send).toHaveBeenCalled());
-  deliver(socket, 'VolumeEventReceived', null, 'destroy', 'volume-one');
+  deliver(socket, 'VolumesUpdated', { platformId: 'p1', scope: 'one', id: 'volume-one', volumes: [] });
   deliver(socket, 'NetworkEventReceived', null, 'destroy', 'n1');
   expect(await screen.findByText('volumes: 0')).toBeVisible();
   expect(await screen.findByText('networks: 0')).toBeVisible();

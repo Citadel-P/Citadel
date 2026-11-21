@@ -203,6 +203,7 @@ async fn list_deployments(
     let filter = DeploymentFilter {
         tags: filter.tags,
         platform_id: filter.platform_id,
+        ..Default::default()
     };
     let capabilities = collection_capabilities(
         &state.identity,

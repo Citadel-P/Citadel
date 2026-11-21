@@ -46,7 +46,25 @@ impl volume_service_server::VolumeService for Runtime {
         &self,
         request: Request<InspectVolumeRequest>,
     ) -> Result<Response<VolumeResponse>, Status> {
-        let name = request.into_inner().name;
+        let request = request.into_inner();
+        use inspect_volume_request::Observation;
+        let mode = Observation::try_from(request.observation)
+            .map_err(|_| Status::invalid_argument("Unknown volume observation"))?;
+        let name = request.name;
+        if mode != Observation::Details {
+            let mode = match mode {
+                Observation::ContentProtection => {
+                    citadel_platforms::VolumeObservation::ContentProtection
+                }
+                _ => citadel_platforms::VolumeObservation::Metadata,
+            };
+            return Ok(Response::new(volume(
+                self.docker
+                    .observe_volume(&name, mode)
+                    .await
+                    .map_err(docker_error)?,
+            )));
+        }
         let (value, containers) = tokio::try_join!(
             self.docker.inspect_volume(&name),
             self.docker.volume_containers(&name)

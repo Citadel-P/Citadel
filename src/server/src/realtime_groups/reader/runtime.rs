@@ -82,6 +82,7 @@ pub(crate) async fn realtime_resource_snapshot(
     id: Uuid,
     lease: Option<&crate::realtime::AuthorizationLease>,
     event: &crate::realtime::PublishedRuntimeEvent,
+    topic: &Topic,
 ) -> Result<Option<crate::realtime_groups::GroupSnapshot>, crate::realtime::RealtimeReadError> {
     use crate::{
         realtime::RealtimeReadError,
@@ -161,6 +162,10 @@ pub(crate) async fn realtime_resource_snapshot(
             payload["volumes"] =
                 serde_json::to_value(enrich_volumes(state, principal, id, volumes).await?)
                     .map_err(failure)?;
+            if matches!(topic, Topic::Volumes(_)) {
+                payload["scope"] = json!("nodes");
+                return super::event("VolumesUpdated", payload).map(Some);
+            }
             let manager_count =
                 crate::realtime::shared_reads::platform(&state.platforms, id, Some(event))
                     .await?
@@ -357,10 +362,33 @@ pub(crate) async fn realtime_resource_snapshot(
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(failure)?;
         let volumes = enrich_volumes(state, principal, id, volumes).await?;
-        events.push(ClientEvent::new(
-            "SwarmNodeLocalResourcesUpdated",
-            vec![serde_json::json!({"platformId":id, "nodeOnly":true, "volumes":volumes})],
-        ));
+        events.push(if matches!(topic, Topic::Volumes(_)) {
+            ClientEvent::new(
+                "VolumesUpdated",
+                vec![json!({"platformId":id, "scope":"nodes", "volumes":volumes})],
+            )
+        } else {
+            ClientEvent::new(
+                "SwarmNodeLocalResourcesUpdated",
+                vec![json!({"platformId":id, "nodeOnly":true, "volumes":volumes})],
+            )
+        });
+    }
+    if matches!(topic, Topic::Volumes(_)) {
+        if manager_available {
+            let (scope, key) = match style {
+                RowStyle::DaemonPatch(key) => ("one", Some(key)),
+                _ => ("manager", None),
+            };
+            events.push(ClientEvent::new(
+                "VolumesUpdated",
+                vec![json!({"platformId":id,"scope":scope,"id":key,"volumes":rows})],
+            ));
+        }
+        return Ok(Some(GroupSnapshot {
+            events,
+            rows: vec![],
+        }));
     }
     Ok(Some(GroupSnapshot {
         events,
@@ -562,7 +590,7 @@ pub(super) async fn daemon_capabilities(
     ))
 }
 
-async fn enrich_volumes(
+pub(super) async fn enrich_volumes(
     state: &ApplicationGroupReader,
     principal: &ActorPrincipal,
     platform: Uuid,

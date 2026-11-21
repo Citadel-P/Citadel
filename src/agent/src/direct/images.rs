@@ -13,8 +13,25 @@ type Output<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 impl ImageService for Runtime {
     async fn list(
         &self,
-        _: Request<ListImagesRequest>,
+        request: Request<ListImagesRequest>,
     ) -> Result<Response<ListImageResponse>, Status> {
+        if request.into_inner().identity_only {
+            let images = self
+                .docker
+                .image_digest_catalog()
+                .await
+                .map_err(docker_error)?;
+            return Ok(Response::new(ListImageResponse {
+                images: images
+                    .into_iter()
+                    .map(|(id, repo_digests)| ImageReply {
+                        id,
+                        repo_digests,
+                        ..Default::default()
+                    })
+                    .collect(),
+            }));
+        }
         Ok(Response::new(ListImageResponse {
             images: self
                 .docker
@@ -62,7 +79,25 @@ impl ImageService for Runtime {
         &self,
         r: Request<InspectImageRequest>,
     ) -> Result<Response<InspectImageResponse>, Status> {
-        let id = r.into_inner().id;
+        let request = r.into_inner();
+        let id = request.id;
+        if request.identity_only {
+            let image = self
+                .docker
+                .image_identity(&id, &self.shutdown)
+                .await
+                .map_err(runtime_error)?;
+            return Ok(Response::new(InspectImageResponse {
+                id: image.id,
+                config_digest: image.config_digest,
+                content_digest: image.content_digest,
+                os: Some(image.os),
+                architecture: Some(image.architecture),
+                variant: image.variant,
+                repo_tags: image.repo_tags,
+                ..Default::default()
+            }));
+        }
         let image = ImageInspectionPort::inspect_image(&self.docker, &id, &self.shutdown)
             .await
             .map_err(runtime_error)?;

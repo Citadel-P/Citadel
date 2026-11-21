@@ -595,15 +595,22 @@ pub(super) async fn validate_references(
             ));
         }
     }
-    for binding in &spec.common().build_image_bindings {
-        if !sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM buildprojects WHERE id=$1 AND archivedat IS NULL)",
+    let projects: std::collections::BTreeSet<_> = spec
+        .common()
+        .build_image_bindings
+        .iter()
+        .map(|b| b.build_project_id)
+        .collect();
+    if !projects.is_empty() {
+        let ids: Vec<_> = projects.into_iter().collect();
+        let count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM buildprojects WHERE id=ANY($1) AND archivedat IS NULL",
         )
-        .bind(binding.build_project_id)
+        .bind(&ids)
         .fetch_one(&mut **tx)
         .await
-        .map_err(storage)?
-        {
+        .map_err(storage)?;
+        if count != ids.len() as i64 {
             return Err(StackError::Validation(
                 "A selected build project does not exist.".to_owned(),
             ));

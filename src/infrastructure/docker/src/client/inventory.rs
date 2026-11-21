@@ -125,12 +125,20 @@ impl citadel_platforms::VolumeInventoryPort for DockerClient {
 }
 
 impl citadel_platforms::VolumeObservationPort for DockerClient {
-    fn inspect_volume<'a>(
+    fn observe_volume<'a>(
         &'a self,
         name: &'a str,
+        observation: citadel_platforms::VolumeObservation,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
         async move {
+            if observation != citadel_platforms::VolumeObservation::Details {
+                return tokio::select! {
+                    biased;
+                    () = cancellation.cancelled() => Err(cancelled_error()),
+                    value = DockerClient::observe_volume(self,name,observation) => value.map(map_volume).map_err(normalize_docker_error),
+                };
+            }
             let (value, containers) = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Err(cancelled_error()),

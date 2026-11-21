@@ -46,7 +46,7 @@ impl ImageUpdateAdapter {
             .runtime
             .images(check.platform, None, cancel)
             .await?
-            .inspect_image(image_id.unwrap_or(&reference), cancel)
+            .image_identity(image_id.unwrap_or(&reference), cancel)
             .await?;
         if image_id.is_some_and(|id| image.id != id) {
             return Err(unavailable(

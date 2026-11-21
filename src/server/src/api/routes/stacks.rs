@@ -1183,6 +1183,7 @@ async fn list(
     let filter = StackFilter {
         tags: filter.tags,
         platform_id: filter.platform_id,
+        ..Default::default()
     };
     let capabilities =
         collection_capabilities(&state.identity, &principal, ResourceType::Stack, &headers).await?;

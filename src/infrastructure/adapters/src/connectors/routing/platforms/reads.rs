@@ -51,6 +51,18 @@ impl ImageInspectionPort for Runtime<'_> {
         }
     }
 
+    fn image_identity<'a>(
+        &'a self,
+        id: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<citadel_platforms::images::ImageIdentity, RuntimeCapabilityError>>
+    {
+        match self {
+            Runtime::Local(runtime) => ImageInspectionPort::image_identity(*runtime, id, cancel),
+            Runtime::Agent(runtime) => ImageInspectionPort::image_identity(runtime, id, cancel),
+            Runtime::Edge(runtime) => ImageInspectionPort::image_identity(runtime, id, cancel),
+        }
+    }
     fn inspect_image<'a>(
         &'a self,
         id: &'a str,

@@ -131,19 +131,34 @@ impl VolumeContentAdapter {
         let runtime = match runtime {
             Runtime::Local(r) => {
                 let inspected = r
-                    .inspect_volume(volume)
+                    .observe_volume(
+                        volume,
+                        citadel_platforms::VolumeObservation::ContentProtection,
+                    )
                     .await
                     .map_err(citadel_docker::client::runtime::normalize_docker_error)?;
                 require_content_access(inspected.content_access_allowed)?;
                 HelperRuntime::Local(r.clone())
             }
             Runtime::Agent(r) => {
-                let inspected = r.inspect_volume(volume, cancellation).await?;
+                let inspected = r
+                    .observe_volume(
+                        volume,
+                        citadel_platforms::VolumeObservation::ContentProtection,
+                        cancellation,
+                    )
+                    .await?;
                 require_content_access(inspected.content_access_allowed)?;
                 HelperRuntime::Agent(AgentExecutionClient::Direct(Arc::new(r)))
             }
             Runtime::Edge(r) => {
-                let inspected = r.inspect_volume(volume, cancellation).await?;
+                let inspected = r
+                    .observe_volume(
+                        volume,
+                        citadel_platforms::VolumeObservation::ContentProtection,
+                        cancellation,
+                    )
+                    .await?;
                 require_content_access(inspected.content_access_allowed)?;
                 HelperRuntime::Agent(AgentExecutionClient::Edge(r.session))
             }

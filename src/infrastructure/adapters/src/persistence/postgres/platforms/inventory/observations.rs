@@ -98,14 +98,12 @@ impl PlatformLifecycleStore for PostgresInventoryProjectionStore {
         &'a self,
         platform: Uuid,
         online: bool,
-    ) -> BoxFuture<'a, Result<(), RuntimeCapabilityError>> {
+        edge_binding: Option<Uuid>,
+    ) -> BoxFuture<'a, Result<bool, RuntimeCapabilityError>> {
         async move {
-            if online {
-                super::super::status::platform_online(&self.pool, platform).await
-            } else {
-                super::super::status::platform_offline(&self.pool, platform).await
-            }
-            .map_err(storage)
+            super::super::status::set_health(&self.pool, platform, online, edge_binding)
+                .await
+                .map_err(storage)
         }
         .boxed()
     }

@@ -1,4 +1,4 @@
-#[path = "stack_images.rs"]
+#[path = "../fixtures/workload_image_peer.rs"]
 mod stack_images;
 use citadel_adapters::connectors::routing::stacks::StackRuntimeRouter;
 use citadel_adapters::connectors::routing::stacks::StackUpdateRuntime;
@@ -205,18 +205,22 @@ pub async fn verify(
         cache.get(registry, "nginx:alpine").unwrap().digest,
         stack_images::remote_digest()
     );
-    let (edge, peer) = stack_images::start(pool, platform, stack.id).await;
+    let mut owners = vec![stack.id];
+    owners.extend((1..25).map(|_| Uuid::now_v7()));
+    let edge = citadel_adapters::connectors::edge::EdgeRegistry::default();
+    let (done, peer) = stack_images::start(pool, &edge, platform, owners.clone(), "nginx").await;
     let image_runtime = StackUpdateRuntime::new(
         StackRuntimeRouter::new(
             pool.clone(),
             DockerClient::new("/no-local-daemon-for-edge-fixture", Duration::from_secs(2)).unwrap(),
             None,
         )
-        .with_edge(edge)
+        .with_edge(edge.clone())
         .with_image_cache(cache),
         git.clone(),
     );
-    let state = image_runtime
+    let scanner = image_runtime.image_batch().unwrap();
+    let state = scanner
         .scan_images_cached(&stack, &CancellationToken::new())
         .await
         .unwrap();
@@ -242,10 +246,58 @@ pub async fn verify(
         unreachable!()
     };
     assert_eq!(&recreate_stack_on_new_commit_state, prior);
+    // Each Stack keeps its own tag comparison. The bounded page shares just the two catalogs.
+    for id in owners.into_iter().skip(1) {
+        let mut other = stack.resource.clone();
+        other.id = id;
+        scanner
+            .scan_images_cached(&other, &CancellationToken::new())
+            .await
+            .unwrap();
+    }
+    done.send(()).unwrap();
+    // Both immutable manifests are shared by the existing registry cache.
+    assert_eq!(peer.await.unwrap(), (2 + 25 + 2, 1, 1));
+    edge.disconnect_platform(platform);
+    let (done, replacement) = stack_images::start(pool, &edge, platform, vec![], "nginx").await;
+    assert!(
+        scanner
+            .scan_images_cached(&stack, &CancellationToken::new())
+            .await
+            .is_err()
+    );
+    done.send(()).unwrap();
     assert_eq!(
-        peer.await.unwrap(),
-        5,
-        "inventory, inspection and both immutable manifests must be checked"
+        replacement.await.unwrap(),
+        (2, 1, 1),
+        "A reconnected Agent has a new inventory."
+    );
+    edge.disconnect_platform(platform);
+    let owners = vec![Uuid::now_v7(), Uuid::now_v7()];
+    sqlx::query("UPDATE platforms SET platformdescriptor=$2 WHERE id=$1")
+        .bind(platform)
+        .bind(json!({"$type":"DockerSwarm","clusterId":"scanner","controlAvailable":true}))
+        .execute(pool)
+        .await
+        .unwrap();
+    let (done, swarm_peer) =
+        stack_images::start(pool, &edge, platform, owners.clone(), "nginx").await;
+    let swarm_page = image_runtime.image_batch().unwrap();
+    for owner in owners {
+        let mut member = stack.resource.clone();
+        member.platform_type = citadel_platforms::PlatformKind::DockerSwarm;
+        member.id = owner;
+        member.name = owner.to_string();
+        swarm_page
+            .scan_images_cached(&member, &CancellationToken::new())
+            .await
+            .unwrap();
+    }
+    done.send(()).unwrap();
+    assert_eq!(
+        swarm_peer.await.unwrap(),
+        (3, 0, 0),
+        "Both Swarm stacks share one service, node and task list; the immutable manifests are already cached."
     );
     let queued: bool =
         sqlx::query_scalar("SELECT controlstate='Queued' FROM gitrepositories WHERE id=$1")

@@ -466,9 +466,10 @@ mod tests {
     }
 
     impl crate::VolumeObservationPort for CountingRuntime {
-        fn inspect_volume<'a>(
+        fn observe_volume<'a>(
             &'a self,
             _name: &'a str,
+            _observation: crate::VolumeObservation,
             _cancellation: &'a CancellationToken,
         ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
             unreachable!()

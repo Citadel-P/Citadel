@@ -20,10 +20,17 @@ pub trait ContainerMaintenanceReader: Send + Sync {
     ) -> BoxFuture<'a, Result<Option<UnmanagedContainer>, RuntimeCapabilityError>>;
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct EdgeHealthObservation {
+    pub platform: Uuid,
+    pub binding: Uuid,
+    pub healthy: bool,
+}
+
 pub trait EdgeHealthReader: Send + Sync {
     /// Only nonrevoked manager bindings participate; unbound/node-only platforms are absent.
     fn health<'a>(
         &'a self,
         platforms: &'a [Uuid],
-    ) -> BoxFuture<'a, Result<Vec<(Uuid, bool)>, RuntimeCapabilityError>>;
+    ) -> BoxFuture<'a, Result<Vec<EdgeHealthObservation>, RuntimeCapabilityError>>;
 }

@@ -473,7 +473,7 @@ impl ImageUpdateService {
                 .images(platform, location.docker_node_id.as_deref(), cancel)
                 .await?;
             let local = runtime
-                .inspect_image(&location.docker_image_id, cancel)
+                .image_identity(&location.docker_image_id, cancel)
                 .await?;
             if local.id != location.docker_image_id
                 || !local.repo_tags.iter().any(|t| t == reference)
@@ -542,7 +542,7 @@ impl ImageUpdateService {
                 .runtime
                 .images(platform, location.docker_node_id.as_deref(), cancel)
                 .await?
-                .inspect_image(&location.docker_image_id, cancel)
+                .image_identity(&location.docker_image_id, cancel)
                 .await?;
             if current.id != local.id || !current.repo_tags.iter().any(|t| t == reference) {
                 return Err(failure(
@@ -620,7 +620,7 @@ enum ComparisonIdentity<'a> {
 }
 
 fn comparison_identity<'a>(
-    local: &'a crate::images::ImageInspection,
+    local: &'a crate::images::ImageIdentity,
     remote: &'a RegistryImageObservation,
 ) -> Result<ComparisonIdentity<'a>, RuntimeCapabilityError> {
     if let Some(digest) = local.config_digest.as_deref().filter(|d| valid_digest(d)) {
@@ -760,7 +760,7 @@ mod tests {
     use super::*;
     #[test]
     fn comparisons_distinguish_classic_configs_from_containerd_indexes_and_manifests() {
-        use crate::images::ImageInspection;
+        use crate::images::ImageIdentity;
         let remote = RegistryImageObservation {
             config_digest: format!("sha256:{}", "a".repeat(64)),
             manifest_digest: format!("sha256:{}", "b".repeat(64)),
@@ -768,7 +768,7 @@ mod tests {
             observed_at: Utc::now(),
         };
         for digest in [&remote.index_digest, &remote.manifest_digest] {
-            let local = ImageInspection {
+            let local = ImageIdentity {
                 id: digest.clone(),
                 content_digest: Some(digest.clone()),
                 ..Default::default()
@@ -777,7 +777,7 @@ mod tests {
                 ComparisonIdentity::Config(d) if d == remote.config_digest));
         }
         let old = format!("sha256:{}", "d".repeat(64));
-        let mut local = ImageInspection {
+        let mut local = ImageIdentity {
             id: old.clone(),
             content_digest: Some(old.clone()),
             ..Default::default()

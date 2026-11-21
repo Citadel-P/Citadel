@@ -12,6 +12,11 @@ enum CheckMode {
 }
 
 pub trait StackUpdateScanner: Send + Sync {
+    /// A scanner scoped to one bounded candidate page can reuse observations on the same daemon.
+    fn image_batch(&self) -> Option<Box<dyn StackUpdateScanner>> {
+        None
+    }
+
     /// Read deployed images and current registry digests without checking Git.
     fn scan_images<'a>(
         &'a self,
@@ -51,8 +56,15 @@ impl StackService {
         id: Uuid,
         cancellation: &CancellationToken,
     ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
-        self.check_updates_mode(actor, administrator, id, CheckMode::Manual, cancellation)
-            .await
+        self.check_updates_mode(
+            actor,
+            administrator,
+            id,
+            CheckMode::Manual,
+            None,
+            cancellation,
+        )
+        .await
     }
     async fn check_updates_mode(
         &self,
@@ -60,6 +72,7 @@ impl StackService {
         administrator: bool,
         id: Uuid,
         mode: CheckMode,
+        batch: Option<&dyn StackUpdateScanner>,
         cancellation: &CancellationToken,
     ) -> Result<AuthorizedResource<crate::Stack>, StackError> {
         let _permit = self
@@ -87,9 +100,8 @@ impl StackService {
                 "The Stack release state does not support update checks.".into(),
             ));
         }
-        let scanner = self
-            .update_scanner
-            .as_ref()
+        let scanner = batch
+            .or(self.update_scanner.as_deref())
             .ok_or_else(|| StackError::Runtime("Stack update checks are unavailable.".into()))?;
         let cancel = cancellation.child_token();
         let _guard = cancel.clone().drop_guard();
@@ -144,6 +156,13 @@ impl StackService {
             if ids.is_empty() {
                 break;
             }
+            let new_batch = || {
+                self.update_scanner
+                    .as_ref()
+                    .filter(|_| images)
+                    .and_then(|s| s.image_batch())
+            };
+            let mut batch = new_batch();
             for id in ids {
                 after = id;
                 if cancellation.is_cancelled() || self.shutdown.is_cancelled() {
@@ -151,7 +170,7 @@ impl StackService {
                 }
                 let result = async {
                     let checked = self
-                        .check_updates_mode(actor, true, id, if images { CheckMode::Images } else { CheckMode::Git }, cancellation)
+                        .check_updates_mode(actor, true, id, if images { CheckMode::Images } else { CheckMode::Git }, batch.as_deref(), cancellation)
                         .await?;
                     let behavior = match checked.spec.as_ref().ok_or(StackError::NotFound)? {
                         StackSpec::Git {
@@ -220,6 +239,7 @@ impl StackService {
                         } else {
                             Vec::new()
                         };
+                    batch = new_batch();
                     let applied = async {
                         let mut output = self
                             .start_apply_versioned(

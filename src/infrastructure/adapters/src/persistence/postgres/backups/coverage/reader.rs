@@ -10,10 +10,10 @@ impl CoverageReader for PostgresVolumeCoverageReader {
         administrator: bool,
         platforms: &'a [Uuid],
         selection: Option<&'a CoverageSelection>,
-    ) -> BoxFuture<'a, Result<CoverageSnapshot, BackupError>> {
+    ) -> BoxFuture<'a, Result<IndexedCoverage, BackupError>> {
         Box::pin(async move {
             if platforms.is_empty() {
-                return Ok(CoverageSnapshot::default());
+                return Ok(IndexedCoverage::default());
             }
             let mut snapshot = CoverageSnapshot::default();
             let query = format!(
@@ -41,15 +41,26 @@ impl CoverageReader for PostgresVolumeCoverageReader {
                 .await
                 .map_err(storage)?;
             let mut inventory_selection = selection.cloned().unwrap_or_default();
-            for row in &rows {
+            for row in rows {
                 let source: sqlx::types::Json<spec::BackupSourceSpec> =
                     row.try_get("source").map_err(storage)?;
                 if let Some((kind, id)) = source_identity(&source.0) {
-                    let policy = CoverageSelection::workload(kind, id);
-                    inventory_selection.deployments.extend(policy.deployments);
-                    inventory_selection.stacks.extend(policy.stacks);
-                    inventory_selection.services.extend(policy.services);
+                    use citadel_backups::policies::read_models::BackupPreviewKind::*;
+                    match kind {
+                        Deployment => inventory_selection.deployments.push(id),
+                        Stack => inventory_selection.stacks.push(id),
+                        SwarmService => inventory_selection.services.push(id),
+                    }
                 }
+                snapshot.policies.push(CoveragePolicy {
+                    id: row.try_get("id").map_err(storage)?,
+                    name: row.try_get("name").map_err(storage)?,
+                    enabled: row.try_get("enabled").map_err(storage)?,
+                    cron: row.try_get("cron").map_err(storage)?,
+                    source: source.0,
+                    repository_ready: row.try_get("ready").map_err(storage)?,
+                    latest_run: None,
+                });
             }
             for ids in [
                 &mut inventory_selection.deployments,
@@ -66,60 +77,39 @@ impl CoverageReader for PostgresVolumeCoverageReader {
                 &mut snapshot,
             )
             .await?;
-            for r in rows {
-                let source: sqlx::types::Json<spec::BackupSourceSpec> =
-                    r.try_get("source").map_err(storage)?;
-                let in_scope = match &source.0 {
-                    spec::BackupSourceSpec::DockerVolume { platform_id, .. }
-                    | spec::BackupSourceSpec::BindMount { platform_id, .. } => {
-                        platforms.contains(platform_id)
-                    }
-                    source => source_identity(source).is_some_and(|(kind, id)| {
-                        snapshot
-                            .workloads
-                            .iter()
-                            .any(|w| w.kind == kind && w.id == id)
-                    }),
-                };
-                if in_scope {
-                    snapshot.policies.push(CoveragePolicy {
-                        id: r.try_get("id").map_err(storage)?,
-                        name: r.try_get("name").map_err(storage)?,
-                        enabled: r.try_get("enabled").map_err(storage)?,
-                        cron: r.try_get("cron").map_err(storage)?,
-                        source: source.0,
-                        repository_ready: r.try_get("ready").map_err(storage)?,
-                        latest_run: None,
-                    });
+            let owners = snapshot
+                .workloads
+                .iter()
+                .map(|w| (w.kind, w.id))
+                .collect::<std::collections::BTreeSet<_>>();
+            snapshot.policies.retain(|p| match &p.source {
+                spec::BackupSourceSpec::DockerVolume { platform_id, .. }
+                | spec::BackupSourceSpec::BindMount { platform_id, .. } => {
+                    platforms.contains(platform_id)
                 }
-            }
+                source => source_identity(source).is_some_and(|key| owners.contains(&key)),
+            });
             // Preserve inventory and its completeness even without visible policies.
             // No run or successful-history lookup can contribute in that case.
+            let mut snapshot = snapshot.indexed();
             if snapshot.policies.is_empty() {
                 return Ok(snapshot);
             }
             let targets = selected_targets(&snapshot, selection);
             let mut relevant = std::collections::BTreeSet::new();
-            for platform in platforms {
-                let local: Vec<_> = targets
-                    .iter()
-                    .filter(|t| t.target.platform_id == *platform)
-                    .cloned()
-                    .collect();
+            for target in &targets {
                 relevant.extend(
                     snapshot
-                        .evaluate(*platform, &local, None, true, true)
-                        .policy_ids,
+                        .matching_policies(&target.target)
+                        .iter()
+                        .map(|p| p.id),
                 );
             }
-            for policy in &snapshot.policies {
-                if source_identity(&policy.source).is_some_and(|(kind, id)| {
-                    selection.is_none_or(|s| s.contains_workload(kind, id))
-                }) {
-                    relevant.insert(policy.id);
+            if let Some(selected) = selection {
+                for key in workload_keys(selected) {
+                    relevant.extend(snapshot.workload_policy_ids(key));
                 }
-            }
-            if selection.is_none() {
+            } else {
                 relevant.extend(snapshot.policies.iter().map(|p| p.id));
             }
             let ids = relevant.into_iter().collect::<Vec<_>>();
@@ -148,24 +138,16 @@ impl CoverageReader for PostgresVolumeCoverageReader {
             for item in items {
                 by_run.entry(item.backup_run_id).or_default().push(item);
             }
-            let policy_index = snapshot
-                .policies
-                .iter()
-                .enumerate()
-                .map(|(i, p)| (p.id, i))
-                .collect::<std::collections::HashMap<_, _>>();
             for mut run in runs {
                 run.items = by_run.remove(&run.id).unwrap_or_default();
-                if let Some(&index) = policy_index.get(&run.backup_policy_id) {
-                    snapshot.policies[index].latest_run = Some(run);
-                }
+                snapshot.attach_run(run);
             }
             let ids: Vec<_> = snapshot.policies.iter().map(|p| p.id).collect();
             let rows=sqlx::query("SELECT i.platformid,i.volumename,i.hostpath,i.dockernodeid,MAX(COALESCE(i.completedat,r.completedat,r.queuedat)) AS at FROM backuprunitems i JOIN backupruns r ON r.id=i.backuprunid WHERE r.backuppolicyid=ANY($1) AND i.platformid=ANY($2) AND i.status='Succeeded' AND i.resticsnapshotid IS NOT NULL AND r.snapshotavailability='Available' AND ($7 OR EXISTS(SELECT 1 FROM unnest($3::uuid[],$4::text[],$5::text[],$6::text[]) t(platformid,name,hostpath,nodeid) WHERE t.platformid=i.platformid AND t.hostpath IS NOT DISTINCT FROM i.hostpath AND t.nodeid IS NOT DISTINCT FROM i.dockernodeid AND (t.hostpath IS NOT NULL OR t.name=i.volumename))) GROUP BY i.platformid,i.volumename,i.hostpath,i.dockernodeid")
                 .bind(&ids).bind(platforms).bind(&target_platforms).bind(&names).bind(&paths).bind(&nodes).bind(selection.is_none()).fetch_all(&self.0).await.map_err(storage)?;
             for r in rows {
                 let host: Option<String> = r.try_get("hostpath").map_err(storage)?;
-                snapshot.successes.push((
+                snapshot.record_success(
                     StorageTarget {
                         platform_id: r.try_get("platformid").map_err(storage)?,
                         name: host
@@ -175,7 +157,7 @@ impl CoverageReader for PostgresVolumeCoverageReader {
                         docker_node_id: r.try_get("dockernodeid").map_err(storage)?,
                     },
                     r.try_get("at").map_err(storage)?,
-                ));
+                );
             }
             Ok(snapshot)
         })
@@ -220,11 +202,7 @@ pub async fn volume_coverage(
                 scheduling_available,
             );
             let v = summary.volumes.remove(0);
-            let policies = snapshot
-                .policies
-                .iter()
-                .filter(|p| v.policy_ids.contains(&p.id))
-                .collect::<Vec<_>>();
+            let policies = snapshot.matching_policies(&v.target);
             let latest = policies
                 .iter()
                 .copied()
@@ -274,6 +252,24 @@ impl summaries::VolumeCoverageReader for PostgresVolumeCoverageReader {
     }
 }
 
+fn workload_keys(
+    selection: &CoverageSelection,
+) -> impl Iterator<
+    Item = (
+        citadel_backups::policies::read_models::BackupPreviewKind,
+        Uuid,
+    ),
+> + '_ {
+    use citadel_backups::policies::read_models::BackupPreviewKind::*;
+    [
+        (Deployment, &selection.deployments),
+        (Stack, &selection.stacks),
+        (SwarmService, &selection.services),
+    ]
+    .into_iter()
+    .flat_map(|(kind, ids)| ids.iter().map(move |id| (kind, *id)))
+}
+
 fn selected_targets(
     snapshot: &CoverageSnapshot,
     selection: Option<&CoverageSelection>,
@@ -284,22 +280,39 @@ fn selected_targets(
             targets.insert(target.clone(), false);
         }
     }
+    let workloads = selection.map(|s| workload_keys(s).collect::<std::collections::BTreeSet<_>>());
+    let ids = selection.map(|s| {
+        s.containers
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>()
+    });
+    let keys: std::collections::BTreeSet<_> = selection
+        .into_iter()
+        .flat_map(|s| {
+            s.container_keys
+                .iter()
+                .map(|(p, node, id)| (*p, node.as_deref(), id.as_str()))
+        })
+        .collect();
     for workload in &snapshot.workloads {
-        if selection.is_none_or(|s| s.contains_workload(workload.kind, workload.id)) {
+        if workloads
+            .as_ref()
+            .is_none_or(|set| set.contains(&(workload.kind, workload.id)))
+        {
             for v in &workload.volumes {
                 targets.insert(v.target.clone(), v.included);
             }
         }
     }
     for container in &snapshot.containers {
-        if selection.is_none_or(|s| {
-            s.containers.contains(&container.id)
-                || s.container_keys.iter().any(|(p, n, id)| {
-                    *p == container.platform_id
-                        && *n == container.docker_node_id
-                        && *id == container.docker_id
-                })
-        }) {
+        if ids.as_ref().is_none_or(|set| set.contains(&container.id))
+            || keys.contains(&(
+                container.platform_id,
+                container.docker_node_id.as_deref(),
+                container.docker_id.as_str(),
+            ))
+        {
             for v in &container.volumes {
                 targets.insert(v.target.clone(), v.included);
             }

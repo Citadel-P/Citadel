@@ -40,10 +40,10 @@ describe('node-local Docker resource snapshots', () => {
       },
     });
 
-    // Images use their actor-authorized snapshot group; volumes/networks use daemon events.
-    await waitFor(() => expect(fake.listenerCount('SwarmNodeLocalResourcesUpdated')).toBe(2));
+    await waitFor(() => expect(fake.listenerCount('VolumesUpdated')).toBe(1));
     await waitFor(() => expect(fake.listenerCount('ImagesInfoUpdated')).toBe(1));
     act(() => fake.emit('ImagesInfoUpdated', { platformId, images: [image('worker')], capabilities: {} }));
+    act(() => fake.emit('VolumesUpdated', { platformId, scope: 'all', volumes: [volume('worker')], capabilities: {} }));
     act(() =>
       fake.emit('SwarmNodeLocalResourcesUpdated', {
         platformId,
@@ -61,6 +61,10 @@ describe('node-local Docker resource snapshots', () => {
     expect(await screen.findByTestId('volumes')).toHaveTextContent('worker');
     expect(await screen.findByTestId('networks')).toHaveTextContent('worker');
     expect(screen.queryByText('manager')).not.toBeInTheDocument();
+    // Rejoining delivers a complete snapshot, including removals while disconnected.
+    act(() => fake.emit('VolumesUpdated', { platformId, scope: 'all', volumes: [], capabilities: {} }));
+    await waitFor(() => expect(screen.getByTestId('volumes')).toBeEmptyDOMElement());
+
   });
   it('applies scoped node changes without clearing manager or unrelated resources', async () => {
     const fake = new FakeRealtimeConnection();
@@ -84,23 +88,23 @@ describe('node-local Docker resource snapshots', () => {
     await waitFor(() => expect(screen.getByTestId('images')).toHaveTextContent('image-owner'));
     await waitFor(() => expect(screen.getByTestId('networks')).toHaveTextContent('network-owner'));
     act(() =>
-      fake.emit('SwarmNodeLocalResourcesUpdated', {
+      fake.emit('VolumesUpdated', {
         platformId,
-        nodeOnly: true,
+        scope: 'nodes',
         volumes: [volume('worker')],
-      } satisfies SwarmNodeLocalResourcesUpdate),
+      }),
     );
-    expect(screen.getByTestId('volumes')).toHaveTextContent(',worker');
+    await waitFor(() => expect(screen.getByTestId('volumes')).toHaveTextContent(',worker'));
     expect(screen.getByTestId('images')).toHaveTextContent('image-owner');
     expect(screen.getByTestId('networks')).toHaveTextContent('network-owner');
     act(() =>
-      fake.emit('SwarmNodeLocalResourcesUpdated', {
+      fake.emit('VolumesUpdated', {
         platformId,
-        nodeOnly: true,
+        scope: 'nodes',
         volumes: [],
-      } satisfies SwarmNodeLocalResourcesUpdate),
+      }),
     );
-    expect(screen.getByTestId('volumes')).not.toHaveTextContent('worker');
+    await waitFor(() => expect(screen.getByTestId('volumes')).not.toHaveTextContent('worker'));
     expect(screen.getByTestId('images')).toHaveTextContent('image-owner');
   });
 });

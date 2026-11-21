@@ -1971,7 +1971,7 @@ impl citadel_platforms::ImageInventoryPort for AgentClient {
             let response = self
                 .retry_unary(cancellation, || async {
                     let request = self.signer.sign(
-                        ListImagesRequest {},
+                        ListImagesRequest::default(),
                         LIST_IMAGES_METHOD,
                         Some(self.operation_timeout),
                     )?;
@@ -2046,10 +2046,21 @@ impl citadel_platforms::NetworkObservationPort for AgentClient {
     }
 }
 
+pub(crate) fn volume_observation(mode: citadel_platforms::VolumeObservation) -> i32 {
+    use citadel_contracts::citadel::volumes::v1::inspect_volume_request::Observation;
+    use citadel_platforms::VolumeObservation;
+    match mode {
+        VolumeObservation::Details => Observation::Details as i32,
+        VolumeObservation::Metadata => Observation::Metadata as i32,
+        VolumeObservation::ContentProtection => Observation::ContentProtection as i32,
+    }
+}
+
 impl citadel_platforms::VolumeObservationPort for AgentClient {
-    fn inspect_volume<'a>(
+    fn observe_volume<'a>(
         &'a self,
         name: &'a str,
+        observation: citadel_platforms::VolumeObservation,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
         async move {
@@ -2058,6 +2069,9 @@ impl citadel_platforms::VolumeObservationPort for AgentClient {
                     let request = self.signer.sign(
                         InspectVolumeRequest {
                             name: name.to_owned(),
+                            observation: crate::connectors::agent::client::volume_observation(
+                                observation,
+                            ),
                         },
                         INSPECT_VOLUME_METHOD,
                         Some(self.operation_timeout),
@@ -2086,7 +2100,7 @@ impl citadel_platforms::SwarmInventoryPort for AgentClient {
                     let request = self.signer.sign(
                         ListSwarmNodesRequest {
                             max_items: 10_000,
-                            include_task_counts: true,
+                            include_task_counts: false,
                         },
                         LIST_SWARM_NODES_METHOD,
                         Some(self.operation_timeout),

@@ -735,6 +735,7 @@ async fn list(
     let filter = SwarmServiceFilter {
         tags: filter.tags,
         platform_id: filter.platform_id,
+        ..Default::default()
     };
     let capabilities = collection_capabilities(
         &state.identity,

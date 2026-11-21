@@ -286,7 +286,7 @@ impl citadel_platforms::ImageInventoryPort for EdgeRuntime {
         list_images,
         RuntimeImageSummary,
         ImageList,
-        ListImagesRequest {},
+        ListImagesRequest::default(),
         citadel_contracts::citadel::shared_models::v1::ListImageResponse,
         images,
         map_image
@@ -343,7 +343,7 @@ impl citadel_platforms::SwarmInventoryPort for EdgeRuntime {
         SwarmNodeList,
         ListSwarmNodesRequest {
             max_items: 10000,
-            include_task_counts: true
+            include_task_counts: false
         },
         ListSwarmNodesResponse,
         nodes,
@@ -409,16 +409,20 @@ impl citadel_platforms::NetworkObservationPort for EdgeRuntime {
 }
 
 impl citadel_platforms::VolumeObservationPort for EdgeRuntime {
-    fn inspect_volume<'a>(
+    fn observe_volume<'a>(
         &'a self,
         name: &'a str,
+        observation: citadel_platforms::VolumeObservation,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
         Box::pin(async move {
             let response: VolumeResponse = unary(
                 &self.session,
                 EdgeCommandKind::VolumeInspect,
-                InspectVolumeRequest { name: name.into() },
+                InspectVolumeRequest {
+                    name: name.into(),
+                    observation: crate::connectors::agent::client::volume_observation(observation),
+                },
                 cancellation,
             )
             .await?;

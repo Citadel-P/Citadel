@@ -44,6 +44,7 @@ pub(crate) async fn probe_health(
 pub(crate) struct PlatformHealthTransition {
     pub target: ReconciliationTarget,
     pub online: bool,
+    pub edge_binding: Option<uuid::Uuid>,
 }
 
 pub(crate) struct HealthWorker {
@@ -67,7 +68,7 @@ pub(crate) async fn platform_health_monitor(
     let mut ticker = tokio::time::interval(Duration::from_secs(5));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut states = std::collections::HashMap::<
-        (uuid::Uuid, String),
+        (uuid::Uuid, String, Option<uuid::Uuid>),
         (citadel_platforms::ConnectorKind, HealthState),
     >::new();
     loop {
@@ -92,7 +93,7 @@ pub(crate) async fn platform_health_monitor(
                 result=edge.health(&edge_ids)=>result,
             };
             match result {
-                Ok(rows) => rows.into_iter().collect(),
+                Ok(rows) => rows.into_iter().map(|row| (row.platform, row)).collect(),
                 Err(error) => {
                     cycle_failed = true;
                     tracing::warn!(%error,"Edge health lookup failed");
@@ -104,6 +105,7 @@ pub(crate) async fn platform_health_monitor(
             targets
                 .iter()
                 .any(|t| t.id == key.0 && t.address == key.1 && t.connector_type == *connector)
+                && (cycle_failed || key.2 == edge_states.get(&key.0).map(|row| row.binding))
         });
         let probes = futures_util::stream::iter(targets.iter().cloned().map(|target| {
             let docker = docker.clone();
@@ -112,7 +114,10 @@ pub(crate) async fn platform_health_monitor(
             let edge_health = edge_states.get(&target.id).copied();
             async move {
                 if target.connector_type == citadel_platforms::ConnectorKind::EdgeAgent {
-                    return (target, edge_health);
+                    return (
+                        target,
+                        edge_health.map(|row| (row.healthy, Some(row.binding))),
+                    );
                 }
                 let Some(_permit) = budget.enter(&cancellation).await else {
                     return (target, None);
@@ -129,27 +134,34 @@ pub(crate) async fn platform_health_monitor(
                         &selected
                     };
                 let healthy = probe_health(runtime, &cancellation, Duration::from_secs(2)).await;
-                (target, Some(healthy))
+                (target, Some((healthy, None)))
             }
         }))
         .buffer_unordered(HEALTH_CONCURRENCY);
         tokio::pin!(probes);
         loop {
             let next = tokio::select! { ()=cancellation.cancelled()=>return Ok(()), next=probes.next()=>next };
-            let Some((target, Some(healthy))) = next else {
+            let Some((target, Some((healthy, edge_binding)))) = next else {
                 if next.is_none() {
                     break;
                 }
                 continue;
             };
             let (_, state) = states
-                .entry((target.id, target.address.clone()))
+                .entry((target.id, target.address.clone(), edge_binding))
                 .or_insert_with(|| (target.connector_type, HealthState::default()));
             let Some(online) = state.observe(healthy) else {
                 continue;
             };
             if transitions
-                .send(PlatformHealthTransition { target, online }, &cancellation)
+                .send(
+                    PlatformHealthTransition {
+                        target,
+                        online,
+                        edge_binding,
+                    },
+                    &cancellation,
+                )
                 .await
                 .is_err()
             {

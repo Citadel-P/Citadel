@@ -41,6 +41,30 @@ where
 }
 
 impl AgentClient {
+    pub(crate) async fn image_digests(
+        &self,
+        cancellation: &CancellationToken,
+    ) -> Result<
+        citadel_contracts::citadel::shared_models::v1::ListImageResponse,
+        RuntimeCapabilityError,
+    > {
+        self.retry_unary(cancellation, || async {
+            let request = self.signer.sign(
+                ListImagesRequest {
+                    identity_only: true,
+                },
+                LIST_IMAGES_METHOD,
+                Some(self.operation_timeout),
+            )?;
+            self.image_client()
+                .list(request)
+                .await
+                .map(|r| r.into_inner())
+                .map_err(normalize_status)
+        })
+        .await
+    }
+
     pub async fn inspect_image_document(
         &self,
         id: &str,
@@ -48,7 +72,10 @@ impl AgentClient {
     ) -> Result<serde_json::Value, RuntimeCapabilityError> {
         self.retry_unary(cancellation, || async {
             let request = self.signer.sign(
-                InspectImageRequest { id: id.into() },
+                InspectImageRequest {
+                    id: id.into(),
+                    identity_only: false,
+                },
                 "/citadel.images.v1.ImageService/Inspect",
                 Some(self.operation_timeout),
             )?;
@@ -163,15 +190,40 @@ impl ImageInspectionPort for AgentClient {
         })
     }
 
+    fn image_identity<'a>(
+        &'a self,
+        id: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<citadel_platforms::images::ImageIdentity, RuntimeCapabilityError>>
+    {
+        Box::pin(async move {
+            self.inspect_for_request(id, true, cancellation)
+                .await
+                .map(Into::into)
+        })
+    }
     fn inspect_image<'a>(
         &'a self,
         id: &'a str,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<ImageInspection, RuntimeCapabilityError>> {
+        self.inspect_for_request(id, false, cancellation)
+    }
+}
+impl AgentClient {
+    fn inspect_for_request<'a>(
+        &'a self,
+        id: &'a str,
+        identity_only: bool,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<ImageInspection, RuntimeCapabilityError>> {
         Box::pin(async move {
             self.retry_unary(cancellation, || async {
                 let request = self.signer.sign(
-                    InspectImageRequest { id: id.into() },
+                    InspectImageRequest {
+                        id: id.into(),
+                        identity_only,
+                    },
                     "/citadel.images.v1.ImageService/Inspect",
                     Some(self.operation_timeout),
                 )?;
@@ -204,16 +256,41 @@ impl ImageInspectionPort for crate::connectors::edge::EdgeRuntime {
         })
     }
 
+    fn image_identity<'a>(
+        &'a self,
+        id: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<citadel_platforms::images::ImageIdentity, RuntimeCapabilityError>>
+    {
+        Box::pin(async move {
+            self.inspect_for_request(id, true, cancellation)
+                .await
+                .map(Into::into)
+        })
+    }
     fn inspect_image<'a>(
         &'a self,
         id: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<ImageInspection, RuntimeCapabilityError>> {
+        self.inspect_for_request(id, false, cancellation)
+    }
+}
+impl crate::connectors::edge::EdgeRuntime {
+    fn inspect_for_request<'a>(
+        &'a self,
+        id: &'a str,
+        identity_only: bool,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<ImageInspection, RuntimeCapabilityError>> {
         Box::pin(async move {
             let response: InspectImageResponse = crate::connectors::agent::execution::unary(
                 &self.session,
                 citadel_contracts::citadel::edge::v1::EdgeCommandKind::ImageInspect,
-                InspectImageRequest { id: id.into() },
+                InspectImageRequest {
+                    id: id.into(),
+                    identity_only,
+                },
                 cancellation,
             )
             .await?;

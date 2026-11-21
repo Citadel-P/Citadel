@@ -117,10 +117,26 @@ pub trait VolumeInventoryPort: Send + Sync {
     ) -> BoxFuture<'a, Result<Vec<RuntimeVolumeSummary>, RuntimeCapabilityError>>;
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VolumeObservation {
+    Metadata,
+    ContentProtection,
+    Details,
+}
+
 pub trait VolumeObservationPort: Send + Sync {
     fn inspect_volume<'a>(
         &'a self,
         name: &'a str,
+        cancellation: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>> {
+        self.observe_volume(name, VolumeObservation::Details, cancellation)
+    }
+
+    fn observe_volume<'a>(
+        &'a self,
+        name: &'a str,
+        observation: VolumeObservation,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<RuntimeVolumeSummary, RuntimeCapabilityError>>;
 }

@@ -395,46 +395,28 @@ impl IdentityService {
         if claims.expires_at <= self.clock.now() {
             return Err(IdentityError::InvalidCredentials);
         }
-        if let Some(run) = claims.script_run_id {
-            let attempt = claims
-                .script_attempt_id
-                .ok_or(IdentityError::InvalidCredentials)?;
-            if !self
-                .store
-                .script_attempt_active(claims.actor_id, run, attempt)
-                .await?
-            {
-                return Err(IdentityError::InvalidCredentials);
+        let guard = if let Some(run) = claims.script_run_id {
+            BearerGuard::Script {
+                run,
+                attempt: claims
+                    .script_attempt_id
+                    .ok_or(IdentityError::InvalidCredentials)?,
             }
-        }
-
-        if claims.principal_type == AuthenticatedPrincipalType::ServiceAccount
-            && claims.script_run_id.is_none()
-        {
+        } else if claims.principal_type == AuthenticatedPrincipalType::User {
+            BearerGuard::Browser {
+                session: claims.session_id.ok_or(IdentityError::InvalidCredentials)?,
+                now: self.clock.now(),
+            }
+        } else {
             return Err(IdentityError::InvalidCredentials);
-        }
-        // Browser access is bound to its revocable refresh session. Script
-        // tokens retain their separately scoped run lifetime and authorization.
-        if claims.principal_type == AuthenticatedPrincipalType::User
-            && claims.script_run_id.is_none()
-        {
-            let session_id = claims.session_id.ok_or(IdentityError::InvalidCredentials)?;
-            if self
-                .store
-                .active_session_id(session_id, claims.subject_id, self.clock.now())
-                .await?
-                .is_none()
-            {
-                return Err(IdentityError::InvalidCredentials);
-            }
-        }
+        };
         let principal = self
             .store
             .load_principal(
                 claims.actor_id,
                 claims.subject_id,
                 claims.principal_type,
-                None,
+                guard,
             )
             .await?
             .ok_or(IdentityError::InvalidCredentials)?;

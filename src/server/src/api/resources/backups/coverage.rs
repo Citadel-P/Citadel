@@ -74,7 +74,7 @@ pub struct BackupCoverageService {
     pub identity: Arc<IdentityService>,
 }
 struct CoverageContext {
-    snapshot: CoverageSnapshot,
+    snapshot: IndexedCoverage,
     scheduling_available: bool,
     references: BTreeMap<Uuid, BackupPolicyReference>,
     can_configure: bool,
@@ -124,12 +124,7 @@ impl CoverageContext {
         id: Uuid,
         platform: Uuid,
     ) -> ResourceBackupSummaryView {
-        let Some(w) = self
-            .snapshot
-            .workloads
-            .iter()
-            .find(|w| w.kind == kind && w.id == id && w.platform_id == platform)
-        else {
+        let Some(w) = self.snapshot.workload(kind, id, platform) else {
             return unavailable(platform);
         };
         self.present(
@@ -149,11 +144,7 @@ impl CoverageContext {
         node: Option<&str>,
         docker: &str,
     ) -> ResourceBackupSummaryView {
-        let Some(c) = self.snapshot.containers.iter().find(|c| {
-            c.platform_id == platform
-                && c.docker_node_id.as_deref() == node
-                && c.docker_id == docker
-        }) else {
+        let Some(c) = self.snapshot.container(platform, node, docker) else {
             return unavailable(platform);
         };
         if !c.complete {
@@ -418,10 +409,10 @@ impl BackupCoverageService {
     pub async fn enrich_containers(
         &self,
         principal: &ActorPrincipal,
-        mut views: Vec<crate::api::resources::platforms::views::ContainerView>,
-    ) -> Vec<crate::api::resources::platforms::views::ContainerView> {
+        views: &mut [crate::api::resources::platforms::views::ContainerView],
+    ) -> BTreeMap<Uuid, ResourceBackupSummaryView> {
         if views.is_empty() {
-            return views;
+            return BTreeMap::new();
         }
         let platforms = views
             .iter()
@@ -429,12 +420,31 @@ impl BackupCoverageService {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
+        let mut stacks: BTreeMap<_, _> = views
+            .iter()
+            .filter_map(|v| Some((v.stack_id?, v.platform_id)))
+            .collect();
+        if !stacks.is_empty() && !principal.is_administrator() {
+            let ids = stacks.keys().copied().collect::<Vec<_>>();
+            let grants = self
+                .identity
+                .permissions_for_resources(principal, ResourceType::Stack, &ids)
+                .await
+                .unwrap_or_default();
+            stacks.retain(|id, _| {
+                grants
+                    .get(id)
+                    .and_then(Option::as_ref)
+                    .is_some_and(|p| p.level.grants(PermissionLevel::Read))
+            });
+        }
         let selection = CoverageSelection {
+            stacks: stacks.keys().copied().collect(),
             containers: views.iter().map(|v| v.id).collect(),
             ..Default::default()
         };
         let context = self.context(principal, &platforms, &selection).await;
-        for view in &mut views {
+        for view in views {
             view.backup_coverage = Some(if view.projection_stale_since.is_some() {
                 unavailable(view.platform_id)
             } else {
@@ -450,7 +460,18 @@ impl BackupCoverageService {
                 )
             });
         }
-        views
+        stacks
+            .into_iter()
+            .map(|(id, platform)| {
+                (
+                    id,
+                    context.as_ref().map_or_else(
+                        || unavailable(platform),
+                        |c| c.workload(BackupPreviewKind::Stack, id, platform),
+                    ),
+                )
+            })
+            .collect()
     }
 }
 fn unavailable(platform_id: Uuid) -> ResourceBackupSummaryView {

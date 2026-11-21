@@ -45,7 +45,12 @@ import { isVisibleContainer, normalizeContainerSelection } from './selection';
 import { StackBackupCell } from '@/features/stacks/backup-cell';
 import { groupBackupCoverage } from './group-backup-coverage';
 
-type ContainerTableRow = ContainerView | (ContainerStackGroupResource & { healthSummary?: ContainerGroupHealth });
+type ContainerTableRow =
+  | ContainerView
+  | (ContainerStackGroupResource & {
+      stackBackupCoverage?: ContainerView['backupCoverage'];
+      healthSummary?: ContainerGroupHealth;
+    });
 type PlatformResourceLimits = {
   memoryTotal: number;
   cpuCount: number;
@@ -291,7 +296,7 @@ const columns = (
         const row = props.row.original;
         if (!isContainerStackGroup(row)) return flexRender(containerBackupColumn.cell, props);
         return row.stackId ? (
-          <StackBackupCell stackId={row.stackId} />
+          <StackBackupCell stackId={row.stackId} coverage={row.stackBackupCoverage} />
         ) : (
           <ResourceBackupCell
             coverage={groupBackupCoverage(row.containers)}
@@ -427,7 +432,10 @@ const createStackGroup = (
   stackName: string,
   containers: ContainerHealthItem[],
   platformLimits: PlatformResourceLimits,
-): ContainerStackGroupResource & { healthSummary?: ContainerGroupHealth } => {
+): ContainerStackGroupResource & {
+  stackBackupCoverage?: ContainerView['backupCoverage'];
+  healthSummary?: ContainerGroupHealth;
+} => {
   const firstContainer = containers[0];
   const stackIds = Array.from(new Set(containers.map((container) => container.stackId).filter(Boolean)));
   const stackId = stackIds.length === 1 ? stackIds[0] : null;
@@ -452,6 +460,7 @@ const createStackGroup = (
     imageView: null,
     displayStatus: getStackDisplayStatus(containers),
     healthSummary: firstContainer.stackHealth,
+    stackBackupCoverage: containers.find((c) => c.stackId === stackId)?.stackBackupCoverage,
     capabilities: firstContainer.capabilities,
     projectionStaleSince: containers.some((container) => container.projectionStaleSince)
       ? (containers.find((container) => container.projectionStaleSince)?.projectionStaleSince ?? null)
