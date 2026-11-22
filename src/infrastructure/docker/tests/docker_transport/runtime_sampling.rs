@@ -178,8 +178,12 @@ async fn sampling_discovery_bounds_responses_and_preserves_daemon_errors() {
             "exceeded",
         ),
         (
-            "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 7\r\nConnection: close\r\n\r\noffline",
+            "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 21\r\nConnection: close\r\n\r\n{\"message\":\"offline\"}",
             "offline",
+        ),
+        (
+            "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 7\r\nConnection: close\r\n\r\noffline",
+            "Docker rejected the operation",
         ),
         (
             "HTTP/1.1 200 OK\r\nContent-Length: 1\r\nConnection: close\r\n\r\n[",

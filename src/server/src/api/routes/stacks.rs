@@ -6,8 +6,8 @@ use crate::{
         request_validation::{WorkloadQuery, invalid_json, invalid_path, invalid_query},
         resources::stacks::{
             requests::{
-                ImportDraftQuery, ImportRequest, StackDriftPolicyInput, SwarmPreflightInput,
-                ValidateImportRequest, *,
+                ImportDraftQuery, ImportRequest, StackDriftPolicyInput, StackListOptions,
+                SwarmPreflightInput, ValidateImportRequest, *,
             },
             spec::*,
             views::*,
@@ -1156,12 +1156,6 @@ async fn reconcile(
     Ok(no_store(
         Json(StackReconciliationResult::from(value)).into_response(),
     ))
-}
-
-#[derive(serde::Deserialize)]
-struct StackListOptions {
-    #[serde(default)]
-    catalog: bool,
 }
 
 #[utoipa::path(

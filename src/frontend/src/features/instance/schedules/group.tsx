@@ -50,6 +50,7 @@ export function ScheduleGroup({
       query: {
         resource,
         page: page === 1 ? undefined : page,
+        pageSize: PAGE_SIZE,
         attentionOnly: attentionOnly || undefined,
         search: search || undefined,
       },

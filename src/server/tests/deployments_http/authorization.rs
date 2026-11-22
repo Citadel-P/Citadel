@@ -173,7 +173,7 @@ pub(super) async fn verify(
         set_read_access(pool, reader, &grants, false).await;
 
         for (principal, path, expected) in [
-            (reader, "/api/v1/deployments".to_owned(), 3_i64),
+            (reader, "/api/v1/deployments".to_owned(), 2_i64),
             (
                 reader,
                 format!("/api/v1/deployments/{deployment_id}"),

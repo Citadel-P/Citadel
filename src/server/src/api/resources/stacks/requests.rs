@@ -222,6 +222,12 @@ pub(crate) struct SwarmPreflightInput {
     pub(crate) drift_policy: Option<StackDriftPolicy>,
 }
 
+#[derive(Deserialize)]
+pub(crate) struct StackListOptions {
+    #[serde(default)]
+    pub(crate) catalog: bool,
+}
+
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ImportDraftQuery {
