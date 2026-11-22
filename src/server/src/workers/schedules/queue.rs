@@ -19,6 +19,7 @@ enum Lane {
 impl Key {
     fn lane(self) -> Lane {
         match self {
+            Key::GitRef(_) => Lane::Execute(SchedulePurpose::StackGit),
             Key::Eligibility => Lane::Reconcile(None),
             Key::Discover(p) | Key::Load(p, _) => Lane::Reconcile(Some(p)),
             Key::Calendar(p, _) | Key::Batch(p) => Lane::Execute(p),

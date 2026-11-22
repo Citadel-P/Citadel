@@ -762,7 +762,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
             .unwrap()
             .is_empty()
     );
-    release_interrupted_fixture(&pool, &late_claim).await;
+    release_interrupted_fixture(&pool, &late_claim, false).await;
 
     sqlx::query("UPDATE backuppolicies SET cron='* * * * *',timezone='UTC',controlstate='Idle',currentrunid=NULL WHERE id=$1")
         .bind(policies[0].id)
@@ -775,10 +775,9 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     let mut after = None;
     loop {
         use citadel_instance::{SchedulePurpose, ScheduleReader};
-        let kind = SchedulePurpose::Backup;
         let page =
             citadel_adapters::persistence::postgres::instance::PostgresSchedules(pool.clone())
-                .page(Some(kind), after.map(|id| (kind, id)), 64)
+                .discover(SchedulePurpose::Backup, after, 64)
                 .await
                 .unwrap();
         assert!(page.len() <= 64);
@@ -1021,7 +1020,9 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         result.status = outcome.parse().unwrap();
         result.snapshot_availability = citadel_backups::BackupSnapshotAvailability::Missing;
         result.error_message = Some("Test outcome".into());
-        if outcome == "Interrupted" {
+        if outcome == "Interrupted" && trigger == "Manual" {
+            result.error_code = Some("LeaseLost".into());
+        } else if outcome == "Interrupted" {
             citadel_adapters::persistence::postgres::maintenance::recover_on_startup(&pool)
                 .await
                 .unwrap();
@@ -1037,7 +1038,7 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         );
         assert_backup_alert_count(&pool, claim.run.id, expected).await;
         if outcome == "Interrupted" {
-            release_interrupted_fixture(&pool, &claim).await;
+            release_interrupted_fixture(&pool, &claim, trigger == "Manual").await;
         }
     }
 
@@ -1140,7 +1141,11 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
 
 // These activity fixtures never dispatch a helper. Exercise production owner
 // recovery before another run on the same repository.
-async fn release_interrupted_fixture(pool: &sqlx::PgPool, claim: &citadel_backups::BackupClaim) {
+async fn release_interrupted_fixture(
+    pool: &sqlx::PgPool,
+    claim: &citadel_backups::BackupClaim,
+    lease_lost: bool,
+) {
     let retained: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM backuprepositoryleases WHERE ownerrunid=$1 AND attemptid=$2",
     )
@@ -1159,7 +1164,31 @@ async fn release_interrupted_fixture(pool: &sqlx::PgPool, claim: &citadel_backup
     assert_eq!(external, 0);
     use citadel_backups::BackupDataAdmission;
     let admission=citadel_adapters::persistence::postgres::backups::data_admission::PostgresBackupDataAdmission::new(pool.clone());
-    admission.pending_cleanup(None).await.unwrap();
+    let policy_state = || {
+        sqlx::query_scalar::<_, String>("SELECT controlstate::text FROM backuppolicies WHERE id=$1")
+            .bind(claim.run.backup_policy_id)
+            .fetch_one(pool)
+    };
+    let mut listener = sqlx::postgres::PgListener::connect_with(pool)
+        .await
+        .unwrap();
+    listener.listen("citadel_resource_recovery").await.unwrap();
+    if lease_lost {
+        assert_eq!(policy_state().await.unwrap(), "Processing");
+    }
+    assert!(admission.pending_cleanup(None).await.unwrap().is_empty());
+    let notification = tokio::time::timeout(std::time::Duration::from_secs(2), listener.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(notification.payload(), "backup");
+    assert_eq!(policy_state().await.unwrap(), "Idle");
+    assert!(admission.pending_cleanup(None).await.unwrap().is_empty());
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), listener.recv())
+            .await
+            .is_err()
+    );
     let remaining: i64 =
         sqlx::query_scalar("SELECT count(*) FROM backuprepositoryleases WHERE ownerrunid=$1")
             .bind(claim.run.id)

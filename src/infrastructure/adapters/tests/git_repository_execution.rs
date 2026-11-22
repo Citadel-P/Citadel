@@ -284,7 +284,7 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
             cache,
             Duration::from_secs(60),
         )
-        .with_change_notifier(Arc::new(move || {
+        .with_change_notifier(Arc::new(move |_| {
             changes.fetch_add(1, Ordering::SeqCst);
         })),
     );
@@ -299,6 +299,11 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
         .request_sync(ActorId::new(request_actor), repository_id, Some("main"))
         .await
         .unwrap();
+    assert_eq!(
+        notifications.load(Ordering::SeqCst),
+        1,
+        "committed enqueue notifies"
+    );
     assert!(
         service
             .process_one(&CancellationToken::new())
@@ -335,8 +340,8 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
     assert!(persisted.2.is_none());
     assert_eq!(
         notifications.load(Ordering::SeqCst),
-        2,
-        "claim and committed completion both notify"
+        3,
+        "enqueue, claim and committed completion each notify"
     );
     assert!(
         !service
@@ -346,7 +351,7 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
     );
     assert_eq!(
         notifications.load(Ordering::SeqCst),
-        2,
+        3,
         "idle workers do not notify"
     );
     let snapshot = service
@@ -662,6 +667,7 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         ActorId::new(actor),
         true,
         &[],
+        None,
     )
     .await
     .unwrap()
@@ -981,11 +987,11 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
     sqlx::query("UPDATE gitrepositoryrefs SET lastsyncedat=now()-interval '5 minutes' WHERE gitrepositoryid=$1").bind(id).execute(&pool).await.unwrap();
     assert_eq!(
         store.enqueue_due(100).await.unwrap(),
-        2,
+        [id, id],
         "poll both default branch and branch subscribed by a Git Stack"
     );
     assert_eq!(
-        store.enqueue_due(100).await.unwrap(),
+        store.enqueue_due(100).await.unwrap().len(),
         0,
         "overlapping scheduler ticks cannot duplicate queued branches"
     );

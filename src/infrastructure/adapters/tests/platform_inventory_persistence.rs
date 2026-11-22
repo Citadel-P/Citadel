@@ -3462,3 +3462,6 @@ async fn backup_coverage_uses_persisted_mounts_and_preserves_observation_fences(
 
 #[path = "platform_inventory_persistence/image_safety.rs"]
 mod image_safety;
+
+#[path = "platform_inventory_persistence/coverage_changes.rs"]
+mod coverage_changes;

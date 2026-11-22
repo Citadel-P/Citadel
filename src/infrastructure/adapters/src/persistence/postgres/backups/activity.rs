@@ -11,7 +11,7 @@ pub(super) async fn record_run_activity(
         .await
         .map_err(storage)?;
     let run = map_run(row)?;
-    coverage::changes::publish(tx, Some(run.backup_policy_id), None).await?;
+    coverage::changes::publish_run(tx, run.backup_policy_id).await?;
     if matches!(run.trigger.as_str(), "Schedule" | "Webhook")
         && matches!(
             run.status,

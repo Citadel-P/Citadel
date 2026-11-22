@@ -2,9 +2,11 @@ use crate::realtime::RealtimeHub;
 use axum::{Router, extract::State, response::Response};
 use uuid::Uuid;
 
-/// Coarse invalidations for resource routers whose writes finish inside the
-/// handler. Jobs publish their claim/completion separately; no payload or IDs
-/// are broadcast here, and every follow-up read applies its normal ACL.
+#[derive(Clone, Copy)]
+pub(crate) struct CommittedOwner(pub Uuid);
+
+/// Committed invalidations for resource routers whose writes finish inside the
+/// handler. Jobs publish their claim/completion separately; an optional owner narrows the hint. Every follow-up read applies its normal ACL.
 pub(crate) fn notify_mutations(router: Router, resource_type: &'static str) -> Router {
     router.layer(axum::middleware::from_fn_with_state(
         resource_type,
@@ -24,7 +26,13 @@ async fn mutation_notification(
     if response.status().is_success()
         && let Some(hub) = hub
     {
-        hub.publish_resource_change(resource_type, Uuid::nil(), "resourceChanged");
+        if let Some(change) = response.extensions().get::<citadel_backups::BackupChange>() {
+            hub.publish_backup_change(*change);
+        } else if let Some(owner) = response.extensions().get::<CommittedOwner>() {
+            hub.publish_resource_change(resource_type, owner.0, "ownerChanged");
+        } else {
+            hub.publish_resource_change(resource_type, Uuid::nil(), "resourceChanged");
+        }
     }
     response
 }

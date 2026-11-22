@@ -3,14 +3,18 @@ use citadel_primitives::AuthorizedResource;
 
 pub(super) const AUTHORIZED_CTES: &str = super::super::authorization::workload_grants!(Stack, 2);
 
-pub(super) const PROJECTION: &str = concat!(
+macro_rules! stack_projection {
+    ($release_fields:literal, $with_activity:literal) => { concat!(
     r#"
 SELECT s.id,s.name,s.description,s.stacksource,s.stackupdatestate,s.driftpolicy,
        s.createdat,s.createdbyactorid,s.controlstate,s.currentstackreleaseid,s.rowversion,
        EXISTS(SELECT 1 FROM resourcecopies c WHERE c.destinationid=s.id AND c.status='Succeeded') has_copied_storage,
-       r.platformid,r.status release_status,r.version,r.spec,r.source,r.resourcebindings,
+       r.platformid,r.status release_status,r.version,"#,
+    $release_fields,
+    r#",
        p.status platform_status,p.name platform_name,p.platformdescriptor,
-       CASE WHEN s.healthappliedplatformid=r.platformid THEN s.healthappliedspec END health_applied_spec,
+       CASE WHEN s.healthappliedplatformid=r.platformid AND r.status<>'Created'
+         AND p.platformdescriptor->>'$type' IS DISTINCT FROM 'DockerSwarm' AND s.healthappliedspec->>'$type'='WebEditor' THEN s.healthappliedspec END health_applied_spec,
        COALESCE((SELECT jsonb_agg(jsonb_build_object('service',sp.dockerserviceid,'mode',sp.mode,'desired',sp.desiredtaskcount,'running',sp.runningtaskcount,'stale',sp.isstale,'updateState',sp.updatestate,'ownership',sp.ownership,'stackServiceCount',sp.labels->>'com.citadel.stack-service-count','releaseId',sp.labels->>'com.citadel.release-id'))
         FROM swarmserviceprojections sp WHERE sp.platformid=r.platformid AND sp.stackid=s.id), '[]'::jsonb) health_services,
        CASE WHEN p.platformdescriptor->>'$type'='DockerSwarm' THEN COALESCE(("#,
@@ -39,11 +43,27 @@ LEFT JOIN LATERAL (
 LEFT JOIN LATERAL (
   SELECT jsonb_build_object('id',a.id,'resourceType',a.resourcetype,'eventType',a.eventtype,
     'status',a.status,'info',a.info::jsonb,'createdAt',a.createdat) value
-  FROM activityevents a WHERE a.resourceid=s.id AND a.resourcetype='Stack'
+  FROM activityevents a WHERE "#, $with_activity, r#" AND a.resourceid=s.id AND a.resourcetype='Stack'
     AND a.eventtype NOT IN ('StackUpdated','StackRenamed')
   ORDER BY a.createdat DESC,a.id DESC LIMIT 1
 ) activity ON TRUE
 "#
+) };
+}
+pub(super) const PROJECTION: &str = stack_projection!(
+    "r.spec,r.source,r.resourcebindings,NULL::jsonb catalog_git",
+    true
+);
+const CATALOG: &str = stack_projection!(
+    r#"NULL::jsonb spec,NULL::jsonb source,NULL::jsonb resourcebindings,
+    CASE WHEN s.stacksource='Git' THEN jsonb_build_object(
+        'gitRepositoryName',r.source->>'GitRepositoryName','branch',r.source->>'Branch',
+        'hasMatchingAppliedCommit',COALESCE(r.source->>'SourceType'='Git'
+          AND pg_input_is_valid(r.source->>'GitRepositoryId','uuid') AND pg_input_is_valid(r.spec->>'GitRepoId','uuid')
+          AND translate(lower(r.source->>'GitRepositoryId'),'{}-','')=translate(lower(r.spec->>'GitRepoId'),'{}-','')
+          AND r.source->>'Branch'=r.spec->>'Branch' AND btrim(r.source->>'ResolvedCommitSha')<>'', false))
+    END catalog_git"#,
+    false
 );
 impl PostgresStackRepository {
     pub(super) fn list_authorized_impl<'a>(
@@ -53,9 +73,7 @@ impl PostgresStackRepository {
         filter: &'a StackFilter,
     ) -> BoxFuture<'a, Result<Vec<AuthorizedResource<citadel_stacks::Stack>>, StackError>> {
         Box::pin(async move {
-            let sql = format!(
-                r#"{AUTHORIZED_CTES}{PROJECTION}
-WHERE ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(rp.level_mask,0)) >= {READ})
+            const FILTER: &str = r#"WHERE ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(rp.level_mask,0)) >= 1)
   AND ($3::uuid IS NULL OR r.platformid=$3)
   AND ($5::uuid[] IS NULL OR s.id=ANY($5))
   AND ($6::text[] IS NULL OR s.id IN (SELECT c.stackid FROM containers c WHERE c.platformid=$3 AND c.dockercontainerid=ANY($6)
@@ -67,9 +85,25 @@ WHERE ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(rp.level_mask,0)) >= {RE
   AND NOT EXISTS (SELECT 1 FROM unnest($4::text[]) requested(name) WHERE NOT EXISTS (
     SELECT 1 FROM resourcetags link JOIN tags tag ON tag.id=link.tagid
     WHERE link.resourcetype='Stack' AND link.resourceid=s.id
-      AND (lower(tag.name)=lower(requested.name) OR tag.id::text=requested.name)))
-ORDER BY s.createdat DESC,s.name,s.id"#
-            );
+      AND (lower(tag.name)=lower(requested.name) OR tag.id::text=requested.name)))"#;
+            const ORDER: &str = "s.createdat DESC, s.name, s.id";
+            // Bound authorized keys before projecting activity, tags and runtime observations.
+            let projection = if filter.catalog { CATALOG } else { PROJECTION };
+            let sql = if filter.limit.is_some() {
+                format!(
+                    r#"{AUTHORIZED_CTES}, page AS MATERIALIZED (
+                    SELECT s.id FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid
+                    LEFT JOIN global_permission g ON TRUE
+                    LEFT JOIN resource_permissions rp ON rp.resourceid=s.id
+                    {FILTER} ORDER BY {ORDER} LIMIT $7
+                )
+                SELECT item.* FROM page CROSS JOIN LATERAL (
+                    {projection} WHERE s.id=page.id LIMIT 1
+                ) item ORDER BY item.createdat DESC,item.name,item.id"#
+                )
+            } else {
+                format!("{AUTHORIZED_CTES}{projection} {FILTER} ORDER BY {ORDER} LIMIT $7")
+            };
             sqlx::query(AssertSqlSafe(sql))
                 .bind(actor.value())
                 .bind(administrator)
@@ -77,6 +111,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                 .bind(&filter.tags)
                 .bind(filter.resource_ids.as_deref())
                 .bind(filter.container_ids.as_deref())
+                .bind(filter.limit)
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?

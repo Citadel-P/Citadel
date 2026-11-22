@@ -25032,6 +25032,29 @@
         ],
         "type": "object"
       },
+      "StackCatalogGit": {
+        "properties": {
+          "branch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gitRepositoryName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hasMatchingAppliedCommit": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "hasMatchingAppliedCommit"
+        ],
+        "type": "object"
+      },
       "StackCommand": {
         "additionalProperties": false,
         "properties": {
@@ -26191,6 +26214,16 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/StackCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "catalogGit": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StackCatalogGit"
               },
               {
                 "type": "null"
@@ -73262,6 +73295,15 @@
             "schema": {
               "format": "uuid",
               "type": "string"
+            }
+          },
+          {
+            "description": "Omit release configuration and include Git catalog metadata",
+            "in": "query",
+            "name": "catalog",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],

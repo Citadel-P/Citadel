@@ -85,6 +85,7 @@ pub trait BackupPersistence: Send + Sync {
         &self,
         actor: ActorId,
         administrator: bool,
+        owner: Option<Uuid>,
     ) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>>;
     fn get_policy(&self, id: Uuid) -> BoxFuture<'_, Result<BackupPolicy, BackupError>>;
     fn update_policy<'a>(

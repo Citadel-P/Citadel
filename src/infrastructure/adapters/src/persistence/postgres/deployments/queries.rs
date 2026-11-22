@@ -11,9 +11,7 @@ impl PostgresDeploymentRepository {
         Result<Vec<AuthorizedResource<citadel_deployments::Deployment>>, DeploymentError>,
     > {
         Box::pin(async move {
-            let query = format!(
-                r#"{AUTHORIZED_CTES}{PROJECTION}
-WHERE ($2 OR GREATEST(COALESCE(g.level_mask, 0), COALESCE(r.level_mask, 0)) = ANY($5))
+            const FILTER: &str = r#"WHERE ($2 OR GREATEST(COALESCE(g.level_mask, 0), COALESCE(r.level_mask, 0)) = ANY($5))
   AND ($3::uuid IS NULL OR d.platformid = $3)
   AND ($6::uuid[] IS NULL OR d.id=ANY($6))
   AND ($7::text[] IS NULL OR d.id IN (SELECT c.deploymentid FROM containers c WHERE c.platformid=$3 AND c.dockercontainerid=ANY($7))
@@ -28,9 +26,24 @@ WHERE ($2 OR GREATEST(COALESCE(g.level_mask, 0), COALESCE(r.level_mask, 0)) = AN
           WHERE filter_link.resourcetype = 'Deployment'
             AND filter_link.resourceid = d.id
             AND (lower(filter_tag.name) = lower(requested.name)
-                 OR filter_tag.id::text = requested.name)))
-ORDER BY d.createdat DESC, d.name, d.id"#
-            );
+                 OR filter_tag.id::text = requested.name)))"#;
+            const ORDER: &str = "d.createdat DESC, d.name, d.id";
+            // Bound authorized keys before projecting activity, tags and runtime observations.
+            let query = if filter.limit.is_some() {
+                format!(
+                    r#"{AUTHORIZED_CTES}, page AS MATERIALIZED (
+                    SELECT d.id FROM deployments d
+                    LEFT JOIN global_permission g ON TRUE
+                    LEFT JOIN resource_permissions r ON r.resourceid=d.id
+                    {FILTER} ORDER BY {ORDER} LIMIT $8
+                )
+                SELECT item.* FROM page CROSS JOIN LATERAL (
+                    {PROJECTION} WHERE d.id=page.id LIMIT 1
+                ) item ORDER BY item.createdat DESC,item.name,item.id"#
+                )
+            } else {
+                format!("{AUTHORIZED_CTES}{PROJECTION} {FILTER} ORDER BY {ORDER} LIMIT $8")
+            };
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor_id.value())
                 .bind(administrator)
@@ -39,6 +52,7 @@ ORDER BY d.createdat DESC, d.name, d.id"#
                 .bind(ReadDeployment::REQUIREMENT.level.accepted_database_levels())
                 .bind(filter.resource_ids.as_deref())
                 .bind(filter.container_ids.as_deref())
+                .bind(filter.limit)
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?

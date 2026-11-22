@@ -14,8 +14,9 @@ mod runs;
 use chrono::{DateTime, Utc};
 
 use citadel_builds::{
-    BuildAgentPool, BuildAgentPoolConfiguration, BuildClaim, BuildError, BuildExecutionResult,
-    BuildProject, BuildProjectConfiguration, BuildRepository, BuildRun,
+    BuildAgentPool, BuildAgentPoolConfiguration, BuildChange, BuildClaim, BuildClaimOutcome,
+    BuildError, BuildExecutionResult, BuildProject, BuildProjectConfiguration, BuildRepository,
+    BuildRun,
 };
 
 use citadel_primitives::{ActorId, ResourceType};

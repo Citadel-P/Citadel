@@ -180,7 +180,6 @@ pub fn router(
             identity: Arc::clone(&identity),
             repository: git_repositories.clone(),
             execution: Arc::clone(&git_execution),
-            realtime: realtime_hub.clone(),
             cancellation: cancellation.clone(),
         },
     ))

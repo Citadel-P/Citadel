@@ -142,7 +142,7 @@ impl BuildService {
         )
         .await?;
         if confirmed == Some(true) {
-            self.changed();
+            self.changed(BuildChange::ProjectRuns(claim.project.id));
         }
         Ok(())
     }

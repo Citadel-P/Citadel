@@ -9,6 +9,12 @@ pub(super) fn map_stack(
     let specific: i32 = row.try_get("permission_specific").map_err(storage)?;
     Ok(AuthorizedResource {
         resource: citadel_stacks::Stack {
+            catalog_git: row
+                .try_get::<Option<Value>, _>("catalog_git")
+                .map_err(storage)?
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(storage)?,
             probe_health: citadel_stacks::health::assess(
                 serde_json::from_value(row.try_get("health_members").map_err(storage)?)
                     .map_err(storage)?,
@@ -75,9 +81,11 @@ pub(super) fn map_stack(
             platform_id: Some(row.try_get("platformid").map_err(storage)?),
             has_copied_storage: row.try_get("has_copied_storage").map_err(storage)?,
             version: Some(row.try_get("version").map_err(storage)?),
-            spec: Some(StackSpec::from_storage_value(
-                row.try_get("spec").map_err(storage)?,
-            )?),
+            spec: row
+                .try_get::<Option<Value>, _>("spec")
+                .map_err(storage)?
+                .map(StackSpec::from_storage_value)
+                .transpose()?,
             source: row
                 .try_get::<Option<Value>, _>("source")
                 .map_err(storage)?

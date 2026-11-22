@@ -55,5 +55,11 @@ pub(crate) async fn recover_stale_with_mode(
     changed += affected;
     let affected = sqlx::query("UPDATE backuprepositories r SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,updatedat=CURRENT_TIMESTAMP,rowversion=rowversion+1 WHERE controlstate<>'Idle' AND NOT EXISTS(SELECT 1 FROM backuprepositoryleases l WHERE l.backuprepositoryid=r.id)").execute(&mut **tx).await.map_err(storage)?.rows_affected();
     changed += affected;
+    if changed > 0 {
+        sqlx::query("SELECT pg_notify('citadel_resource_recovery','backup')")
+            .execute(&mut **tx)
+            .await
+            .map_err(storage)?;
+    }
     Ok(changed)
 }

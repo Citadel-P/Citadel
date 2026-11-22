@@ -114,7 +114,14 @@ impl PostgresAlertRepository {
             .flatten();
         // Rechecks and suppressed observations also fence delayed targets. Keep
         // their timestamp independent of lasttriggeredat, which owns cooldown.
-        if update_available && last_observed.is_some_and(|last| observation.observed_at < last) {
+        // Ref completion and fallback can both deliver the same saved Git observation.
+        if update_available
+            && last_observed.is_some_and(|last| {
+                observation.observed_at < last
+                    || (observation.alert_type == "StackGitUpdateAvailable"
+                        && observation.observed_at == last)
+            })
+        {
             return Ok(None);
         }
         let deduplication_key = incident_key(rule, observation);

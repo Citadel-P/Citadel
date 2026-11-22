@@ -2,6 +2,8 @@
 mod admission;
 #[path = "build_execution/attempts.rs"]
 mod attempts;
+#[path = "build_execution/claim_changes.rs"]
+mod claim_changes;
 #[path = "build_execution/completion.rs"]
 mod completion;
 #[path = "build_execution/history.rs"]
@@ -87,6 +89,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         build_agent_pool_id: None,
     };
     input.validate().unwrap();
+    claim_changes::verify(&pool, actor, &input).await;
     admission::verify_target_fairness(&pool, actor, &input).await;
     completion::verify(&pool, actor, &input).await;
     attempts::verify(&pool, actor, &input).await;
@@ -155,6 +158,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .claim_next(Utc::now() - Duration::minutes(5))
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_eq!(claim.run.id, queued.id);
     let details = store.get(project.id).await.unwrap();
@@ -167,6 +171,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .is_none()
     );
     // A failed audit write rolls back the result and leaves the claim active.
@@ -277,6 +282,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .claim_next(Utc::now() - Duration::minutes(5))
         .await
         .unwrap()
+        .claim
         .unwrap();
     sqlx::query("UPDATE buildruns SET startedat=CURRENT_TIMESTAMP-INTERVAL '1 hour' WHERE id=$1")
         .bind(interrupted.id)
@@ -288,6 +294,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .is_none()
     );
     assert_eq!(
@@ -308,6 +315,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .unwrap();
         assert_eq!(claim.run.id, run.id);
         store
@@ -350,6 +358,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .claim_next(Utc::now() - Duration::minutes(5))
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_eq!(local_claim.run.id, queued_local.id);
     assert!(!local_claim.project.push_to_registry);
@@ -446,7 +455,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         store.claim_next(Utc::now() - Duration::minutes(5)),
         store.claim_next(Utc::now() - Duration::minutes(5))
     );
-    let claimed = [a.unwrap(), b.unwrap()]
+    let claimed = [a.unwrap().claim, b.unwrap().claim]
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
@@ -456,6 +465,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .is_none()
     );
     store
@@ -466,6 +476,7 @@ async fn build_runs_claim_once_persist_results_cancel_and_recover() {
         .claim_next(Utc::now() - Duration::minutes(5))
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_ne!(next.project.id, claimed[0].project.id);
     store
@@ -864,6 +875,7 @@ async fn assert_local_build_skips_registry(
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .unwrap();
         if scenario == "secret" {
             invalid
@@ -919,6 +931,7 @@ async fn assert_local_build_skips_registry(
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .unwrap();
         assert_eq!(next.run.id, retry.id);
         assert!(store.finish(&next, &failed, None).await.unwrap());

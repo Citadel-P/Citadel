@@ -103,9 +103,8 @@ pub(super) fn build(
             ),
         )
         .with_alerts(alert_store.clone())
-        .with_change_notifier(citadel_server::realtime::change_callback(
+        .with_change_notifier(citadel_server::realtime::build_change_callback(
             realtime_hub.clone(),
-            "Build",
         ))
         .with_entitlements(entitlements.clone())
         .with_pool_change_notifier(citadel_server::realtime::change_callback(

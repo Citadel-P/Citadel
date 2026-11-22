@@ -1,4 +1,6 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useCollectionRows } from '@/hooks/useCollectionRows';
+import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
+import { useCallback, useMemo } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { AuthorizedGitRepositoryView } from '@/api/generated/api.types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
@@ -7,41 +9,33 @@ import { useResourceTagFilter } from '@/features/tags/components';
 
 export const useGitReposGroup = () => {
   const { selectedTagNames } = useResourceTagFilter();
-  const { data, isLoading, error, refetch, isFetching } = useRead(
-    'listGitRepositories',
-    selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined,
+  const readArgs = useMemo(
+    () => (selectedTagNames.length ? { query: { tags: selectedTagNames } } : undefined),
+    [selectedTagNames],
   );
-  const [gitRepos, setGitRepos] = useState<AuthorizedGitRepositoryView[] | undefined>();
-  const lastFetchedRef = useRef<AuthorizedGitRepositoryView[] | undefined>(data?.data?.gitRepositories);
+  const groupName = 'git-repositories';
+  const structuralSharing = useCollectionStructuralSharing(groupName);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listGitRepositories', readArgs, {
+    structuralSharing,
+  });
   const capabilities = data?.data.capabilities;
-
-  useEffect(() => {
-    if (data?.data?.gitRepositories && data.data.gitRepositories !== lastFetchedRef.current) {
-      lastFetchedRef.current = data.data.gitRepositories;
-      setGitRepos(data.data.gitRepositories);
-    }
-  }, [data?.data?.gitRepositories]);
-
-  const handleGitRepoInfoUpdated = useCallback((repo: AuthorizedGitRepositoryView, action: string) => {
-    setGitRepos((prev) => {
-      if (!prev) return prev;
-
-      if (action === 'create') {
-        return [...prev, repo];
-      }
-      if (action === 'delete') {
-        return prev.filter((d) => d.id !== repo.id);
-      }
-
-      const index = prev.findIndex((d) => d.id === repo.id);
-      if (index !== -1) {
-        const updated = [...prev];
-        updated[index] = repo;
-        return updated;
-      }
-      return prev;
-    });
-  }, []);
+  const matches = useCallback(
+    (repo: AuthorizedGitRepositoryView) =>
+      selectedTagNames.every((selected) =>
+        repo.tags.some((tag) => tag.name.toLowerCase() === selected.trim().toLowerCase() || tag.id === selected.trim()),
+      ),
+    [selectedTagNames],
+  );
+  const reload = useCallback(async () => {
+    const result = await refetch();
+    return result.isSuccess ? result.data.data.gitRepositories : undefined;
+  }, [refetch]);
+  const [gitRepos, handleGitRepoInfoUpdated, onJoinedGroup] = useCollectionRows(
+    data?.data.gitRepositories,
+    JSON.stringify(readArgs ?? {}),
+    matches,
+    reload,
+  );
 
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
@@ -58,7 +52,8 @@ export const useGitReposGroup = () => {
   );
 
   useRealtimeGroup({
-    groupName: 'git-repositories',
+    groupName,
+    onJoinedGroup,
     setupEventListeners,
     removeEventListeners,
   });

@@ -7,7 +7,7 @@ use sha2::Digest;
 #[derive(Clone, Copy)]
 enum CheckMode {
     Manual,
-    Git,
+    Git(crate::GitCheckInputs),
     Images,
 }
 
@@ -107,7 +107,7 @@ impl StackService {
         let _guard = cancel.clone().drop_guard();
         let scan = match mode {
             CheckMode::Manual => scanner.scan(&snapshot, &cancel),
-            CheckMode::Git => scanner.scan_cached(&snapshot, &cancel),
+            CheckMode::Git(_) => scanner.scan_cached(&snapshot, &cancel),
             CheckMode::Images => scanner.scan_images_cached(&snapshot, &cancel),
         };
         let next = tokio::select! {
@@ -119,7 +119,16 @@ impl StackService {
         // The scan only reads Docker/Git. Compare-and-swap at commit rejects a
         // concurrent Apply/edit; no durable processing lease needs crash recovery.
         self.store
-            .save_update_check(actor, administrator, &snapshot, &next)
+            .save_update_check(
+                actor,
+                administrator,
+                &snapshot,
+                &next,
+                match mode {
+                    CheckMode::Git(inputs) => Some(inputs),
+                    _ => None,
+                },
+            )
             .await?;
         self.notifier.changed(id, "updated");
         let mut checked = snapshot;
@@ -145,13 +154,23 @@ impl StackService {
         images: bool,
         cancellation: &CancellationToken,
     ) -> Result<(), StackError> {
+        self.run_scoped_update_check_pass(images, None, cancellation)
+            .await
+    }
+
+    pub async fn run_scoped_update_check_pass(
+        &self,
+        images: bool,
+        reference: Option<Uuid>,
+        cancellation: &CancellationToken,
+    ) -> Result<(), StackError> {
         // Detection/Notify is available in Community. Gate only automatic Apply.
         let actor = ActorId::new(Uuid::from_u128(1));
         let mut after = Uuid::nil();
         loop {
             let ids = self
                 .store
-                .update_check_candidates(after, images, 25)
+                .update_check_candidates(after, images, 25, reference)
                 .await?;
             if ids.is_empty() {
                 break;
@@ -163,23 +182,20 @@ impl StackService {
                     .and_then(|s| s.image_batch())
             };
             let mut batch = new_batch();
-            for id in ids {
+            for candidate in ids {
+                let id = candidate.id;
                 after = id;
                 if cancellation.is_cancelled() || self.shutdown.is_cancelled() {
                     return Ok(());
                 }
                 let result = async {
-                    let checked = self
-                        .check_updates_mode(actor, true, id, if images { CheckMode::Images } else { CheckMode::Git }, batch.as_deref(), cancellation)
-                        .await?;
-                    let behavior = match checked.spec.as_ref().ok_or(StackError::NotFound)? {
-                        StackSpec::Git {
-                            update_behavior, ..
-                        }
-                        | StackSpec::WebEditor {
-                            update_behavior, ..
-                        } => *update_behavior,
+                    let Some((checked, retry)) = self
+                        .scheduled_update_action(actor, candidate, batch.as_deref(), cancellation)
+                        .await?
+                    else {
+                        return Ok(());
                     };
+                    let behavior = checked.behavior;
                     let available = if images {
                         let (StackUpdateState::Git { recreate_stack_on_new_image_state, .. }
                             | StackUpdateState::WebEditor { recreate_stack_on_new_image_state }) = &checked.stack_update_state;
@@ -192,11 +208,8 @@ impl StackService {
                         return Ok(());
                     }
                     let git = !images;
-                    let service_only_supported = checked.spec.as_ref().is_some_and(|spec| {
-                        spec.supports_service_auto_deploy(checked.platform_type)
-                    });
                     let auto = (behavior != StackUpdateBehavior::ServiceAutoDeploy
-                        || service_only_supported)
+                        || checked.service_only_supported)
                         && matches!(
                             behavior,
                             StackUpdateBehavior::StackAutoDeploy
@@ -218,6 +231,11 @@ impl StackService {
                             None,
                         )
                         .await;
+                        return Ok(());
+                    }
+                    if let Some(inputs) = retry
+                        && !self.store.claim_git_apply_retry(id, checked.row_version, inputs).await?
+                    {
                         return Ok(());
                     }
                     let service_names =
@@ -252,7 +270,7 @@ impl StackService {
                                     expected_version: Some(checked.row_version),
                                     service_names,
                                 },
-                                if images { checked.source.as_ref().map(|source| source.resolved_commit_sha.clone()).filter(|sha| !sha.is_empty()) } else { None },
+                                if images { checked.applied_commit.clone() } else { None },
                             )
                             .await?;
                         let mut success = false;
@@ -310,7 +328,37 @@ impl StackService {
         Ok(())
     }
 
-    async fn report_update(&self, stack: &crate::Stack, kind: &str, applied_commit: Option<&str>) {
+    async fn scheduled_update_action(
+        &self,
+        actor: ActorId,
+        candidate: crate::StackCheckCandidate,
+        batch: Option<&dyn StackUpdateScanner>,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<(crate::StackUpdateAction, Option<crate::GitCheckInputs>)>, StackError> {
+        use crate::StackCheckWork;
+        let mode = match candidate.work {
+            StackCheckWork::PendingGit(inputs, version) => {
+                return Ok(self
+                    .store
+                    .pending_git_action(candidate.id, version, inputs)
+                    .await?
+                    .map(|action| (action, Some(inputs))));
+            }
+            StackCheckWork::CompareGit(inputs) => CheckMode::Git(inputs),
+            StackCheckWork::Images => CheckMode::Images,
+        };
+        let checked = self
+            .check_updates_mode(actor, true, candidate.id, mode, batch, cancellation)
+            .await?;
+        Ok(Some((checked.resource.try_into()?, None)))
+    }
+
+    async fn report_update(
+        &self,
+        stack: &crate::StackUpdateAction,
+        kind: &str,
+        applied_commit: Option<&str>,
+    ) {
         let Some(alerts) = &self.alerts else {
             return;
         };
@@ -359,10 +407,6 @@ impl StackService {
             ),
             _ => ("", ""),
         };
-        let branch = match &stack.spec {
-            Some(StackSpec::Git { branch, .. }) => branch.as_str(),
-            _ => "",
-        };
         let reason = "Automatic Stack Apply did not complete. Review the Stack activity.";
         let observation = AlertObservation {
             alert_type: kind.into(),
@@ -375,12 +419,16 @@ impl StackService {
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect(),
-            observed_at: chrono::Utc::now(),
+            observed_at: if kind == "StackGitUpdateAvailable" {
+                stack.pending_sync_at.unwrap_or_else(chrono::Utc::now)
+            } else {
+                chrono::Utc::now()
+            },
             value: None,
             matched: true,
             info: serde_json::json!({ "StackId":stack.id,"StackName":stack.name,"Updates":updates,
                 "ServiceNames":images.iter().filter(|image|image.update_available).map(|image|&image.service_name).collect::<Vec<_>>(),
-                "Branch":branch,"GitRepositoryName":stack.source.as_ref().and_then(|source|source.git_repository_name.as_deref()).unwrap_or_default(),
+                "Branch":stack.branch.as_deref().unwrap_or_default(),"GitRepositoryName":stack.repository_name.as_deref().unwrap_or_default(),
                 "CurrentCommitSha":current,"PreviousCommitSha":current,"RemoteCommitSha":remote,"UpdatedCommitSha":applied_commit,"Reason":reason,
                 "HumanMessage": if kind.ends_with("Failed") { reason }
                     else if kind.ends_with("Available") { "A Stack update is available." } else { "The Stack was automatically updated." } }),
@@ -429,7 +477,7 @@ pub(super) async fn refresh_applied_images(
         // advertised remote digest is what Docker actually deployed.
         let next = scanner.scan_images(&snapshot, &cancel).await?;
         store
-            .save_update_check(actor, administrator, &snapshot, &next)
+            .save_update_check(actor, administrator, &snapshot, &next, None)
             .await
     };
     tokio::select! {

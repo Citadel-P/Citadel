@@ -385,6 +385,19 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         .list_authorized(ActorId::new(reader), false, &DeploymentFilter::default())
         .await
         .unwrap();
+    let bounded = store
+        .list_authorized(
+            ActorId::new(reader),
+            false,
+            &DeploymentFilter {
+                limit: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(bounded.len(), 1);
+    assert_eq!(bounded[0].id, created.id);
     assert_eq!(authorized.len(), 1);
     assert_eq!(authorized[0].id, created.id);
     assert!(!authorized[0].effective_permission.allows(<citadel_deployments::permissions::WriteDeployment as citadel_primitives::PermissionPolicy>::REQUIREMENT));

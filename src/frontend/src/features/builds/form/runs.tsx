@@ -109,13 +109,9 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
   }, [liveLogState, logRunId, logs.data?.data.logs]);
   const logViewerEntries = useMemo(() => logEntries.flatMap(formatBuildRunLogViewerEntries), [logEntries]);
 
-  const upsertRun = useCallback((run: BuildRunView, action: string) => {
+  const upsertRun = useCallback((run: BuildRunView) => {
     setRuns((prev) => {
       const current = prev ?? [];
-      if (action === 'delete') {
-        return current.filter((item) => item.id !== run.id);
-      }
-
       const index = current.findIndex((item) => item.id === run.id);
       if (index === -1) {
         return sortRuns([run, ...current]);
@@ -131,17 +127,28 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
   }, []);
 
   const handleBuildRunInfoUpdated = useCallback(
-    (run: BuildRunView, action: string) => {
+    (run: BuildRunView, action: string, sourceGroup?: string) => {
+      if (action === 'delete') {
+        setRuns((prev) =>
+          prev?.some((item) => item.id === run.id) ? prev.filter((item) => item.id !== run.id) : prev,
+        );
+        if (logRunId === run.id && sourceGroup === `build-run:${run.id}`) {
+          setLogRunId(undefined);
+          clearRunId();
+          queryClient.removeQueries({ queryKey: ['getBuildRun', { id: run.id }], exact: true });
+        }
+        return;
+      }
       if (run.buildProjectId !== resource.id) return;
 
-      upsertRun(run, action);
+      upsertRun(run);
 
       if (logRunId === run.id) {
         queryClient.setQueryData(['getBuildRun', { id: run.id }], { data: run });
         queryClient.invalidateQueries({ queryKey: ['getBuildRunRecovery', { id: run.id }] });
       }
     },
-    [logRunId, queryClient, resource.id, upsertRun],
+    [clearRunId, logRunId, queryClient, resource.id, upsertRun],
   );
 
   const setupEventListeners = useCallback(

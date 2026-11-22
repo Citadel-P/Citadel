@@ -134,18 +134,21 @@ impl PostgresBuildRepository {
     pub(super) fn claim_next_impl<'a>(
         &'a self,
         stale_before: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<Option<BuildClaim>, BuildError>> {
+    ) -> BoxFuture<'a, Result<BuildClaimOutcome, BuildError>> {
         Box::pin(async move {
-            // Negative hint only: active runs still need transactional recovery even
-            // without queued work. Enqueue notifications and the fallback cover races.
-            let active: bool = sqlx::query_scalar(
-                "SELECT EXISTS(SELECT 1 FROM buildruns WHERE status IN ('Queued','Preparing','Running'))",
-            ).fetch_one(&self.pool).await.map_err(storage)?;
-            if !active {
-                return Ok(None);
+            // Only due queue entries and overdue executions need a claim transaction.
+            // Recheck under the lock below; subsequent admissions and missed wakes
+            // remain covered by the worker notification and fallback.
+            let due: bool = sqlx::query_scalar(include_str!("claim_due.sql"))
+                .bind(stale_before)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(storage)?;
+            if !due {
+                return Ok(BuildClaimOutcome::default());
             }
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            recover(&mut tx, stale_before).await?;
+
             // Serialize only the short claim transaction, not Build execution.
             // Otherwise concurrent workers can both observe a free pool slot.
             let owns_claim = sqlx::query_scalar::<_, bool>(
@@ -155,11 +158,13 @@ impl PostgresBuildRepository {
             .await
             .map_err(storage)?;
             if !owns_claim {
-                return Ok(None);
+                return Ok(BuildClaimOutcome::default());
             }
+            let mut change = recover(&mut tx, stale_before).await?;
             let expired: Vec<(Uuid, Uuid)> = sqlx::query_as("UPDATE buildruns SET status='Failed',completedat=CURRENT_TIMESTAMP,errorcode='build.queue_timeout',errormessage='Build waited in the queue for 24 hours.' WHERE id IN(SELECT id FROM buildruns WHERE status='Queued' AND queuedat+INTERVAL '24 hours'<=CURRENT_TIMESTAMP ORDER BY queuedat,id LIMIT 64 FOR UPDATE SKIP LOCKED) RETURNING id,buildprojectid")
                 .fetch_all(&mut *tx).await.map_err(storage)?;
             for (run, project) in expired {
+                BuildChange::include_project(&mut change, project);
                 sqlx::query("UPDATE buildprojects SET controlstate='Idle',currentrunid=NULL,controlstartedat=NULL,rowversion=rowversion+1 WHERE id=$1 AND currentrunid=$2")
                     .bind(project).bind(run).execute(&mut *tx).await.map_err(storage)?;
                 record_run_activity(&mut tx, run).await?;
@@ -167,7 +172,10 @@ impl PostgresBuildRepository {
             // One undispatched preparation/probe per configured target. A refused target shares
             // its cooldown across queued projects; retries yield to untouched work.
             // Daemon reservations still own actual execution/alias capacity.
-            let Some(row) = sqlx::query("SELECT run.id,run.buildprojectid FROM buildruns run JOIN buildprojects project ON project.id=run.buildprojectid WHERE run.status='Queued' AND (run.nextattemptat IS NULL OR run.nextattemptat<=CURRENT_TIMESTAMP) AND project.currentrunid=run.id AND NOT EXISTS(SELECT 1 FROM buildruns probe WHERE COALESCE(probe.platformsnapshot->>'buildAgentPoolId',probe.platformsnapshot->>'id')=COALESCE(run.platformsnapshot->>'buildAgentPoolId',run.platformsnapshot->>'id') AND ((probe.status='Preparing' AND NOT EXISTS(SELECT 1 FROM buildexecutorreservations dispatched WHERE dispatched.runid=probe.id AND dispatched.attemptid=probe.attemptid AND dispatched.dispatchstarted)) OR (probe.status='Queued' AND probe.nextattemptat>CURRENT_TIMESTAMP))) AND NOT EXISTS(SELECT 1 FROM buildexecutorreservations reservation JOIN buildruns previous ON previous.id=reservation.runid WHERE previous.buildprojectid=run.buildprojectid) AND ((run.platformsnapshot->>'buildAgentPoolId')::uuid IS NULL OR (SELECT count(*) FROM buildruns active JOIN buildprojects other ON other.id=active.buildprojectid WHERE (active.platformsnapshot->>'buildAgentPoolId')::uuid=(run.platformsnapshot->>'buildAgentPoolId')::uuid AND (active.status IN ('Preparing','Running') OR EXISTS(SELECT 1 FROM buildexecutorreservations reservation WHERE reservation.runid=active.id))) < COALESCE((SELECT maxactivebuilders FROM buildagentpools WHERE id=(run.platformsnapshot->>'buildAgentPoolId')::uuid),1)) ORDER BY COALESCE(run.nextattemptat,run.queuedat),run.queuedat,run.id FOR UPDATE OF run,project SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)? else { tx.commit().await.map_err(storage)?; return Ok(None) };
+            let Some(row) = sqlx::query("SELECT run.id,run.buildprojectid FROM buildruns run JOIN buildprojects project ON project.id=run.buildprojectid WHERE run.status='Queued' AND (run.nextattemptat IS NULL OR run.nextattemptat<=CURRENT_TIMESTAMP) AND project.currentrunid=run.id AND NOT EXISTS(SELECT 1 FROM buildruns probe WHERE COALESCE(probe.platformsnapshot->>'buildAgentPoolId',probe.platformsnapshot->>'id')=COALESCE(run.platformsnapshot->>'buildAgentPoolId',run.platformsnapshot->>'id') AND ((probe.status='Preparing' AND NOT EXISTS(SELECT 1 FROM buildexecutorreservations dispatched WHERE dispatched.runid=probe.id AND dispatched.attemptid=probe.attemptid AND dispatched.dispatchstarted)) OR (probe.status='Queued' AND probe.nextattemptat>CURRENT_TIMESTAMP))) AND NOT EXISTS(SELECT 1 FROM buildexecutorreservations reservation JOIN buildruns previous ON previous.id=reservation.runid WHERE previous.buildprojectid=run.buildprojectid) AND ((run.platformsnapshot->>'buildAgentPoolId')::uuid IS NULL OR (SELECT count(*) FROM buildruns active JOIN buildprojects other ON other.id=active.buildprojectid WHERE (active.platformsnapshot->>'buildAgentPoolId')::uuid=(run.platformsnapshot->>'buildAgentPoolId')::uuid AND (active.status IN ('Preparing','Running') OR EXISTS(SELECT 1 FROM buildexecutorreservations reservation WHERE reservation.runid=active.id))) < COALESCE((SELECT maxactivebuilders FROM buildagentpools WHERE id=(run.platformsnapshot->>'buildAgentPoolId')::uuid),1)) ORDER BY COALESCE(run.nextattemptat,run.queuedat),run.queuedat,run.id FOR UPDATE OF run,project SKIP LOCKED LIMIT 1").fetch_optional(&mut *tx).await.map_err(storage)? else {
+                tx.commit().await.map_err(storage)?;
+                return Ok(BuildClaimOutcome { claim: None, change });
+            };
             let run_id: Uuid = row.try_get("id").map_err(storage)?;
             let project_id: Uuid = row.try_get("buildprojectid").map_err(storage)?;
             let attempt_id = Uuid::now_v7();
@@ -206,11 +214,15 @@ impl PostgresBuildRepository {
             project.registry_id = run.registry_id;
             project.image_repository = run.image_repository.clone();
             tx.commit().await.map_err(storage)?;
-            Ok(Some(BuildClaim {
-                attempt_id,
-                project,
-                run,
-            }))
+            BuildChange::include_project(&mut change, project.id);
+            Ok(BuildClaimOutcome {
+                claim: Some(BuildClaim {
+                    attempt_id,
+                    project,
+                    run,
+                }),
+                change,
+            })
         })
     }
 }

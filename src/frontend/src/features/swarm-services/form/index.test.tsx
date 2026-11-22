@@ -311,7 +311,7 @@ describe('SwarmServiceFormComponents', () => {
     const { fake, user } = renderRuntime(<Runtime resource={resource} />);
 
     expect(await screen.findByText('redis.1')).toBeVisible();
-    await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBe(2));
+    await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBe(1));
 
     act(() => {
       fake.emit(

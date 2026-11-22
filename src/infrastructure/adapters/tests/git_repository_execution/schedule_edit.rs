@@ -70,7 +70,7 @@ async fn admission_rechecks_repository_edits_committed_after_selection() {
     .await
     .unwrap();
     edit.commit().await.unwrap();
-    assert_eq!(admission.await.unwrap().unwrap(), 0);
+    assert!(admission.await.unwrap().unwrap().is_empty());
     let state: String = sqlx::query_scalar("SELECT controlstate FROM gitrepositories WHERE id=$1")
         .bind(id)
         .fetch_one(&writer)
@@ -81,7 +81,7 @@ async fn admission_rechecks_repository_edits_committed_after_selection() {
     sqlx::query("UPDATE gitrepositoryrefs SET lastsyncedat=now()-interval '2 hours' WHERE gitrepositoryid=$1 AND branch='next'")
         .bind(id).execute(&writer).await.unwrap();
     let current = PostgresGitRepositoryExecutionPersistence::new(writer.clone());
-    assert_eq!(current.enqueue_due(100).await.unwrap(), 1);
+    assert_eq!(current.enqueue_due(100).await.unwrap(), [id]);
     let pending: Vec<String> = sqlx::query_scalar(
         "SELECT branch FROM gitrepositoryrefs WHERE gitrepositoryid=$1 AND status='Pending'",
     )

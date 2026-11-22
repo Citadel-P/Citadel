@@ -8,7 +8,23 @@ pub(crate) async fn publish(
     policy: Option<Uuid>,
     repository: Option<Uuid>,
 ) -> Result<(), BackupError> {
-    sqlx::query(r#"SELECT pg_notify('citadel_backup_coverage',platform::text) FROM (
+    publish_change(tx, policy, repository, false).await
+}
+
+/// Run transitions can resolve affected shared storage from the committed policy and run items.
+pub(crate) async fn publish_run(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    policy: Uuid,
+) -> Result<(), BackupError> {
+    publish_change(tx, Some(policy), None, true).await
+}
+async fn publish_change(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    policy: Option<Uuid>,
+    repository: Option<Uuid>,
+    run: bool,
+) -> Result<(), BackupError> {
+    sqlx::query(r#"SELECT pg_notify('citadel_backup_coverage',CASE WHEN $3 THEN platform::text || ':' || $1::uuid::text ELSE platform::text END) FROM (
         SELECT DISTINCT COALESCE(
             NULLIF(COALESCE(p.source->>'platformId',p.source->>'PlatformId'),'')::uuid,
             d.platformid,r.platformid,s.platformid) AS platform
@@ -22,7 +38,7 @@ pub(crate) async fn publish(
         SELECT item.platformid FROM backuprunitems item
         JOIN backupruns run ON run.id=item.backuprunid
         WHERE run.backuppolicyid=$1 OR run.backuprepositoryid=$2
-    ) affected WHERE platform IS NOT NULL"#).bind(policy).bind(repository).execute(&mut **tx).await.map_err(storage)?;
+    ) affected WHERE platform IS NOT NULL"#).bind(policy).bind(repository).bind(run).execute(&mut **tx).await.map_err(storage)?;
     Ok(())
 }
 use citadel_runtime::notifications::{NotificationSource, RuntimeNotification};
@@ -31,7 +47,7 @@ use std::{collections::BTreeSet, time::Duration};
 pub struct PostgresCoverageChanges {
     source: Box<dyn NotificationSource>,
     pool: PgPool,
-    pending: BTreeSet<Uuid>,
+    pending: BTreeSet<(Uuid, Option<Uuid>)>,
 }
 impl PostgresCoverageChanges {
     pub fn from_notifications(pool: &PgPool, source: Box<dyn NotificationSource>) -> Self {
@@ -52,7 +68,11 @@ impl PostgresCoverageChanges {
         loop {
             match self.source.recv().await.map_err(storage)? {
                 RuntimeNotification::BackupCoverage(id) => {
-                    self.pending.insert(id);
+                    self.pending.insert((id, None));
+                    break;
+                }
+                RuntimeNotification::BackupRunCoverage { platform, policy } => {
+                    self.pending.insert((platform, Some(policy)));
                     break;
                 }
                 RuntimeNotification::Resync => {
@@ -67,8 +87,9 @@ impl PostgresCoverageChanges {
             tokio::select! {
                 _ = tokio::time::sleep_until(deadline) => break,
                 event = self.source.recv() => match event.map_err(storage)? {
-                    RuntimeNotification::BackupCoverage(id) => { self.pending.insert(id); }
-                    RuntimeNotification::Resync => { self.pending.clear(); return Ok(false); }
+                    RuntimeNotification::BackupCoverage(id) => { self.pending.insert((id,None)); }
+                    RuntimeNotification::BackupRunCoverage {platform,policy} => { self.pending.insert((platform,Some(policy))); }
+                RuntimeNotification::Resync => { self.pending.clear(); return Ok(false); }
                     _ => {},
                 },
             }
@@ -82,8 +103,19 @@ impl CoverageChangeSource for PostgresCoverageChanges {
             if self.pending.is_empty() && !self.collect().await? {
                 return Ok(None);
             }
-            let platform = *self.pending.first().expect("collected coverage platform");
-            let rows=sqlx::query("SELECT id,'Deployment' AS kind FROM deployments WHERE platformid=$1 UNION ALL SELECT s.id,'Stack' FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=$1 UNION ALL SELECT id,'SwarmService' FROM swarmservices WHERE platformid=$1 UNION ALL SELECT id,'Container' FROM containers WHERE platformid=$1").bind(platform).fetch_all(&self.pool).await.map_err(storage)?;
+            let &(platform, _) = self.pending.first().expect("collected coverage platform");
+            let rows = if self.pending.contains(&(platform,None)) {
+                sqlx::query("SELECT id,'Deployment' AS kind FROM deployments WHERE platformid=$1
+                    UNION ALL SELECT s.id,'Stack' FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid WHERE r.platformid=$1
+                    UNION ALL SELECT id,'SwarmService' FROM swarmservices WHERE platformid=$1
+                    UNION ALL SELECT id,'Container' FROM containers WHERE platformid=$1")
+                    .bind(platform).fetch_all(&self.pool).await
+            } else {
+                let policies: Vec<_> = self.pending.range((platform,None)..=(platform,Some(Uuid::max())))
+                    .filter_map(|(_,policy)| *policy).collect();
+                sqlx::query(include_str!("run_owners.sql"))
+                    .bind(platform).bind(policies).fetch_all(&self.pool).await
+            }.map_err(storage)?;
             let mut change = CoverageInvalidation {
                 platform_id: platform,
                 ..Default::default()
@@ -97,7 +129,7 @@ impl CoverageChangeSource for PostgresCoverageChanges {
                 };
                 ids.push(row.try_get("id").map_err(storage)?);
             }
-            self.pending.remove(&platform);
+            self.pending.retain(|(id, _)| *id != platform);
             Ok(Some(change))
         })
     }

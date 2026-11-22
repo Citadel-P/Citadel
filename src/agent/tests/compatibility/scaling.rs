@@ -293,6 +293,7 @@ async fn six_real_remote_builds_overlap_with_two_preparation_permits() {
                         .claim_next(chrono::Utc::now() - chrono::Duration::minutes(5))
                         .await
                         .unwrap()
+                        .claim
                     {
                         break (claim, permit);
                     }

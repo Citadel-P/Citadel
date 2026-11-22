@@ -1,6 +1,8 @@
 use super::super::scoped_reconciler::{event_refresh_channels, run_refresh_workers};
 use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use tokio::sync::Notify;
 
 async fn settle() {
     for _ in 0..30 {
@@ -135,7 +137,7 @@ async fn in_flight_burst_discards_read_and_retains_one_follow_up() {
     debounce().await;
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     assert_eq!(commits.load(Ordering::SeqCst), 1);
-    assert!(sender.0.state.lock().unwrap().pending.is_empty());
+    assert!(sender.occupancy() == 0);
     cancel.cancel();
     worker.await.unwrap();
 }
@@ -153,10 +155,13 @@ async fn new_platforms_wait_at_capacity_but_duplicates_never_wait() {
     for _ in 0..100 {
         sender.mark(id, &cancel).await.unwrap();
     }
-    assert_eq!(sender.0.state.lock().unwrap().pending.len(), 1);
+    assert_eq!(sender.occupancy(), 1);
     drop(receiver);
-    assert_eq!(blocked.await.unwrap(), Err(()));
-    assert!(sender.0.state.lock().unwrap().pending.is_empty());
+    assert!(matches!(
+        blocked.await.unwrap(),
+        Err(citadel_runtime::QueueSendError::Closed(_))
+    ));
+    assert!(sender.occupancy() == 0);
 }
 
 #[tokio::test(start_paused = true)]
@@ -197,7 +202,7 @@ async fn bounded_parallelism_and_shutdown_drop_active_reads() {
     cancel.cancel();
     worker.await.unwrap();
     assert_eq!(active.load(Ordering::SeqCst), 0);
-    assert!(sender.0.state.lock().unwrap().pending.is_empty());
+    assert!(sender.occupancy() == 0);
 }
 
 #[tokio::test(start_paused = true)]
@@ -274,26 +279,17 @@ async fn safety_pass_is_delayed_and_uses_only_current_manager_targets() {
         .await;
     });
     settle().await;
-    assert!(sender.0.state.lock().unwrap().pending.is_empty());
+    assert!(sender.occupancy() == 0);
     tokio::time::advance(Duration::from_secs(60)).await;
     settle().await;
-    assert_eq!(
-        sender
-            .0
-            .state
-            .lock()
-            .unwrap()
-            .pending
-            .keys()
-            .copied()
-            .collect::<Vec<_>>(),
-        vec![manager]
-    );
-    sender.0.state.lock().unwrap().pending.clear();
+    tokio::time::advance(DEBOUNCE).await;
+    let work = receiver.next().await;
+    assert_eq!(work.key, manager);
+    receiver.finish(work, true, None);
     current.lock().unwrap().clear();
     tokio::time::advance(Duration::from_secs(60)).await;
     settle().await;
-    assert!(sender.0.state.lock().unwrap().pending.is_empty());
+    assert!(sender.occupancy() == 0);
     cancel.cancel();
     safety.await.unwrap();
     drop(receiver);
@@ -332,10 +328,10 @@ async fn dirty_during_commit_survives_completion() {
     sender.mark(id, &cancel).await.unwrap();
     release.notify_one();
     settle().await;
-    assert_eq!(sender.0.state.lock().unwrap().pending.len(), 1);
+    assert_eq!(sender.occupancy(), 1);
     debounce().await;
     assert_eq!(writes.load(Ordering::SeqCst), 2);
-    assert!(sender.0.state.lock().unwrap().pending.is_empty());
+    assert!(sender.occupancy() == 0);
     cancel.cancel();
     worker.await.unwrap();
 }

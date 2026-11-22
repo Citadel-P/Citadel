@@ -9,7 +9,9 @@ impl GitRepositoryExecutionService {
         if let Some(branch) = branch {
             validate_branch_input(branch)?;
         }
-        self.store.enqueue_sync(actor_id, id, branch).await
+        self.store.enqueue_sync(actor_id, id, branch).await?;
+        self.changed(Some(id));
+        Ok(())
     }
 
     /// Reuse the durable repository worker rather than fetching concurrently
@@ -33,7 +35,7 @@ impl GitRepositoryExecutionService {
         // and a request arriving during Syncing causes another Pending pass.
         let wait = async {
             self.store.enqueue_apply(actor, id, branch).await?;
-            self.changed();
+            self.changed(Some(id));
             completion::wait(completion, || self.store.get_ref(id, branch)).await
         };
         completion::bounded(cancellation, wait).await
@@ -92,7 +94,7 @@ impl GitRepositoryExecutionService {
         let Some(claim) = self.store.claim_next(stale_before).await? else {
             return Ok(false);
         };
-        self.changed();
+        self.changed(Some(claim.repository.id));
         let result = self.synchronize_claim(&claim, cancellation).await;
         match result {
             Ok(result) => self.store.complete(&claim, &result).await?,
@@ -109,15 +111,21 @@ impl GitRepositoryExecutionService {
         }
         // Persistence has committed before any waiter is awakened. A failed
         // commit emits no success hint; the coarse fallback still recovers.
-        self.completion.send_modify(|_| {});
-        self.changed();
+        self.completion.send_modify(|(sequence, reference)| {
+            *sequence = sequence.wrapping_add(1);
+            *reference = claim.reference_id;
+        });
+        self.changed(Some(claim.repository.id));
         Ok(true)
     }
 
     pub async fn enqueue_due(&self, limit: usize) -> Result<usize, GitRepositoryExecutionError> {
-        let count = self.store.enqueue_due(limit.clamp(1, 100)).await?;
-        if count > 0 {
-            self.changed();
+        let mut owners = self.store.enqueue_due(limit.clamp(1, 100)).await?;
+        let count = owners.len();
+        owners.sort_unstable();
+        owners.dedup();
+        for id in owners {
+            self.changed(Some(id));
         }
         Ok(count)
     }
@@ -175,7 +183,7 @@ impl GitRepositoryExecutionService {
                 &original_webhook,
             )
             .await?;
-        self.changed();
+        self.changed(Some(id));
         Ok(GitWebhookOutcome::Queued {
             branch: branch.unwrap_or(&source.default_branch).to_owned(),
         })

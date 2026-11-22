@@ -50,10 +50,21 @@ fn decode(channel: &str, payload: &str) -> Option<RuntimeNotification> {
                     ConnectionResync
                 }),
         ),
+        "citadel_resource_recovery" => match payload {
+            "backup" => Some(BackupRecovery),
+            "git" => Some(GitRecovery),
+            _ => Some(Resync),
+        },
         "citadel_container_created" => serde_json::from_str(payload).ok().map(ContainerCreated),
         "citadel_schedules" => Some(Schedule(payload.to_owned())),
         "citadel_stack_drift" => payload.parse().ok().map(StackDrift),
-        "citadel_backup_coverage" => Some(payload.parse().map(BackupCoverage).unwrap_or(Resync)),
+        "citadel_backup_coverage" => Some(match payload.split_once(':') {
+            Some((platform, policy)) => platform.parse().ok().zip(policy.parse().ok()).map_or(
+                Resync,
+                |(platform, policy)| BackupRunCoverage { platform, policy },
+            ),
+            None => payload.parse().map(BackupCoverage).unwrap_or(Resync),
+        }),
         "citadel_resource_copies" => Some(payload.parse().map(ResourceCopy).unwrap_or(Resync)),
         _ => RuntimeSignal::ALL
             .into_iter()

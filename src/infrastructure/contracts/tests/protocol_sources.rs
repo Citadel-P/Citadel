@@ -10,6 +10,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
     // Post-commit cleanup adds request field 5 and an explicit response acknowledgement;
     // empty/default responses never prove deletion and ordinary settlement remains unchanged.
     // Volume system classification adds field 14; existing field numbers are unchanged.
+    // Image requests add opt-in identity-only reads. Volume inspect adds a read mode with Details as the default.
     let sources = [
         (
             "script_service.proto",
@@ -49,7 +50,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "image_service.proto",
             include_str!("../proto/image_service.proto"),
-            "4d47b812a034b8bc561fa4d99f3854ef16446ed502fb28d0b92cfa75861b8bf3",
+            "52e00bd9b28b9eab99dc01a922ff2f05f88cc66322595fd7f2389558fa42ca9a",
         ),
         (
             "network_service.proto",
@@ -59,7 +60,7 @@ fn protocol_sources_preserve_the_accepted_wire_contract() {
         (
             "volume_service.proto",
             include_str!("../proto/volume_service.proto"),
-            "acd9d6aff11f1b7e5fde57afdd94200b2ea547d031cd858de0a89e1ca6efca83",
+            "960a0954d6be206730727e4799d7e62902c3acd37aa7ee1a46c5e02be8d7eabd",
         ),
         (
             "swarm_service.proto",

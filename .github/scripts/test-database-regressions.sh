@@ -84,7 +84,6 @@ docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_resource_
 # These ignored fixtures exercise real completion transactions and fault injection.
 for selection in \
   'resource_schedules catalog_changes_require_commit_and_failed_admission_can_retry' \
-  'git_repository_execution schedule_edit::admission_rechecks_repository_edits_committed_after_selection' \
   'idle_worker_queries concurrent_automation_admissions_share_only_reads_that_have_yet_to_start' \
   'script_execution script_claim_is_exclusive_and_interrupted_runs_recover' \
   'build_execution build_runs_claim_once_persist_results_cancel_and_recover' \
@@ -100,6 +99,14 @@ for selection in \
     run_cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --test-threads=1
   )
 done
+docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_git_execution
+(
+  export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_git_execution"
+  # Includes schedule-edit races, unchanged ref observations and dependent Stack checks.
+  test_name=schedule_edit::admission_rechecks_repository_edits_committed_after_selection
+  run_cargo test --locked --workspace --test git_repository_execution "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
+  run_cargo test --locked --workspace --test git_repository_execution -- --ignored --test-threads=1
+)
 docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_schedule_edits
 (
   export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_schedule_edits"

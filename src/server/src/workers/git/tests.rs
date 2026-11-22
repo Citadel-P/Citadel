@@ -38,10 +38,13 @@ impl GitRepositoryExecutionPersistence for SlowStore {
             Ok(None)
         })
     }
-    fn enqueue_due(&self, _: usize) -> BoxFuture<'_, Result<usize, GitRepositoryExecutionError>> {
+    fn enqueue_due(
+        &self,
+        _: usize,
+    ) -> BoxFuture<'_, Result<Vec<Uuid>, GitRepositoryExecutionError>> {
         Box::pin(async {
             self.schedules.fetch_add(1, Ordering::SeqCst);
-            Ok(0)
+            Ok(vec![])
         })
     }
     fn get_source(

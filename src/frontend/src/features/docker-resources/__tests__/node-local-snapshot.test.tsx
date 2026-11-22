@@ -177,13 +177,18 @@ it('merges newer node removals into the initial HTTP inventory and capabilities'
       return HttpResponse.json(baseline);
     }),
   );
-  renderCitadel(<VolumesProbe />, {
+  const { queryClient } = renderCitadel(<VolumesProbe />, {
     groups: { connectionFactory: () => fake, startConnection: (c) => c.start() },
   });
   await captured.promise;
   await waitFor(() => expect(fake.listenerCount('VolumesUpdated')).toBe(1));
   act(() => fake.emit('VolumesUpdated', { platformId, scope: 'nodes', volumes: [] }));
-  gate.resolve();
+  const initialRead = queryClient.getQueryCache().find({ queryKey: key, exact: true })?.promise;
+  expect(initialRead).toBeDefined();
+  await act(async () => {
+    gate.resolve();
+    await initialRead;
+  });
   await waitFor(() =>
     expect(screen.getByRole('status')).toHaveTextContent(JSON.stringify({ volumes: [manager], capabilities })),
   );

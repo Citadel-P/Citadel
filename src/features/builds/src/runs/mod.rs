@@ -1,4 +1,7 @@
 mod model;
-pub use model::{BuildClaim, BuildExecutionResult, BuildLog, BuildPlatformSnapshot, BuildRun};
+pub use model::{
+    BuildChange, BuildClaim, BuildClaimOutcome, BuildExecutionResult, BuildLog,
+    BuildPlatformSnapshot, BuildRun,
+};
 
 pub mod logs;

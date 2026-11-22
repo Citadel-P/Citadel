@@ -38,7 +38,9 @@ use citadel_docker::client::events::RuntimeEventKind;
 use citadel_platforms::jobs::observations::{PlatformLifecycleStore, RuntimeProjectionStore};
 use citadel_platforms::jobs::{DeltaOutcome, EventRefresh, ReconciliationDecision, event_decision};
 use citadel_platforms::{PlatformInventoryPort, RuntimeCapabilityError};
-use citadel_runtime::{BoundedReceiver, BoundedSender, QueueOverflowPolicy, bounded_channel};
+use citadel_runtime::{BoundedReceiver, BoundedSender};
+#[cfg(test)]
+use citadel_runtime::{QueueOverflowPolicy, bounded_channel};
 use futures_util::StreamExt;
 use tokio_util::sync::CancellationToken;
 

@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 pub(crate) struct DatabaseNotificationHub {
     pub(super) signals: Arc<[watch::Sender<()>; RuntimeSignal::ALL.len()]>,
     pub(super) changes: [broadcast::Sender<RuntimeNotification>; 4],
+    realtime: Option<crate::realtime::RealtimeHub>,
     copy_work: watch::Sender<()>,
     pub connections: ConnectionEventHub,
 }
@@ -20,7 +21,17 @@ impl DatabaseNotificationHub {
             signals: Arc::new(std::array::from_fn(|_| watch::channel(()).0)),
             connections: ConnectionEventHub::new(256),
             changes: std::array::from_fn(|_| broadcast::channel(256).0),
+            realtime: None,
             copy_work: watch::channel(()).0,
+        }
+    }
+    pub fn with_realtime(mut self, hub: Option<crate::realtime::RealtimeHub>) -> Self {
+        self.realtime = hub;
+        self
+    }
+    fn refresh_catalog(&self, ty: &'static str) {
+        if let Some(hub) = &self.realtime {
+            hub.publish_resource_change(ty, uuid::Uuid::nil(), "resourceChanged");
         }
     }
     pub fn subscribe(&self, signal: RuntimeSignal) -> watch::Receiver<()> {
@@ -56,7 +67,15 @@ impl DatabaseNotificationHub {
                 Ok(RuntimeNotification::Signal(signal)) => {
                     self.signals[signal as usize].send_modify(|_| {})
                 }
+                Ok(RuntimeNotification::BackupRecovery) => {
+                    self.refresh_catalog("BackupPolicy");
+                    self.refresh_catalog("BackupRepository");
+                }
+                Ok(RuntimeNotification::GitRecovery) => self.refresh_catalog("GitRepository"),
                 Ok(RuntimeNotification::Resync) => {
+                    for resource in ["BackupPolicy", "BackupRepository", "GitRepository"] {
+                        self.refresh_catalog(resource);
+                    }
                     self.connections.publish(ConnectionNotification::Resync);
                     for changes in &self.changes {
                         let _ = changes.send(RuntimeNotification::Resync);
@@ -71,7 +90,10 @@ impl DatabaseNotificationHub {
                     self.copy_work.send_modify(|_| {});
                     let _ = self.changes[ScopedTopic::Copies as usize].send(event);
                 }
-                Ok(event @ RuntimeNotification::BackupCoverage(_)) => {
+                Ok(
+                    event @ (RuntimeNotification::BackupCoverage(_)
+                    | RuntimeNotification::BackupRunCoverage { .. }),
+                ) => {
                     let _ = self.changes[ScopedTopic::Coverage as usize].send(event);
                 }
                 Ok(event @ RuntimeNotification::Schedule(_)) => {

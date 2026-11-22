@@ -452,6 +452,40 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     let created = response_json(created_response).await;
     assert_eq!(status, StatusCode::OK, "{created}");
     let id = Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
+    for catalog in [false, true] {
+        let url = if catalog {
+            "/api/v1/stacks?catalog=true"
+        } else {
+            "/api/v1/stacks"
+        };
+        let body =
+            response_json(request(&app, Method::GET, url, Some(admin.clone()), None).await).await;
+        let row = body["stacks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == created["id"])
+            .unwrap();
+        let mut health = row["probeHealth"].as_object().unwrap().clone();
+        let mut expected = created["probeHealth"].as_object().unwrap().clone();
+        assert!(health.remove("evaluatedAt").unwrap().is_number());
+        expected.remove("evaluatedAt");
+        assert_eq!(health, expected);
+        if catalog {
+            assert!(row["latestActivityView"].is_null());
+            assert!(
+                !row.to_string().contains("APP_MODE"),
+                "catalog must omit embedded activity configuration too"
+            );
+            assert!(
+                row["spec"].is_null()
+                    && row["source"].is_null()
+                    && row["resourceBindings"].is_null()
+            );
+        } else {
+            assert_eq!(row["spec"]["composeFile"], created["spec"]["composeFile"]);
+        }
+    }
 
     let cleared = response_json(
         request(

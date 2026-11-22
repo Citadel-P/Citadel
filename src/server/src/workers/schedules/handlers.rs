@@ -41,6 +41,7 @@ pub(crate) trait Dispatch: Send + Sync + 'static {
     fn batch(
         &self,
         p: Purpose,
+        reference: Option<uuid::Uuid>,
         cancel: &CancellationToken,
     ) -> impl Future<Output = Result<(), String>> + Send;
     fn deadline(
@@ -135,7 +136,12 @@ impl Dispatch for Handlers {
         }
     }
 
-    async fn batch(&self, purpose: Purpose, cancel: &CancellationToken) -> Result<(), String> {
+    async fn batch(
+        &self,
+        purpose: Purpose,
+        reference: Option<uuid::Uuid>,
+        cancel: &CancellationToken,
+    ) -> Result<(), String> {
         let Some(_permit) = self.admission.enter("Scheduled checks", cancel).await else {
             return Ok(());
         };
@@ -171,7 +177,11 @@ impl Dispatch for Handlers {
                 let _iteration =
                     citadel_runtime::runtime_metrics::RuntimeWork::StackUpdates.start();
                 self.stacks
-                    .run_update_check_pass(purpose == Purpose::StackImages, cancel)
+                    .run_scoped_update_check_pass(
+                        purpose == Purpose::StackImages,
+                        reference,
+                        cancel,
+                    )
                     .await
                     .map_err(|e| e.to_string())
             }

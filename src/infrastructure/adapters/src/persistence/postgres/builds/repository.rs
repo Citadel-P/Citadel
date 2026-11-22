@@ -170,7 +170,7 @@ impl BuildRepository for PostgresBuildRepository {
     fn claim_next<'a>(
         &'a self,
         stale_before: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<Option<BuildClaim>, BuildError>> {
+    ) -> BoxFuture<'a, Result<BuildClaimOutcome, BuildError>> {
         self.claim_next_impl(stale_before)
     }
 

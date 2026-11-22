@@ -111,8 +111,9 @@ impl BackupPersistence for Store {
         &self,
         actor: ActorId,
         administrator: bool,
+        owner: Option<Uuid>,
     ) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>> {
-        self.inner.list_policies(actor, administrator)
+        self.inner.list_policies(actor, administrator, owner)
     }
     fn get_policy(&self, id: Uuid) -> BoxFuture<'_, Result<BackupPolicy, BackupError>> {
         self.inner.get_policy(id)

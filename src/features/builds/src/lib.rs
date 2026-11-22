@@ -33,7 +33,10 @@ pub use error::BuildError;
 use futures_util::future::BoxFuture;
 pub use projects::{BuildArgSpec, BuildProject, BuildProjectConfiguration, BuildSecretSpec};
 pub use repository::BuildRepository;
-pub use runs::{BuildClaim, BuildExecutionResult, BuildLog, BuildPlatformSnapshot, BuildRun};
+pub use runs::{
+    BuildChange, BuildClaim, BuildClaimOutcome, BuildExecutionResult, BuildLog,
+    BuildPlatformSnapshot, BuildRun,
+};
 pub use runtime::{
     BuildEntitlements, BuildExecutor, BuildRegistryCredentialResolver, BuildRegistryCredentials,
     BuildSecretResolver,

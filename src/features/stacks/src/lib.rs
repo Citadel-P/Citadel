@@ -41,7 +41,8 @@ pub use commands::{
 
 pub use read_models::{
     ComposeProjectImportDraft, ComposeProjectImportSource, ComposeProjectStackDraft,
-    DuplicateDraftWarning, StackConfig, StackDraft, StackDuplicateDraft, StackFilter,
+    DuplicateDraftWarning, StackCatalogGit, StackConfig, StackDraft, StackDuplicateDraft,
+    StackFilter, StackUpdateAction,
 };
 
 pub use compose::{
@@ -55,7 +56,7 @@ pub use service::{
     calculate_drift, import_runtime_fingerprint,
 };
 
-pub use repository::StackRepository;
+pub use repository::{GitCheckInputs, StackCheckCandidate, StackCheckWork, StackRepository};
 
 pub use runtime::{
     StackBindingResolverPort, StackBuildImageResolverPort, StackRuntime,

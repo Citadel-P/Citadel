@@ -20,10 +20,45 @@ pub fn change_callback(
     })
 }
 
+pub fn owner_change_callback(
+    hub: Option<RealtimeHub>,
+    resource_type: &'static str,
+) -> Arc<dyn Fn(Option<Uuid>) + Send + Sync> {
+    Arc::new(move |owner| {
+        if let Some(hub) = &hub {
+            hub.publish_resource_change(resource_type, owner.unwrap_or_default(), "ownerChanged");
+        }
+    })
+}
+
+pub fn backup_change_callback(
+    hub: Option<RealtimeHub>,
+) -> Arc<dyn Fn(citadel_backups::BackupChange) + Send + Sync> {
+    Arc::new(move |change| {
+        if let Some(hub) = &hub {
+            hub.publish_backup_change(change);
+        }
+    })
+}
+
 pub fn backup_repository_callback(hub: Option<RealtimeHub>) -> Arc<dyn Fn(Uuid) + Send + Sync> {
     Arc::new(move |id| {
         if let Some(hub) = &hub {
             hub.publish_resource_change("BackupRepository", id, "resourceChanged");
+        }
+    })
+}
+
+pub fn build_change_callback(
+    hub: Option<RealtimeHub>,
+) -> Arc<dyn Fn(citadel_builds::BuildChange) + Send + Sync> {
+    Arc::new(move |change| {
+        if let Some(hub) = &hub {
+            let project = match change {
+                citadel_builds::BuildChange::ProjectRuns(id) => id,
+                citadel_builds::BuildChange::Resync => Uuid::nil(),
+            };
+            hub.publish_resource_change("Build", project, "resourceChanged");
         }
     })
 }
@@ -76,6 +111,23 @@ impl PublishedRuntimeEvent {
             return None;
         }
         serde_json::from_value(self.payload["containerPatches"].clone()).ok()
+    }
+
+    pub(crate) fn changed_owner(&self, resource: &str) -> Option<Uuid> {
+        (self.resource_type == resource
+            && matches!(self.event_kind, "ownerChanged" | "webhookReceived")
+            && !self.resource_id.is_nil())
+        .then_some(self.resource_id)
+    }
+
+    pub(crate) fn changed_build_project(&self) -> Option<Uuid> {
+        (self.resource_type == "Build"
+            && matches!(
+                self.event_kind,
+                "resourceChanged" | "ownerChanged" | "webhookReceived"
+            )
+            && !self.resource_id.is_nil())
+        .then_some(self.resource_id)
     }
 
     pub(crate) fn affects_resource(&self, id: Option<Uuid>) -> bool {
@@ -428,6 +480,24 @@ impl RealtimeHub {
                 "stats": stats,
             }),
         )
+    }
+
+    pub(crate) fn publish_backup_change(&self, change: citadel_backups::BackupChange) {
+        use citadel_backups::BackupChange;
+        if self.inner.sender.receiver_count() == 0 {
+            return;
+        }
+        let (policy, payload) = match change {
+            BackupChange::Policy(policy) => (policy, json!({})),
+            BackupChange::Run {
+                policy,
+                run,
+                retention,
+            } => (policy, json!({"backupRun":run,"retention":retention})),
+            BackupChange::Restore { policy, restore } => (policy, json!({"restoreRun":restore})),
+            BackupChange::Resync => (Uuid::nil(), json!({})),
+        };
+        self.publish(None, "BackupPolicy", policy, "ownerChanged", payload);
     }
 
     pub fn publish_backup_coverage(

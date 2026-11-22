@@ -59,7 +59,7 @@ async fn registry_browsing_authorizes_before_using_credentials_and_maps_existing
         (
             github,
             &github_name,
-            json!({"$type":"GitHub","NameSpace":"tester","PAT":"fixture-PAT"}),
+            json!({"$type":"GitHub","NameSpace":"tester","PAT":"fixture-PAT","GhcrAuthEnabled":true}),
             "ghcr.io",
         ),
     ] {

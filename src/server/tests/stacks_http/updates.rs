@@ -277,6 +277,14 @@ impl citadel_stacks::StackSourceMaterializerPort for GitSource {
     }
 }
 
+#[derive(Default)]
+struct GitChanges(std::sync::atomic::AtomicUsize);
+impl citadel_stacks::StackChangeNotifier for GitChanges {
+    fn changed(&self, _: Uuid, _: &'static str) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
 async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal, existing: Uuid) {
     use citadel_stacks::{StackRepository, StackSpec};
     let store = Arc::new(PostgresStackRepository::new(pool.clone()));
@@ -296,6 +304,11 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
     let runtime = Arc::new(CompletingStackRuntime::default());
     let alerts = Arc::new(alert_sink::RecordedAlerts::default());
     let scanner = Arc::new(Scanner::new(pool.clone()));
+    let changes = Arc::new(GitChanges::default());
+    let entitlements = Arc::new(Entitlements {
+        automatic: true.into(),
+        guardrails: true.into(),
+    });
     let service = StackService::new(
         Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(
             citadel_runtime::DynamicTasks::new(tokio_util::sync::CancellationToken::new()),
@@ -303,15 +316,12 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
         store.clone(),
         runtime.clone(),
         Arc::new(FixtureBindings),
-        Arc::new(NoopStackChangeNotifier),
+        changes.clone(),
         CancellationToken::new(),
     )
     .with_update_scanner(scanner.clone())
     .with_source_materializer(Arc::new(GitSource))
-    .with_entitlements(Arc::new(Entitlements {
-        automatic: true.into(),
-        guardrails: true.into(),
-    }))
+    .with_entitlements(entitlements.clone())
     .with_alerts(alerts.clone());
     for (behavior, failed, kind) in [
         ("Notify", false, "StackGitUpdateAvailable"),
@@ -333,6 +343,27 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
         alerts.0.lock().unwrap().clear();
         let calls = runtime.apply_calls.lock().unwrap().len();
         let cached_before = scanner.cached_calls.load(Ordering::SeqCst);
+        if kind == "StackGitAutoUpdated" {
+            // First observe this revision without automatic deployment. A subsequent healthy
+            // sync can apply the saved observation after the entitlement becomes available.
+            entitlements.automatic.store(false, Ordering::Relaxed);
+            service
+                .run_update_checks(false, &CancellationToken::new())
+                .await
+                .unwrap();
+            assert_eq!(runtime.apply_calls.lock().unwrap().len(), calls);
+            assert!(
+                alerts
+                    .0
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|event| event.alert_type == "StackGitUpdateAvailable")
+            );
+            entitlements.automatic.store(true, Ordering::Relaxed);
+            sqlx::query("UPDATE gitrepositoryrefs SET lastsyncedat=clock_timestamp() WHERE gitrepositoryid=$1")
+                .bind(repo).execute(pool).await.unwrap();
+        }
         service
             .run_update_checks(false, &CancellationToken::new())
             .await
@@ -356,7 +387,7 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
                     .has_drift
             );
         }
-        let observations = alerts.0.lock().unwrap();
+        let observations = alerts.0.lock().unwrap().clone();
         let observation = observations
             .iter()
             .find(|a| a.resource_id == stack.id && a.alert_type == kind)
@@ -372,6 +403,36 @@ async fn verify_git_update_producers(pool: &sqlx::PgPool, admin: &ActorPrincipal
             assert!(observation.info["UpdatedCommitSha"].is_null());
         }
         if behavior == "Notify" {
+            let change_count = changes.0.load(Ordering::SeqCst);
+            for _ in 0..2 {
+                sqlx::query("UPDATE gitrepositoryrefs SET lastsyncedat=clock_timestamp() WHERE gitrepositoryid=$1").bind(repo).execute(pool).await.unwrap();
+                alerts.0.lock().unwrap().clear();
+                service
+                    .run_update_checks(false, &CancellationToken::new())
+                    .await
+                    .unwrap();
+                assert!(
+                    alerts
+                        .0
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .any(|event| event.alert_type == kind)
+                );
+                assert_eq!(
+                    store
+                        .get_authorized(admin.actor_id, true, stack.id)
+                        .await
+                        .unwrap()
+                        .row_version,
+                    persisted.row_version
+                );
+            }
+            assert_eq!(
+                scanner.cached_calls.load(Ordering::SeqCst),
+                cached_before + 1
+            );
+            assert_eq!(changes.0.load(Ordering::SeqCst), change_count);
             assert_eq!(runtime.apply_calls.lock().unwrap().len(), calls);
         }
     }

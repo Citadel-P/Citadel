@@ -39,8 +39,18 @@ impl From<AuthorizedResource<crate::Stack>> for StackConfig {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StackCatalogGit {
+    pub git_repository_name: Option<String>,
+    pub branch: Option<String>,
+    pub has_matching_applied_commit: bool,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct StackFilter {
+    pub catalog: bool,
+    pub limit: Option<i64>,
     pub resource_ids: Option<Vec<Uuid>>,
     pub container_ids: Option<Vec<String>>,
     pub tags: Vec<String>,
@@ -100,4 +110,60 @@ pub struct StackDraft {
     pub tag_ids: Vec<Uuid>,
     pub source_id: Uuid,
     pub source_name: String,
+}
+
+/// Data needed to act on a known update. The candidate query reads this snapshot
+/// only when the current release and healthy ref still match the checked inputs.
+pub struct StackUpdateAction {
+    pub id: Uuid,
+    pub name: String,
+    pub current_stack_release_id: Uuid,
+    pub row_version: i64,
+    pub behavior: StackUpdateBehavior,
+    pub service_only_supported: bool,
+    pub pending_sync_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub branch: Option<String>,
+    pub repository_name: Option<String>,
+    pub applied_commit: Option<String>,
+    pub stack_update_state: StackUpdateState,
+}
+
+impl TryFrom<Stack> for StackUpdateAction {
+    type Error = StackError;
+    fn try_from(stack: Stack) -> Result<Self, StackError> {
+        let spec = stack.spec.ok_or(StackError::NotFound)?;
+        let service_only_supported = spec.supports_service_auto_deploy(stack.platform_type);
+        let (behavior, branch) = match spec {
+            StackSpec::Git {
+                update_behavior,
+                branch,
+                ..
+            } => (update_behavior, Some(branch)),
+            StackSpec::WebEditor {
+                update_behavior, ..
+            } => (update_behavior, None),
+        };
+        let (repository_name, applied_commit) = stack
+            .source
+            .map(|source| {
+                (
+                    source.git_repository_name,
+                    Some(source.resolved_commit_sha).filter(|s| !s.is_empty()),
+                )
+            })
+            .unwrap_or_default();
+        Ok(Self {
+            id: stack.id,
+            name: stack.name,
+            current_stack_release_id: stack.current_stack_release_id,
+            row_version: stack.row_version,
+            behavior,
+            service_only_supported,
+            pending_sync_at: None,
+            branch,
+            repository_name,
+            applied_commit,
+            stack_update_state: stack.stack_update_state,
+        })
+    }
 }

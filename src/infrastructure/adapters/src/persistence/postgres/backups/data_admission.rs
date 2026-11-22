@@ -220,6 +220,10 @@ async fn release_recovered_owner(
         .bind(repository).bind(owner).bind(attempt).fetch_one(&mut **tx).await.map_err(storage)?;
     if safe {
         release(tx, repository, owner, policy, false).await?;
+        sqlx::query("SELECT pg_notify('citadel_resource_recovery','backup')")
+            .execute(&mut **tx)
+            .await
+            .map_err(storage)?;
     }
     Ok(())
 }

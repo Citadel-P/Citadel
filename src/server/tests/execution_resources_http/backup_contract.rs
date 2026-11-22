@@ -46,7 +46,10 @@ pub(super) async fn verify(pool: &sqlx::PgPool, admin: &ActorPrincipal, policy: 
     let detail = store.get_policy(id).await.unwrap();
     assert!(detail.tags.iter().any(|v| v.id == tag));
     assert_eq!(detail.latest_run.as_ref().unwrap().id, run);
-    let list = store.list_policies(admin.actor_id, true).await.unwrap();
+    let list = store
+        .list_policies(admin.actor_id, true, None)
+        .await
+        .unwrap();
     let listed = list.iter().find(|v| v.id == id).unwrap();
     assert_eq!(listed.latest_run.as_ref().unwrap().id, run);
     assert!(listed.tags.iter().any(|v| v.id == tag));

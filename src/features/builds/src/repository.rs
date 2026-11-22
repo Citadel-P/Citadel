@@ -98,7 +98,7 @@ pub trait BuildRepository: Send + Sync {
     fn claim_next<'a>(
         &'a self,
         stale_before: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<Option<BuildClaim>, BuildError>>;
+    ) -> BoxFuture<'a, Result<BuildClaimOutcome, BuildError>>;
     /// Atomically finish the owned active attempt and enqueue its optional observation.
     /// A Queued capacity-wait result instead defers proven-not-started work,
     /// preserving its pinned commit and original queue deadline.

@@ -318,6 +318,7 @@ async fn verify_queued_snapshot(pool: &sqlx::PgPool, builds: &BuildService, proj
         .claim_next(chrono::Utc::now() - chrono::Duration::hours(1))
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_eq!(claim.run.id, run.id);
     assert_eq!(claim.project.builder_kind, original.builder_kind);

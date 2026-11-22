@@ -23,6 +23,7 @@ pub(super) enum Key {
     Discover(Purpose),
     Batch(Purpose),
     Eligibility,
+    GitRef(Uuid),
 }
 struct Calendar {
     expression: String,
@@ -74,7 +75,7 @@ fn configure(
 
 pub(super) enum Output {
     Next(Option<Time>),
-    Definition(u64, Option<ScheduleDefinition>),
+    Definition(u64, Option<Box<ScheduleDefinition>>),
     BatchFinished,
     Eligibility,
     Deadline(Option<Time>),
@@ -91,6 +92,7 @@ pub(super) struct Planner {
     pending_reads: BTreeSet<(Purpose, Uuid)>,
     overflow: bool,
     fixed: BTreeMap<Purpose, Instant>,
+    pending_refs: BTreeSet<Uuid>,
     first_batch: Instant,
 }
 impl Planner {
@@ -120,6 +122,7 @@ impl Planner {
             }
         }
         Self {
+            pending_refs: Default::default(),
             queue,
             calendar: Default::default(),
             generation: 0,
@@ -204,6 +207,14 @@ impl Planner {
         }
     }
 
+    pub fn wake_ref(&mut self, reference: Uuid) {
+        if self.pending_refs.len() < 128 || self.pending_refs.contains(&reference) {
+            self.pending_refs.insert(reference);
+            self.queue.wake(Key::GitRef(reference));
+        } else {
+            self.queue.wake(Key::Batch(Purpose::StackGit));
+        }
+    }
     pub fn request(&self, key: Key) -> super::coordinator::Request {
         let recurrence = match key {
             Key::Calendar(p, id) => self.calendar.get(&(p, id)).map(|c| c.parsed.clone()),
@@ -266,6 +277,12 @@ impl Planner {
                 h.set_deadline(p, clock.project(*anchor));
                 Some(Deadline::Elapsed(*anchor))
             }
+            (Key::GitRef(_), outcome) => {
+                if let Err(error) = outcome {
+                    tracing::warn!(%error,"Stack Git check failed; the scheduled fallback will reconcile");
+                }
+                None
+            }
             (_, Err(e)) => {
                 tracing::warn!(%e,?key,"Schedule reconciliation will retry");
                 Some(Deadline::after(match key {
@@ -281,7 +298,7 @@ impl Planner {
                 if let Some(stale) = self.stale.get_mut(&p) {
                     stale.remove(&id);
                 }
-                configure(&mut self.queue, &mut self.calendar, p, id, def);
+                configure(&mut self.queue, &mut self.calendar, p, id, def.map(|d| *d));
                 None
             }
             (Key::Discover(p), Ok(Output::Page(epoch, defs))) => self.page(p, epoch, defs),
@@ -313,6 +330,11 @@ impl Planner {
             _ => unreachable!("reconciliation result must match its request"),
         };
         self.queue.finish(key, next);
+        if let Key::GitRef(id) = key
+            && !self.queue.contains(key)
+        {
+            self.pending_refs.remove(&id);
+        }
         if let Key::Load(p, id) = key
             && !self.queue.contains(key)
         {

@@ -28,7 +28,10 @@ async fn repeated_platforms_coalesce_and_distinct_platforms_remain_bounded() {
     events.push(RuntimeNotification::BackupCoverage(second));
     let mut changes = source(events);
     assert!(changes.collect().await.unwrap());
-    assert_eq!(changes.pending, BTreeSet::from([id, second]));
+    assert_eq!(
+        changes.pending,
+        BTreeSet::from([(id, None), (second, None)])
+    );
     let mut changes = source(
         (0..300)
             .map(|_| RuntimeNotification::BackupCoverage(Uuid::now_v7()))

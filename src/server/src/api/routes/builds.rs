@@ -1,4 +1,5 @@
 //! Builds HTTP routes, authorization and local request handling.
+use crate::api::mutation_notifications::CommittedOwner;
 use crate::api::resources::builds::authorized::{authorized_pools, authorized_projects};
 use crate::api::resources::builds::patch::typed_patch;
 use crate::{
@@ -819,13 +820,16 @@ async fn project_response(
     project: citadel_builds::BuildProject,
     headers: &HeaderMap,
 ) -> HttpResult {
+    let owner = CommittedOwner(project.id);
     let mut projects = api_result(
         authorized_projects(state.builds.store().as_ref(), principal, vec![project])
             .await
             .map_err(map_error),
         headers,
     )?;
-    Ok(no_store(Json(projects.remove(0)).into_response()))
+    Ok(no_store(
+        (Extension(owner), Json(projects.remove(0))).into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -1098,7 +1102,7 @@ async fn archive_project(
             .map_err(map_error),
         &headers,
     )?;
-    Ok(StatusCode::NO_CONTENT.into_response())
+    Ok((Extension(CommittedOwner(id)), StatusCode::NO_CONTENT).into_response())
 }
 
 #[utoipa::path(
@@ -1319,11 +1323,14 @@ async fn queue_run(
         &headers,
     )?;
     Ok(no_store(
-        Json(api_result(
-            BuildRunView::try_from(run).map_err(ApiError::internal),
-            &headers,
-        )?)
-        .into_response(),
+        (
+            Extension(CommittedOwner(id)),
+            Json(api_result(
+                BuildRunView::try_from(run).map_err(ApiError::internal),
+                &headers,
+            )?),
+        )
+            .into_response(),
     ))
 }
 
@@ -1503,7 +1510,11 @@ async fn cancel_run(
         &headers,
     )?;
     api_result(state.builds.cancel(id).await.map_err(map_error), &headers)?;
-    Ok(StatusCode::NO_CONTENT.into_response())
+    Ok((
+        Extension(CommittedOwner(run.build_project_id)),
+        StatusCode::NO_CONTENT,
+    )
+        .into_response())
 }
 
 #[utoipa::path(

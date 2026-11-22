@@ -221,7 +221,7 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 442);
+        assert_eq!(operations(&full), 443);
         assert!(
             public["paths"]
                 .get("/api/v1/installation/settings")

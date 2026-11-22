@@ -181,11 +181,12 @@ async fn git_and_backup_realtime_rows_include_actor_capabilities() {
                         .flat_map(|batch| &batch.rows)
                         .find(|row| row["id"] == json!(id))
                         .unwrap();
-                    assert_eq!(
-                        row["capabilities"],
-                        json!({"canRead":true,"canWrite":writable,"canExecute":executable}),
-                        "{group_name}"
-                    );
+                    let mut expected =
+                        json!({"canRead":true,"canWrite":writable,"canExecute":executable});
+                    if kind == ResourceType::BackupPolicy {
+                        expected["canRestore"] = json!(principal.is_administrator());
+                    }
+                    assert_eq!(row["capabilities"], expected, "{group_name}");
                 }
             }
             assert!(

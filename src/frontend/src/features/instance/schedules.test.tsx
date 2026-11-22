@@ -63,7 +63,7 @@ function groupCounts(counts: Record<string, number>) {
 }
 
 it('keeps the active filter and page while a committed change refreshes the catalog', async () => {
-  groupCounts({ Script: 30 });
+  groupCounts({ Script: 60 });
   let renamed = false;
   const seen: string[] = [];
   server.use(
@@ -104,6 +104,7 @@ it('keeps the active filter and page while a committed change refreshes the cata
   expect(screen.getByRole('link', { name: '2', current: 'page' })).toBeVisible();
   expect(seen.at(-1)).toContain('resource=script');
   expect(seen.at(-1)).toContain('page=2');
+  expect(seen.at(-1)).toContain('pageSize=50');
   await user.type(screen.getByRole('searchbox'), 'nightly');
   await waitFor(() => {
     const last = new URLSearchParams(seen.at(-1));
@@ -130,7 +131,7 @@ it('reuses the instance page when its group is closed and reopened', async () =>
   await user.click(group);
   expect(await screen.findByText('Core release checks')).toBeVisible();
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
-  expect(reads).toEqual(['?resource=instance']);
+  expect(reads).toEqual(['?resource=instance&pageSize=50']);
   await user.click(group);
   // Until the first realtime snapshot arrives, reopening can reconcile an old page.
   const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_000);
@@ -248,7 +249,7 @@ it('groups both Stack purposes together and keeps their resource links and times
 });
 
 it('pages images and scripts independently and only reads expanded groups', async () => {
-  groupCounts({ Image: 200, Script: 35 });
+  groupCounts({ Image: 200, Script: 75 });
   const reads: string[] = [];
   server.use(
     http.get(url, ({ request }) => {
@@ -257,7 +258,7 @@ it('pages images and scripts independently and only reads expanded groups', asyn
       const size = Number(params.get('pageSize') ?? 25);
       const offset = (Number(params.get('page') ?? 1) - 1) * size;
       reads.push(`${purpose}:${offset}`);
-      const total = purpose === 'Image' ? 200 : 35;
+      const total = purpose === 'Image' ? 200 : 75;
       return HttpResponse.json({
         items: Array.from({ length: Math.min(size, total - offset) }, (_, i) => ({
           purpose,
@@ -280,31 +281,31 @@ it('pages images and scripts independently and only reads expanded groups', asyn
   await user.click(scripts);
   await screen.findByText('Script 15');
   const pager = (name: string) => within(screen.getByRole('navigation', { name: name + ' schedule pages' }));
-  await user.click(pager('Image').getByRole('link', { name: '8' }));
-  expect(await screen.findByText('Image 176')).toBeVisible();
+  await user.click(pager('Image').getByRole('link', { name: '4' }));
+  expect(await screen.findByText('Image 151')).toBeVisible();
   expect(pager('Script').getByRole('link', { name: '1', current: 'page' })).toBeVisible();
   expect(screen.queryByText('Image 1')).toBeNull();
   expect(screen.getByText('Script 1')).toBeVisible();
-  expect(reads).toEqual(['Image:0', 'Script:0', 'Image:175']);
+  expect(reads).toEqual(['Image:0', 'Script:0', 'Image:150']);
   await user.click(pager('Script').getByRole('link', { name: 'Go to next page' }));
-  await screen.findByText('Script 35');
-  expect(pager('Image').getByRole('link', { name: '8', current: 'page' })).toBeVisible();
+  await screen.findByText('Script 75');
+  expect(pager('Image').getByRole('link', { name: '4', current: 'page' })).toBeVisible();
   const readCount = reads.length;
   await act(async () => live.changed?.({ catalogChanged: false, activeBatches: [] }));
   await user.click(images);
   await user.click(images);
-  expect(await screen.findByText('Image 176')).toBeVisible();
+  expect(await screen.findByText('Image 151')).toBeVisible();
   expect(reads).toHaveLength(readCount);
   await user.click(images);
   expect(screen.queryByRole('navigation', { name: 'Image schedule pages' })).toBeNull();
   await act(async () => live.changed?.({ catalogChanged: true, activeBatches: [] }));
-  await waitFor(() => expect(reads.at(-1)).toBe('Script:25'));
+  await waitFor(() => expect(reads.at(-1)).toBe('Script:50'));
   await user.click(images);
-  await waitFor(() => expect(reads.slice(readCount)).toEqual(['Script:25', 'Image:175']));
-  expect(await screen.findByText('Image 176')).toBeVisible();
+  await waitFor(() => expect(reads.slice(readCount)).toEqual(['Script:50', 'Image:150']));
+  expect(await screen.findByText('Image 151')).toBeVisible();
   await user.click(pager('Image').getByRole('link', { name: '1' }));
   expect(await screen.findByText('Image 1')).toBeVisible();
-  expect(screen.getByText('Script 26')).toBeVisible();
+  expect(screen.getByText('Script 51')).toBeVisible();
 });
 
 it('finds confirmed blockers outside the first page and links the actual scheduled run', async () => {

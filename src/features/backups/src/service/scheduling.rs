@@ -8,7 +8,7 @@ impl BackupService {
     ) -> Result<(), BackupError> {
         self.ensure_automated_operations().await?;
         self.store.enqueue_webhook(id, expected_webhook).await?;
-        self.changed();
+        self.changed(BackupChange::Policy(id));
         Ok(())
     }
 
@@ -22,7 +22,7 @@ impl BackupService {
         }
         let accepted = self.store.enqueue_scheduled_backup(id, minute).await?;
         if accepted {
-            self.changed();
+            self.changed(BackupChange::Policy(id));
         }
         Ok(accepted)
     }

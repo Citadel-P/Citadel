@@ -21,6 +21,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .unwrap();
         assert_eq!(claim.run.id, run.id);
         claims.push(claim);
@@ -266,6 +267,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .is_none(),
         "unresolved Project ownership must block claims before selecting any executor"
     );
@@ -689,6 +691,7 @@ pub(super) async fn verify_target_fairness(
         .claim_next(Utc::now() - Duration::minutes(5))
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_eq!(old.run.id, runs[0].id);
     // Keep the slow connection in Preparing. The second preparation slot must
@@ -697,6 +700,7 @@ pub(super) async fn verify_target_fairness(
         .claim_next(Utc::now() - Duration::minutes(5))
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_eq!(healthy.run.id, runs[4].id);
     assert!(
@@ -704,6 +708,7 @@ pub(super) async fn verify_target_fairness(
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .is_none()
     );
     let mut deferred = success_result('a');
@@ -715,6 +720,7 @@ pub(super) async fn verify_target_fairness(
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .is_none(),
         "target cooldown covers sibling projects, not just the failed run"
     );
@@ -727,6 +733,7 @@ pub(super) async fn verify_target_fairness(
         .claim_next(Utc::now() - Duration::minutes(5))
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_eq!(
         resumed.run.id, runs[1].id,
@@ -748,6 +755,7 @@ pub(super) async fn verify_target_fairness(
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .is_none()
     );
     store
@@ -760,6 +768,7 @@ pub(super) async fn verify_target_fairness(
         .claim_next(Utc::now() - Duration::minutes(5))
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_eq!(sibling.run.id, runs[2].id);
     assert_eq!(

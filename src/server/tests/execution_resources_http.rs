@@ -161,7 +161,7 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
             ),
         )
         .with_entitlements(build_entitlement.clone())
-        .with_change_notifier(change_callback(Some(hub.clone()), "Build"))
+        .with_change_notifier(citadel_server::realtime::build_change_callback(Some(hub.clone())))
         .with_pool_checker(Arc::new(
             citadel_adapters::connectors::agent::build_pool_checker::AgentBuildPoolChecker {
                 admission: build_store.clone(),
@@ -185,7 +185,9 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
         .with_repository_change_notifier(citadel_server::realtime::backup_repository_callback(
             Some(hub.clone()),
         ))
-        .with_change_notifier(change_callback(Some(hub.clone()), "BackupPolicy"))
+        .with_change_notifier(citadel_server::realtime::backup_change_callback(Some(
+            hub.clone(),
+        )))
         .with_entitlements(backup_entitlement.clone()),
     );
     let (stacks, stack_entitlement) = stack_webhooks::service(pool.clone());

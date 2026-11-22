@@ -56,12 +56,13 @@ impl PostgresBackupPersistence {
         &self,
         actor: ActorId,
         administrator: bool,
+        owner: Option<Uuid>,
     ) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>> {
         Box::pin(async move {
             let query = format!(
                 r#"{AUTHORIZED_CTE}
 SELECT policy.* FROM backuppolicies policy
-WHERE policy.archivedat IS NULL
+WHERE policy.archivedat IS NULL AND ($5::uuid IS NULL OR policy.id=$5)
   AND ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
       SELECT 1 FROM actor_scope scope
       JOIN resourceaccesses access ON access.actorid=scope.actorid
@@ -75,6 +76,7 @@ ORDER BY policy.name,policy.id"#
                 .bind(ResourceType::BackupPolicy as i32)
                 .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
+                .bind(owner)
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?

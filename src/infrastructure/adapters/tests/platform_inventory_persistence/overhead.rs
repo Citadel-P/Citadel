@@ -232,3 +232,77 @@ async fn health_and_statistics_share_admission_without_blocking_ordinary_reads()
     tasks.drain(Duration::from_secs(6)).await.unwrap();
     pool.close().await;
 }
+
+#[tokio::test]
+#[ignore = "measures unchanged inventory on a dedicated disposable PostgreSQL database"]
+async fn measure_complete_inventory_freshness() {
+    let url = std::env::var("CITADEL_PLATFORM_DATABASE_URL").unwrap();
+    MigrationRunner::migrate(&url).await.unwrap();
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&url)
+        .await
+        .unwrap();
+    sqlx::query("CREATE EXTENSION IF NOT EXISTS pgstattuple")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let store = PostgresInventoryProjectionStore::new(pool.clone());
+    for count in [1, 500] {
+        let platform = Uuid::now_v7();
+        seed_platform(&pool, platform, Uuid::now_v7(), Uuid::now_v7()).await;
+        let mut inventory = snapshot(platform, true);
+        let swarm = inventory.swarm.as_mut().unwrap();
+        swarm.services[0].labels.clear();
+        swarm.services[0] = swarm.services[0].clone().normalize_ownership();
+        let template = swarm.configs[0].clone();
+        for i in 1..count {
+            let mut config = template.clone();
+            config.id = format!("extra-{i}");
+            config.name = config.id.clone();
+            swarm.configs.push(config);
+        }
+        store.persist(&inventory).await.unwrap();
+        let start: String = sqlx::query_scalar("SELECT pg_current_wal_insert_lsn()::text")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let dead_before: i64 = sqlx::query_scalar(
+            "SELECT dead_tuple_count FROM pgstattuple('swarmconfigprojections')",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let elapsed = std::time::Instant::now();
+        for _ in 0..5 {
+            inventory.observed_at += chrono::Duration::seconds(1);
+            store.persist(&inventory).await.unwrap();
+        }
+        let duration = elapsed.elapsed();
+        let wal: i64 = sqlx::query_scalar(
+            "SELECT pg_wal_lsn_diff(pg_current_wal_insert_lsn(),$1::pg_lsn)::bigint",
+        )
+        .bind(start)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let dead: i64 = sqlx::query_scalar(
+            "SELECT dead_tuple_count FROM pgstattuple('swarmconfigprojections')",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let fresh: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM swarmconfigprojections WHERE platformid=$1 AND observedat=$2",
+        )
+        .bind(platform)
+        .bind(inventory.observed_at)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(fresh, count);
+        eprintln!(
+            "five full refreshes: {count} configs + 5 other Swarm rows; elapsed={duration:?}, database WAL={wal} bytes, config dead tuples {dead_before} -> {dead}"
+        );
+    }
+}

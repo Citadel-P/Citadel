@@ -1,5 +1,6 @@
 mod access;
 mod application;
+mod builds;
 mod jobs;
 mod logs;
 mod platform_stats;

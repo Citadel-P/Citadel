@@ -342,6 +342,18 @@ schema_model! {
 }
 
 schema_model! {
+    citadel_stacks::StackCatalogGit =>
+    #[derive(serde::Serialize, utoipa::ToSchema)]
+    #[serde(rename_all = "camelCase")]
+    #[schema(as = StackCatalogGit)]
+    pub struct StackCatalogGitSchema {
+        pub git_repository_name: Option<String>,
+        pub branch: Option<String>,
+        pub has_matching_applied_commit: bool,
+    }
+}
+
+schema_model! {
     citadel_stacks::StackReleaseSource =>
     #[derive(serde::Serialize, utoipa::ToSchema)]
     #[serde(rename_all = "camelCase")]

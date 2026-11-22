@@ -48,7 +48,10 @@ impl BackupService {
         claim: RestoreClaim,
         shutdown: &CancellationToken,
     ) -> Result<bool, BackupError> {
-        self.changed();
+        self.changed(BackupChange::Restore {
+            policy: claim.source.backup_policy_id,
+            restore: claim.run.id,
+        });
         self.progress(
             claim.run.id,
             "Running",
@@ -93,7 +96,10 @@ impl BackupService {
             && result.error_code.as_deref() == Some("HostBusy")
             && self.store.defer_restore(&claim).await?
         {
-            self.changed();
+            self.changed(BackupChange::Restore {
+                policy: claim.source.backup_policy_id,
+                restore: claim.run.id,
+            });
             return Ok(true);
         }
         let confirmed = completion::persist(claim.run.id, shutdown, || async {
@@ -122,7 +128,10 @@ impl BackupService {
                 status.as_str(),
                 message.as_deref().unwrap_or("Restore run completed."),
             );
-            self.changed();
+            self.changed(BackupChange::Restore {
+                policy: claim.source.backup_policy_id,
+                restore: claim.run.id,
+            });
         }
         Ok(true)
     }

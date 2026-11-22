@@ -42,7 +42,7 @@ impl Request {
                 if let Some(d) = &mut def {
                     h.apply_policy(d);
                 }
-                Ok(Output::Definition(self.generation, def))
+                Ok(Output::Definition(self.generation, def.map(Box::new)))
             }
             Key::Discover(p) if p.mode() == ScheduleMode::Calendar => {
                 let mut defs = if h.eligible(p) {
@@ -97,8 +97,13 @@ impl Request {
                     Utc::now(),
                 )))
             }
+            Key::GitRef(reference) => {
+                citadel_runtime::jobs::observe(h.batch(Purpose::StackGit, Some(reference), token))
+                    .await?;
+                Ok(Output::BatchFinished)
+            }
             Key::Batch(p) => {
-                citadel_runtime::jobs::observe(h.batch(p, token)).await?;
+                citadel_runtime::jobs::observe(h.batch(p, None, token)).await?;
                 Ok(Output::BatchFinished)
             }
         }
@@ -118,10 +123,11 @@ pub(crate) async fn run(
 pub(crate) async fn drive(
     h: impl Dispatch,
     mut changes: Box<dyn NotificationSource>,
-    mut git: watch::Receiver<()>,
+    mut git: watch::Receiver<(u64, Uuid)>,
     mut licensing: watch::Receiver<()>,
     cancel: CancellationToken,
 ) -> Result<(), std::convert::Infallible> {
+    let mut git_sequence = git.borrow().0;
     let mut planner = Planner::new(&h);
     let mut work = FuturesUnordered::new();
     let mut release_token = cancel.child_token();
@@ -151,7 +157,7 @@ pub(crate) async fn drive(
                 async move {
                     let pending = request.reconcile(h, due.unwrap_or(clock.wall), &token);
                     let result = match key {
-                        Key::Batch(_) | Key::Calendar(..) => pending.await,
+                        Key::Batch(_) | Key::GitRef(_) | Key::Calendar(..) => pending.await,
                         _ => citadel_runtime::jobs::observe(pending).await,
                     };
                     (key, result)
@@ -182,7 +188,12 @@ pub(crate) async fn drive(
                 planner.notification(msg,h);
             }
             Ok(())=licensing.changed()=>planner.queue.wake(Key::Eligibility),
-            Ok(())=git.changed()=>planner.queue.wake(Key::Batch(Purpose::StackGit)),
+            Ok(())=git.changed()=>{
+                let (sequence,reference) = *git.borrow_and_update();
+                if sequence == git_sequence.wrapping_add(1) { planner.wake_ref(reference); }
+                else { planner.queue.wake(Key::Batch(Purpose::StackGit)); }
+                git_sequence = sequence;
+            },
             Some((key,result))=work.next(),if !work.is_empty()=>planner.finish(key,result,h),
             ()=tokio::time::sleep(delay)=>{}
         }

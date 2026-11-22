@@ -10,10 +10,10 @@ export function useBackupPolicyGroup(id: string) {
   const query = useRead('getBackupPolicy', { id });
   const receive = useCallback(
     (policy: BackupPolicyView, operation: string) => {
-      if (policy.id !== id || operation === 'delete') return;
+      if (policy.id !== id) return;
       const filter = { queryKey: ['getBackupPolicy', { id }], exact: true };
       void queryClient.cancelQueries(filter);
-      queryClient.setQueryData(filter.queryKey, { data: policy });
+      queryClient.setQueryData(filter.queryKey, operation === 'delete' ? null : { data: policy });
     },
     [id, queryClient],
   );

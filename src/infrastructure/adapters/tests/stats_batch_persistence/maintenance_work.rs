@@ -16,20 +16,24 @@ async fn idle_build_claim_uses_active_index_and_skips_recovery_transaction() {
         .connect(&url)
         .await
         .unwrap();
-    sqlx::raw_sql("CREATE TEMP TABLE buildruns(projectid uuid,status text); INSERT INTO buildruns SELECT gen_random_uuid(),'Succeeded' FROM generate_series(1,100000); CREATE INDEX ON buildruns(projectid) WHERE status IN ('Queued','Preparing','Running'); ANALYZE buildruns;")
+    sqlx::raw_sql("CREATE TEMP TABLE buildruns(buildprojectid uuid,status text,nextattemptat timestamptz,queuedat timestamptz,startedat timestamptz,timeoutseconds integer);
+        INSERT INTO buildruns(buildprojectid,status) SELECT gen_random_uuid(),'Succeeded' FROM generate_series(1,100000);
+        CREATE INDEX ON buildruns(buildprojectid) WHERE status IN ('Queued','Preparing','Running');
+        ANALYZE buildruns;")
         .execute(&pool).await.unwrap();
     let store = PostgresBuildRepository::new(pool.clone());
     for _ in 0..10 {
-        assert!(
-            store
-                .claim_next(chrono::Utc::now())
-                .await
-                .unwrap()
-                .is_none()
-        );
+        let outcome = store.claim_next(chrono::Utc::now()).await.unwrap();
+        assert!(outcome.claim.is_none() && outcome.change.is_none());
     }
-    let plan: serde_json::Value = sqlx::query_scalar("EXPLAIN(ANALYZE,BUFFERS,TIMING OFF,FORMAT JSON) SELECT EXISTS(SELECT 1 FROM buildruns WHERE status IN ('Queued','Preparing','Running'))")
-        .fetch_one(&pool).await.unwrap();
+    let plan: serde_json::Value = sqlx::query_scalar(concat!(
+        "EXPLAIN(ANALYZE,BUFFERS,TIMING OFF,FORMAT JSON) ",
+        include_str!("../../src/persistence/postgres/builds/claim_due.sql")
+    ))
+    .bind(chrono::Utc::now())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert!(
         plan[0]["Plan"]["Local Hit Blocks"]
             .as_i64()
@@ -37,10 +41,10 @@ async fn idle_build_claim_uses_active_index_and_skips_recovery_transaction() {
             < 10,
         "{plan}"
     );
-    // Each active status must enter the unchanged authoritative path. The shadow
+    // Each due or overdue status must enter the claim transaction. The shadow
     // table then produces a storage error instead of falsely reporting no work.
     for status in ["Queued", "Preparing", "Running"] {
-        sqlx::query("INSERT INTO buildruns VALUES(gen_random_uuid(),$1)")
+        sqlx::query("INSERT INTO buildruns(buildprojectid,status,startedat,timeoutseconds) VALUES(gen_random_uuid(),$1,now()-interval '1 day',60)")
             .bind(status)
             .execute(&pool)
             .await

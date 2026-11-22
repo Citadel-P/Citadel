@@ -18,8 +18,36 @@ impl StackRepository for PostgresStackRepository {
         after: Uuid,
         images: bool,
         limit: i64,
-    ) -> BoxFuture<'_, Result<Vec<Uuid>, StackError>> {
-        self.update_check_candidates_impl(after, images, limit)
+        reference: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<Vec<StackCheckCandidate>, StackError>> {
+        self.update_check_candidates_impl(after, images, limit, reference)
+    }
+
+    fn pending_git_action(
+        &self,
+        id: Uuid,
+        row_version: i64,
+        inputs: GitCheckInputs,
+    ) -> BoxFuture<'_, Result<Option<citadel_stacks::StackUpdateAction>, StackError>> {
+        Box::pin(update_checks::pending_git_action(
+            &self.pool,
+            id,
+            row_version,
+            inputs,
+        ))
+    }
+    fn claim_git_apply_retry(
+        &self,
+        id: Uuid,
+        row_version: i64,
+        inputs: GitCheckInputs,
+    ) -> BoxFuture<'_, Result<bool, StackError>> {
+        Box::pin(update_checks::claim_git_apply_retry(
+            &self.pool,
+            id,
+            row_version,
+            inputs,
+        ))
     }
 
     fn save_update_check<'a>(
@@ -28,8 +56,9 @@ impl StackRepository for PostgresStackRepository {
         administrator: bool,
         expected: &'a citadel_stacks::Stack,
         state: &'a StackUpdateState,
+        git_inputs: Option<GitCheckInputs>,
     ) -> BoxFuture<'a, Result<(), StackError>> {
-        self.save_update_check_impl(actor, administrator, expected, state)
+        self.save_update_check_impl(actor, administrator, expected, state, git_inputs)
     }
 
     fn enqueue_webhook<'a>(

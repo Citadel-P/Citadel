@@ -14,7 +14,14 @@ impl BackupService {
         }
         if self.store.cancel_backup(id).await? {
             self.progress(id, "Cancelled", "Backup cancelled.");
-            self.changed();
+            self.changed(self.store.run_policy_id(id).await.map_or(
+                BackupChange::Resync,
+                |policy| BackupChange::Run {
+                    policy,
+                    run: id,
+                    retention: false,
+                },
+            ));
             Ok(())
         } else {
             Err(BackupError::Conflict("Backup Run is not active.".into()))
@@ -34,7 +41,13 @@ impl BackupService {
         }
         if self.store.cancel_restore(id).await? {
             self.progress(id, "Cancelled", "Restore cancelled.");
-            self.changed();
+            self.changed(self.store.restore_policy_id(id).await.map_or(
+                BackupChange::Resync,
+                |policy| BackupChange::Restore {
+                    policy,
+                    restore: id,
+                },
+            ));
             Ok(())
         } else {
             Err(BackupError::Conflict("Restore Run is not active.".into()))

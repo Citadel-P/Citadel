@@ -176,7 +176,7 @@ use citadel_adapters::persistence::postgres::platforms::edge::store::PostgresEdg
         let mut input:BuildProjectConfiguration=serde_json::from_value(json!({"name":format!("project-{suffix}"),"enabled":true,"gitRepositoryId":repository,"branch":"main","platformId":platform,"registryId":registry,"imageRepository":format!("citadel-acceptance-{suffix}"),"tagTemplates":["{shortSha}"],"timeoutSeconds":120,"retentionRunCount":2})).unwrap();
         input.validate().unwrap();
         let store=Arc::new(PostgresBuildRepository::new(pool.clone()));let project=store.create(actor,&input).await.unwrap();
-        let queued=store.enqueue(actor,project.id,"Manual").await.unwrap();let claim=store.claim_next(chrono::Utc::now()-chrono::Duration::minutes(5)).await.unwrap().unwrap();
+        let queued=store.enqueue(actor,project.id,"Manual").await.unwrap();let claim=store.claim_next(chrono::Utc::now()-chrono::Duration::minutes(5)).await.unwrap().claim.unwrap();
         assert_eq!(claim.run.id,queued.id);
         let credentials=Arc::new(PostgresBuildRegistryCredentialResolver::new(pool.clone()));
         let executor=match client {
