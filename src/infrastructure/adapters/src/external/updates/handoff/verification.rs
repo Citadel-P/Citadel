@@ -244,7 +244,7 @@ pub(super) async fn source_image(
     release_image(docker, &intent.operation.plan.source).await
 }
 
-pub(super) async fn release_image(
+pub(in crate::external::updates) async fn release_image(
     docker: &LocalDocker<'_>,
     identity: &citadel_updates::CoreIdentity,
 ) -> Result<String, UpdateError> {

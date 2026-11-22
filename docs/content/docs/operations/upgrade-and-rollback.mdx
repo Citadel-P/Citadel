@@ -297,7 +297,10 @@ as `0:0` **inside a container on that daemon**; this maps to its unprivileged ho
 Follow the [registration instructions](https://github.com/Citadel-P/Citadel/blob/main/docs/DEVELOPMENT.md)
 using the existing Compose project and ordered files. Enabling the setting alone does
 not create a registration. Citadel checks the release signature, architecture,
-migration history and protocol compatibility automatically.
+migration history and protocol compatibility automatically. Review also checks that
+changing `CITADEL_IMAGE` in the installer `.env` selects the target image. If this
+check fails, inspect `services.server.image` in the registered Compose files,
+including overrides.
 
 Select **Update and restart** to approve the reviewed version. Citadel waits for
 active work, creates a recovery checkpoint and replaces Core. Running managed
@@ -311,8 +314,10 @@ after reload and a toast confirms the successful update; the update remains in *
 **Reload portal** is available if automatic reload cannot complete. Closing the
 browser does not cancel an approved update.
 
-If verification or cleanup fails, an error toast appears and the recovery banner
-stays visible. Citadel retains maintenance and recovery state.
+**Update failed — maintenance released** means that attempt no longer blocks the
+installation. Check **Activities** for its outcome. **Operator recovery required**
+means the installation still needs recovery. If Core committed the target but
+could not finish cleanup, keep both Core images and the exited updater helper.
 Preserve the checkpoint and logs for operator recovery. It does not automatically
 roll back a migrated database. Use the manual procedure below for unsupported
 installations.

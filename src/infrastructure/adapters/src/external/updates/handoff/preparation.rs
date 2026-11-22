@@ -187,7 +187,7 @@ pub(super) fn record_fixture(state: &super::super::JournalDirectory, intent: &He
             target_catalog_sha256: plan.target.catalog_sha256.clone(),
             installer_format: citadel_updates::INSTALLER_FORMAT,
             update_protocol: citadel_updates::UPDATE_PROTOCOL,
-            migration_catalog: citadel_database::MIGRATION_MANIFEST_JSON.into(),
+            migration_catalog: super::tests::target_catalog(),
             agent_protocol: citadel_contracts::EDGE_AGENT_PROTOCOL_VERSION,
         }),
         configuration: CheckedCoreReplacement {

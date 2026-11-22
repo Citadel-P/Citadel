@@ -71,7 +71,7 @@ impl UpdateInstallationRuntime for DockerUpdateInstallation {
         })
     }
 
-    fn validate_database<'a>(
+    fn validate_replacement<'a>(
         &'a self,
         plan: &'a citadel_updates::UpdatePlan,
         cancellation: &'a CancellationToken,
@@ -80,7 +80,7 @@ impl UpdateInstallationRuntime for DockerUpdateInstallation {
             let (response, image, architecture) = self
                 .client
                 .exchange(
-                    HostUpdateRequest::CheckDatabase(Box::new(plan.clone())),
+                    HostUpdateRequest::CheckReplacement(Box::new(plan.clone())),
                     cancellation,
                 )
                 .await?;
@@ -88,7 +88,9 @@ impl UpdateInstallationRuntime for DockerUpdateInstallation {
                 return Err(super::super::docker::failed());
             }
             match response {
-                HostUpdateResponse::DatabaseChecked { plan_id, blocker } if plan_id == plan.id => {
+                HostUpdateResponse::ReplacementChecked { plan_id, blocker }
+                    if plan_id == plan.id =>
+                {
                     match blocker {
                         Some(message) => Err(UpdateError::Conflict(message)),
                         None => Ok(()),
@@ -144,8 +146,12 @@ impl UpdateInstallationRuntime for DockerUpdateInstallation {
                     cancellation,
                 )
                 .await?;
-            let HostUpdateResponse::Checked(checked) = response else {
-                return Err(super::super::docker::failed());
+            let checked = match response {
+                HostUpdateResponse::Checked(checked) => checked,
+                HostUpdateResponse::ReviewBlocked { reason } => {
+                    return Err(UpdateError::Conflict(reason));
+                }
+                _ => return Err(super::super::docker::failed()),
             };
             let agents =
                 crate::persistence::postgres::updates::read_update_agent_versions(&self.pool)

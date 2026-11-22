@@ -94,6 +94,12 @@ async fn replacement_preserves_inputs_and_rejects_other_resolved_changes() {
             .await;
         assert_eq!(result.is_ok(), change == "normal", "{change}: {result:?}");
         assert_eq!(runner.calls.load(Ordering::SeqCst), 2);
+        if change == "ignored-image" {
+            assert!(
+                matches!(&result, Err(citadel_updates::UpdateError::Conflict(reason))
+                if reason.contains("CITADEL_IMAGE") && reason.contains("services.server.image"))
+            );
+        }
         if change != "edit-input" {
             assert_eq!(std::fs::read(&path).unwrap(), before);
         }
@@ -161,6 +167,36 @@ async fn actual_compose_replacement_preserves_the_installer_and_edge_overlay() {
         assert_eq!(checked.target_image, image);
         assert_eq!(fixture.inputs.capture().unwrap(), before);
     }
+}
+
+#[tokio::test]
+#[ignore = "Requires Docker Compose CLI; resolves disposable files without a daemon"]
+async fn actual_compose_review_reports_a_pinned_core_override_without_editing_inputs() {
+    let mut fixture = Fixture::new(false);
+    let pinned = fixture.inputs.directory.join("pinned.yaml");
+    std::fs::write(
+        &pinned,
+        format!(
+            "services:\n  server:\n    image: ghcr.io/citadel-p/citadel@sha256:{}\n",
+            "a".repeat(64)
+        ),
+    )
+    .unwrap();
+    fixture.inputs.compose_files.push(pinned);
+    let before = fixture.inputs.capture().unwrap();
+    let target = format!("ghcr.io/citadel-p/citadel@sha256:{}", "b".repeat(64));
+    let result = fixture
+        .inputs
+        .check_replacement(
+            &target,
+            &citadel_processes::SystemProcess,
+            &CancellationToken::new(),
+        )
+        .await;
+    assert!(
+        matches!(result, Err(citadel_updates::UpdateError::Conflict(message)) if message.contains("CITADEL_IMAGE") && message.contains("services.server.image"))
+    );
+    assert_eq!(fixture.inputs.capture().unwrap(), before);
 }
 
 #[tokio::test]

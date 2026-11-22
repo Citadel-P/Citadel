@@ -226,7 +226,8 @@ it.each(['Failed', 'RecoveryRequired'])(
     const view = renderCitadel(progress(current));
     expect(toast.error).toHaveBeenCalledExactlyOnceWith('Citadel update failed', {
       id: `instance-update-${status.instanceId}-${operation.id}`,
-      description: 'The update to 0.1.2 needs manual recovery. Check Activities for details.',
+      description:
+        'The update to 0.1.2 needs manual recovery. Check the Core log and preserve the checkpoint and update state.',
     });
     expect(getDefaultStore().get(pendingInstanceUpdateAtom)).toMatchObject({
       instanceId: status.instanceId,
@@ -257,6 +258,10 @@ it.each(['Failed', 'Postponed', 'RecoveryRequired'])('does not reload a %s opera
   retainedOutcome(phase);
   renderCitadel(progress({ ...status, installedVersion: operation.version }));
   expect(await screen.findByText(`Target version: Citadel ${operation.version}.`)).toBeVisible();
+  if (phase === 'Failed') {
+    expect(screen.getByText('Update failed — maintenance released')).toBeVisible();
+    expect(screen.queryByText('Update failed — operator recovery required')).toBeNull();
+  }
   expect(reload).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Reload portal' })).not.toBeInTheDocument();
 });

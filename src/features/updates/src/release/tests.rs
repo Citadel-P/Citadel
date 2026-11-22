@@ -88,10 +88,21 @@ fn altered_removed_reordered_or_unbound_migrations_are_rejected() {
             .is_err()
     );
     source.catalog_sha256 = "f".repeat(64);
+    let mismatch = descriptor
+        .validate_transition(&source, &target, &self::catalog(1), 2, &[])
+        .unwrap_err();
     assert!(
-        descriptor
-            .validate_transition(&source, &target, &self::catalog(1), 2, &[])
-            .is_err()
+        mismatch
+            .to_string()
+            .contains("source migration catalog checksum")
+    );
+    let mut wrong_descriptor = descriptor.clone();
+    wrong_descriptor.migration_catalog = self::catalog(1);
+    let mismatch = wrong_descriptor.validate_target(&target).unwrap_err();
+    assert!(
+        mismatch
+            .to_string()
+            .contains("target migration catalog checksum")
     );
     source.catalog_sha256 = digest(&self::catalog(1));
     source.architecture = "arm64".into();

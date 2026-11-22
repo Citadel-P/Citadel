@@ -49,7 +49,7 @@ pub async fn check_registered_compose_installation(
     // Reject edited inputs before calling Compose or contacting Docker.
     if fingerprint_inputs(&inputs.project, &inputs.capture()?) != registered.configuration_sha256 {
         return Err(UpdateError::Conflict(
-            "Registered installer inputs have changed.".into(),
+            "Registered installer inputs have changed. Compare the Compose files and .env with the registered installation before refreshing its registration.".into(),
         ));
     }
     let (observed, source) = inspect_installation(
@@ -65,7 +65,7 @@ pub async fn check_registered_compose_installation(
     state.require_registration_only()?;
     let current: RegisteredComposeInstallation = state.read(REGISTRATION)?;
     if current != registered || observed != registered {
-        return Err(UpdateError::Conflict("The live installation no longer matches its registration. Registration and recovery state were preserved.".into()));
+        return Err(UpdateError::Conflict("The live installation no longer matches its registration. Check the Compose project and containers before refreshing the registration. Preserve the update-state directory.".into()));
     }
     if cancellation.is_cancelled() {
         return Err(UpdateError::Cancelled);
