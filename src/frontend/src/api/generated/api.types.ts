@@ -7694,6 +7694,12 @@ export interface StackCapabilities {
   canWrite: boolean;
 }
 
+export interface StackCatalogGit {
+  branch?: string | null;
+  gitRepositoryName?: string | null;
+  hasMatchingAppliedCommit: boolean;
+}
+
 export interface StackCommand {
   commands?: string[];
   path?: string;
@@ -7945,6 +7951,7 @@ export type StackUpdateState =
 export interface StackView {
   backupCoverage?: ResourceBackupSummaryView | null;
   capabilities: StackCapabilities | null;
+  catalogGit?: StackCatalogGit | null;
   controlState: ResourceControlState;
   copyEligibility?: ResourceCopyEligibility | null;
   /** @format date-time */
@@ -20168,6 +20175,8 @@ export class Api<
         tags?: string[];
         /** @format uuid */
         platformId?: string;
+        /** Omit release configuration and include Git catalog metadata */
+        catalog?: boolean;
       },
       params: RequestParams = {},
     ) =>

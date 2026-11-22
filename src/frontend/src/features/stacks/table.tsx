@@ -183,8 +183,8 @@ const StackNameRow = ({ stack }: { stack: StackView }) => {
 
 const StackSourceCell = ({ stack }: { stack: StackView }) => {
   if (stack.stackSource === StackSource.Git) {
-    const repositoryName = stack.source?.gitRepositoryName ?? 'Git repository';
-    const branch = stack.source?.branch;
+    const repositoryName = (stack.catalogGit ?? stack.source)?.gitRepositoryName ?? 'Git repository';
+    const branch = (stack.catalogGit ?? stack.source)?.branch;
     const label = branch ? `${repositoryName}/${branch}` : repositoryName;
 
     return (
@@ -250,7 +250,7 @@ const StackUpdateStatusCell = ({ stack }: { stack: StackView }) => {
 };
 
 const StackGitUpdateStateRow = ({ stack, state }: { stack: StackView; state: RecreateStackOnNewCommitState }) => {
-  const source = stack.source;
+  const source = stack.catalogGit ?? stack.source;
   const remoteCommit = state.remoteCommitSha ?? undefined;
 
   return (
@@ -311,6 +311,7 @@ const StackUpdateStateRow = ({ state }: { state: ImageUpdateState }) => {
 const getStackSourceLabel = (stack: StackView): string => {
   if (stack.stackSource !== StackSource.Git) return 'UI defined';
 
-  const repositoryName = stack.source?.gitRepositoryName ?? 'Git repository';
-  return stack.source?.branch ? `${repositoryName}/${stack.source.branch}` : repositoryName;
+  const source = stack.catalogGit ?? stack.source;
+  const repositoryName = source?.gitRepositoryName ?? 'Git repository';
+  return source?.branch ? `${repositoryName}/${source.branch}` : repositoryName;
 };

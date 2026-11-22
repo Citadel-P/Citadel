@@ -42,7 +42,7 @@ impl Request {
                 if let Some(d) = &mut def {
                     h.apply_policy(d);
                 }
-                Ok(Output::Definition(self.generation, def))
+                Ok(Output::Definition(self.generation, def.map(Box::new)))
             }
             Key::Discover(p) if p.mode() == ScheduleMode::Calendar => {
                 let mut defs = if h.eligible(p) {

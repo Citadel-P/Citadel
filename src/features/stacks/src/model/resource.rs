@@ -25,6 +25,7 @@ pub struct StackRelease {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stack {
+    pub catalog_git: Option<StackCatalogGit>,
     pub probe_health: citadel_primitives::health::WorkloadHealth,
     pub id: Uuid,
     pub name: String,

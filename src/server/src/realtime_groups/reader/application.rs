@@ -1013,6 +1013,7 @@ impl ApplicationGroupReader {
                         actor,
                         admin,
                         &citadel_stacks::StackFilter {
+                            catalog: true,
                             platform_id: selection.platform,
                             resource_ids: selection.owners,
                             container_ids: selection.references,
@@ -1038,7 +1039,7 @@ impl ApplicationGroupReader {
                     Some(hint_deadline),
                 )
                 .await;
-                rows("StackInfoUpdated", views, style)
+                rows("StackCatalogUpdated", views, style)
             }
             Topic::Stack(..) => {
                 let resource = self

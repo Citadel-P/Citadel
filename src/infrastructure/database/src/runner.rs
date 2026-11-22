@@ -378,10 +378,9 @@ mod tests {
                 .map(|migration| migration.id)
                 .collect::<Vec<_>>(),
             [
-                "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010",
-                "0011"
+                "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010"
             ],
-            "the release catalog includes Stack Git check inputs"
+            "the release catalog ends at the consolidated migration"
         );
         assert_eq!(
             manifest["0001"].sha256,

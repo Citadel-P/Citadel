@@ -34,11 +34,12 @@ export const getStackUpdateCheckDisabledReason = (stack: StackView | null | unde
     const spec = stack.spec?.$type === 'Git' ? stack.spec : null;
     const source = stack.source;
     const hasMatchingAppliedCommit =
-      !!spec &&
-      source?.sourceType === StackSource.Git &&
-      source.gitRepositoryId === spec.gitRepoId &&
-      source.branch === spec.branch &&
-      !!source.resolvedCommitSha?.trim();
+      stack.catalogGit?.hasMatchingAppliedCommit ??
+      (!!spec &&
+        source?.sourceType === StackSource.Git &&
+        source.gitRepositoryId === spec.gitRepoId &&
+        source.branch === spec.branch &&
+        !!source.resolvedCommitSha?.trim());
 
     if (!hasMatchingAppliedCommit) {
       return 'Redeploy this stack once so Citadel has an applied Git commit to compare.';

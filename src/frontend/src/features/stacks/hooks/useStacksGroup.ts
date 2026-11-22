@@ -11,10 +11,10 @@ export const useStacksGroup = () => {
   const { selectedTagNames } = useResourceTagFilter();
   const { selectedPlatformId } = useResourcePlatformFilter();
   const readArgs = useMemo(() => {
-    const query: { tags?: string[]; platformId?: string } = {};
+    const query: { catalog: true; tags?: string[]; platformId?: string } = { catalog: true };
     if (selectedTagNames.length > 0) query.tags = selectedTagNames;
     if (selectedPlatformId) query.platformId = selectedPlatformId;
-    return Object.keys(query).length > 0 ? { query } : undefined;
+    return { query };
   }, [selectedPlatformId, selectedTagNames]);
   const { data, isLoading, error, refetch, isFetching } = useRead('listStacks', readArgs);
   const capabilities = data?.data.capabilities;
@@ -33,7 +33,7 @@ export const useStacksGroup = () => {
     const result = await refetch();
     return result.isSuccess ? result.data.data.stacks : undefined;
   }, [refetch]);
-  const [stacks, handleStackInfoUpdated, onJoinedGroup] = useCollectionRows(
+  const [stacks, handleStackCatalogUpdated, onJoinedGroup] = useCollectionRows(
     data?.data.stacks,
     JSON.stringify(readArgs ?? {}),
     matchesActiveFilters,
@@ -42,16 +42,16 @@ export const useStacksGroup = () => {
 
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
-      hubConnection.on('StackInfoUpdated', handleStackInfoUpdated);
+      hubConnection.on('StackCatalogUpdated', handleStackCatalogUpdated);
     },
-    [handleStackInfoUpdated],
+    [handleStackCatalogUpdated],
   );
 
   const removeEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
-      hubConnection.off('StackInfoUpdated', handleStackInfoUpdated);
+      hubConnection.off('StackCatalogUpdated', handleStackCatalogUpdated);
     },
-    [handleStackInfoUpdated],
+    [handleStackCatalogUpdated],
   );
 
   useRealtimeGroup({

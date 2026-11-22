@@ -75,7 +75,7 @@ fn configure(
 
 pub(super) enum Output {
     Next(Option<Time>),
-    Definition(u64, Option<ScheduleDefinition>),
+    Definition(u64, Option<Box<ScheduleDefinition>>),
     BatchFinished,
     Eligibility,
     Deadline(Option<Time>),
@@ -298,7 +298,7 @@ impl Planner {
                 if let Some(stale) = self.stale.get_mut(&p) {
                     stale.remove(&id);
                 }
-                configure(&mut self.queue, &mut self.calendar, p, id, def);
+                configure(&mut self.queue, &mut self.calendar, p, id, def.map(|d| *d));
                 None
             }
             (Key::Discover(p), Ok(Output::Page(epoch, defs))) => self.page(p, epoch, defs),

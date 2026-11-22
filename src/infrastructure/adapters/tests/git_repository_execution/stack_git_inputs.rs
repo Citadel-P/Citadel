@@ -8,7 +8,10 @@ async fn candidate(store: &PostgresStackRepository, id: Uuid) -> Option<GitCheck
         .unwrap()
         .into_iter()
         .find(|row| row.id == id)
-        .and_then(|row| row.git_inputs)
+        .and_then(|row| match row.work {
+            citadel_stacks::StackCheckWork::CompareGit(inputs) => Some(inputs),
+            _ => None,
+        })
 }
 
 pub(super) async fn verify(
@@ -130,13 +133,89 @@ pub(super) async fn verify(
         .await
         .unwrap();
     assert!(candidate(store, id).await.is_none());
+    let version = stack.row_version + 1;
+    for _ in 0..2 {
+        git.request_sync(actor, *git_repo_id, Some(branch))
+            .await
+            .unwrap();
+        assert!(git.process_one(&cancel).await.unwrap());
+        assert!(
+            candidate(store, id).await.is_none(),
+            "unchanged pending observation needs no comparison"
+        );
+        let pending = store
+            .update_check_candidates(Uuid::nil(), false, 100, Some(reference))
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|row| row.id == id)
+            .unwrap();
+        assert!(
+            matches!(pending.work, citadel_stacks::StackCheckWork::PendingGit(_, observed_version) if observed_version == version)
+        );
+        assert!(
+            !store
+                .claim_git_apply_retry(id, version, edited)
+                .await
+                .unwrap(),
+            "Notify cannot claim an Apply"
+        );
+    }
+    // Switching to automatic deployment changes the semantic inputs. A later
+    // sync at the same SHA can admit one version-fenced retry using that result.
+    sqlx::query("UPDATE stackreleases SET spec=jsonb_set(spec,'{UpdateBehavior}','\"StackAutoDeploy\"') WHERE id=$1")
+        .bind(stack.current_stack_release_id).execute(pool).await.unwrap();
+    assert!(
+        store
+            .pending_git_action(id, version, edited)
+            .await
+            .unwrap()
+            .is_none(),
+        "stale pending alert is discarded after an edit"
+    );
+    let auto = candidate(store, id).await.unwrap();
+    let stack = store.get_authorized(actor, true, id).await.unwrap();
+    let next = scanner.scan_cached(&stack, &cancel).await.unwrap();
+    store
+        .save_update_check(actor, true, &stack, &next, Some(auto))
+        .await
+        .unwrap();
     git.request_sync(actor, *git_repo_id, Some(branch))
         .await
         .unwrap();
     assert!(git.process_one(&cancel).await.unwrap());
+    let version = stack.row_version + 1;
     assert!(
-        candidate(store, id).await.is_some(),
-        "preserve pending update retries"
+        !store
+            .claim_git_apply_retry(id, version - 1, auto)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !store
+            .claim_git_apply_retry(id, version, edited)
+            .await
+            .unwrap()
+    );
+    assert!(
+        store
+            .claim_git_apply_retry(id, version, auto)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !store
+            .claim_git_apply_retry(id, version, auto)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !store
+            .update_check_candidates(Uuid::nil(), false, 100, Some(reference))
+            .await
+            .unwrap()
+            .iter()
+            .any(|row| row.id == id)
     );
     sqlx::query("UPDATE stackreleases SET spec=$2 WHERE id=$1")
         .bind(stack.current_stack_release_id)

@@ -1158,6 +1158,12 @@ async fn reconcile(
     ))
 }
 
+#[derive(serde::Deserialize)]
+struct StackListOptions {
+    #[serde(default)]
+    catalog: bool,
+}
+
 #[utoipa::path(
     get,
     path = "/api/v1/stacks",
@@ -1168,19 +1174,22 @@ async fn reconcile(
         (status = 200, description = "Success", body = StacksView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
-    params(("tags" = Option<Vec<String>>, Query), ("platformId" = Option<uuid::Uuid>, Query)),
+    params(("tags" = Option<Vec<String>>, Query), ("platformId" = Option<uuid::Uuid>, Query), ("catalog" = Option<bool>, Query, description = "Omit release configuration and include Git catalog metadata")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 async fn list(
     State(state): State<StacksHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
+    options: Result<Query<StackListOptions>, QueryRejection>,
     filter: Result<WorkloadQuery, crate::api::error::HttpError>,
     headers: HeaderMap,
 ) -> HttpResult {
     let principal = api_result(require_actor(principal), &headers)?;
     let filter = filter?;
+    let Query(options) = api_result(options.map_err(invalid_query), &headers)?;
     let filter = StackFilter {
+        catalog: options.catalog,
         tags: filter.tags,
         platform_id: filter.platform_id,
         ..Default::default()

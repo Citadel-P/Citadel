@@ -55,6 +55,22 @@ async fn unchanged_update_rechecks_fence_delayed_targets_across_restart_without_
         };
         assert!(f.alerts.process_event(&repeat).await.unwrap().is_none());
 
+        if kind == "StackGitUpdateAvailable" {
+            let state = || {
+                sqlx::query_as::<_,(String,i32,DateTime<Utc>)>(
+                "SELECT xmin::text,consecutivematches,lastobservedat FROM alertrulestates WHERE alertruleid=$1 AND resourceid=$2")
+                .bind(rule).bind(resource).fetch_one(&f.pool)
+            };
+            let before = state().await.unwrap();
+            // PostgreSQL ref timestamps have microsecond precision.
+            let replay = AlertObservation {
+                observed_at: before.2,
+                ..repeat.clone()
+            };
+            assert!(f.alerts.process_event(&replay).await.unwrap().is_none());
+            assert_eq!(state().await.unwrap(), before);
+        }
+
         // A new repository instance must retain the fence even though the last
         // observation neither created an event nor extended notification cooldown.
         let resumed = PostgresAlertRepository::new(f.pool.clone())

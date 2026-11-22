@@ -533,6 +533,7 @@ mod tests {
             },
         };
         crate::Stack {
+            catalog_git: None,
             probe_health: Default::default(),
             id,
             name: "stack".to_owned(),

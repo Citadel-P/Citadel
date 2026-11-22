@@ -3553,3 +3553,8 @@ CREATE TRIGGER git_ref_stack_check_inputs BEFORE UPDATE OF resolvedcommitsha,sta
         OR (NEW.lasterror IS NOT NULL AND NEW.lasterror IS DISTINCT FROM OLD.lasterror)
         OR (OLD.branch,OLD.gitrepositoryid) IS DISTINCT FROM (NEW.branch,NEW.gitrepositoryid))
     EXECUTE FUNCTION advance_stack_git_check_revision();
+
+ALTER TABLE stackreleases ADD COLUMN lastgitapplysyncat timestamptz;
+CREATE INDEX ix_stackreleases_git_dependency ON stackreleases
+    USING hash ((translate(lower(spec->>'GitRepoId'), '{}-', '') || ':' || (spec->>'Branch')))
+    WHERE spec ? 'GitRepoId';

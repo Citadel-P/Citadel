@@ -299,6 +299,11 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
         .request_sync(ActorId::new(request_actor), repository_id, Some("main"))
         .await
         .unwrap();
+    assert_eq!(
+        notifications.load(Ordering::SeqCst),
+        1,
+        "committed enqueue notifies"
+    );
     assert!(
         service
             .process_one(&CancellationToken::new())
@@ -335,8 +340,8 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
     assert!(persisted.2.is_none());
     assert_eq!(
         notifications.load(Ordering::SeqCst),
-        2,
-        "claim and committed completion both notify"
+        3,
+        "enqueue, claim and committed completion each notify"
     );
     assert!(
         !service
@@ -346,7 +351,7 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
     );
     assert_eq!(
         notifications.load(Ordering::SeqCst),
-        2,
+        3,
         "idle workers do not notify"
     );
     let snapshot = service

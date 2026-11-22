@@ -189,17 +189,13 @@ impl StackService {
                     return Ok(());
                 }
                 let result = async {
-                    let checked = self
-                        .check_updates_mode(actor, true, id, candidate.git_inputs.map_or(CheckMode::Images, CheckMode::Git), batch.as_deref(), cancellation)
-                        .await?;
-                    let behavior = match checked.spec.as_ref().ok_or(StackError::NotFound)? {
-                        StackSpec::Git {
-                            update_behavior, ..
-                        }
-                        | StackSpec::WebEditor {
-                            update_behavior, ..
-                        } => *update_behavior,
+                    let Some((checked, retry)) = self
+                        .scheduled_update_action(actor, candidate, batch.as_deref(), cancellation)
+                        .await?
+                    else {
+                        return Ok(());
                     };
+                    let behavior = checked.behavior;
                     let available = if images {
                         let (StackUpdateState::Git { recreate_stack_on_new_image_state, .. }
                             | StackUpdateState::WebEditor { recreate_stack_on_new_image_state }) = &checked.stack_update_state;
@@ -212,11 +208,8 @@ impl StackService {
                         return Ok(());
                     }
                     let git = !images;
-                    let service_only_supported = checked.spec.as_ref().is_some_and(|spec| {
-                        spec.supports_service_auto_deploy(checked.platform_type)
-                    });
                     let auto = (behavior != StackUpdateBehavior::ServiceAutoDeploy
-                        || service_only_supported)
+                        || checked.service_only_supported)
                         && matches!(
                             behavior,
                             StackUpdateBehavior::StackAutoDeploy
@@ -238,6 +231,11 @@ impl StackService {
                             None,
                         )
                         .await;
+                        return Ok(());
+                    }
+                    if let Some(inputs) = retry
+                        && !self.store.claim_git_apply_retry(id, checked.row_version, inputs).await?
+                    {
                         return Ok(());
                     }
                     let service_names =
@@ -272,7 +270,7 @@ impl StackService {
                                     expected_version: Some(checked.row_version),
                                     service_names,
                                 },
-                                if images { checked.source.as_ref().map(|source| source.resolved_commit_sha.clone()).filter(|sha| !sha.is_empty()) } else { None },
+                                if images { checked.applied_commit.clone() } else { None },
                             )
                             .await?;
                         let mut success = false;
@@ -330,7 +328,37 @@ impl StackService {
         Ok(())
     }
 
-    async fn report_update(&self, stack: &crate::Stack, kind: &str, applied_commit: Option<&str>) {
+    async fn scheduled_update_action(
+        &self,
+        actor: ActorId,
+        candidate: crate::StackCheckCandidate,
+        batch: Option<&dyn StackUpdateScanner>,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<(crate::StackUpdateAction, Option<crate::GitCheckInputs>)>, StackError> {
+        use crate::StackCheckWork;
+        let mode = match candidate.work {
+            StackCheckWork::PendingGit(inputs, version) => {
+                return Ok(self
+                    .store
+                    .pending_git_action(candidate.id, version, inputs)
+                    .await?
+                    .map(|action| (action, Some(inputs))));
+            }
+            StackCheckWork::CompareGit(inputs) => CheckMode::Git(inputs),
+            StackCheckWork::Images => CheckMode::Images,
+        };
+        let checked = self
+            .check_updates_mode(actor, true, candidate.id, mode, batch, cancellation)
+            .await?;
+        Ok(Some((checked.resource.try_into()?, None)))
+    }
+
+    async fn report_update(
+        &self,
+        stack: &crate::StackUpdateAction,
+        kind: &str,
+        applied_commit: Option<&str>,
+    ) {
         let Some(alerts) = &self.alerts else {
             return;
         };
@@ -379,10 +407,6 @@ impl StackService {
             ),
             _ => ("", ""),
         };
-        let branch = match &stack.spec {
-            Some(StackSpec::Git { branch, .. }) => branch.as_str(),
-            _ => "",
-        };
         let reason = "Automatic Stack Apply did not complete. Review the Stack activity.";
         let observation = AlertObservation {
             alert_type: kind.into(),
@@ -395,12 +419,16 @@ impl StackService {
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect(),
-            observed_at: chrono::Utc::now(),
+            observed_at: if kind == "StackGitUpdateAvailable" {
+                stack.pending_sync_at.unwrap_or_else(chrono::Utc::now)
+            } else {
+                chrono::Utc::now()
+            },
             value: None,
             matched: true,
             info: serde_json::json!({ "StackId":stack.id,"StackName":stack.name,"Updates":updates,
                 "ServiceNames":images.iter().filter(|image|image.update_available).map(|image|&image.service_name).collect::<Vec<_>>(),
-                "Branch":branch,"GitRepositoryName":stack.source.as_ref().and_then(|source|source.git_repository_name.as_deref()).unwrap_or_default(),
+                "Branch":stack.branch.as_deref().unwrap_or_default(),"GitRepositoryName":stack.repository_name.as_deref().unwrap_or_default(),
                 "CurrentCommitSha":current,"PreviousCommitSha":current,"RemoteCommitSha":remote,"UpdatedCommitSha":applied_commit,"Reason":reason,
                 "HumanMessage": if kind.ends_with("Failed") { reason }
                     else if kind.ends_with("Available") { "A Stack update is available." } else { "The Stack was automatically updated." } }),

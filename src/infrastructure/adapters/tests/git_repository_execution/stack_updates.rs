@@ -43,6 +43,27 @@ pub async fn verify(
         .await
         .unwrap();
     let mut stack = store.get_authorized(actor, true, stack.id).await.unwrap();
+    let catalog = store
+        .list_authorized(
+            actor,
+            true,
+            &citadel_stacks::StackFilter {
+                catalog: true,
+                resource_ids: Some(vec![stack.id]),
+                limit: Some(2),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    let git_summary = catalog.catalog_git.as_ref().unwrap();
+    assert_eq!(git_summary.branch.as_deref(), Some("main"));
+    assert!(git_summary.has_matching_applied_commit);
+    assert!(
+        catalog.spec.is_none() && catalog.source.is_none() && catalog.resource_bindings.is_none()
+    );
     let scanner = StackUpdateRuntime::new(
         StackRuntimeRouter::new(
             pool.clone(),

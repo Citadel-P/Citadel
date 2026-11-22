@@ -458,7 +458,7 @@ async fn clock_corrections_preserve_elapsed_timers_and_recompute_calendar_occurr
                 key,
                 Ok(Output::Definition(
                     0,
-                    Some(Store::definition(Purpose::Script, id)),
+                    Some(Box::new(Store::definition(Purpose::Script, id))),
                 )),
                 &store,
             );

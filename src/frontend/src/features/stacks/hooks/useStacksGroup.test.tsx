@@ -49,7 +49,7 @@ describe('useStacksGroup', () => {
 
     expect(await screen.findByText('api')).toBeVisible();
     await waitFor(() => {
-      expect(fake.listenerCount('StackInfoUpdated')).toBe(1);
+      expect(fake.listenerCount('StackCatalogUpdated')).toBe(1);
     });
 
     const worker = createStack({
@@ -57,20 +57,20 @@ describe('useStacksGroup', () => {
       name: 'worker',
     });
     act(() => {
-      fake.emit('StackInfoUpdated', worker, 'create');
-      fake.emit('StackInfoUpdated', { ...worker, name: 'worker-updated' }, 'create');
+      fake.emit('StackCatalogUpdated', worker, 'create');
+      fake.emit('StackCatalogUpdated', { ...worker, name: 'worker-updated' }, 'create');
     });
 
     expect(screen.queryByText('worker')).not.toBeInTheDocument();
     expect(screen.getAllByText('worker-updated')).toHaveLength(1);
 
     act(() => {
-      fake.emit('StackInfoUpdated', { ...initialStack, name: 'api-updated' }, 'update');
+      fake.emit('StackCatalogUpdated', { ...initialStack, name: 'api-updated' }, 'update');
     });
     expect(screen.getByText('api-updated')).toBeVisible();
 
     act(() => {
-      fake.emit('StackInfoUpdated', worker, 'delete');
+      fake.emit('StackCatalogUpdated', worker, 'delete');
     });
     expect(screen.queryByText('worker-updated')).not.toBeInTheDocument();
   });
@@ -94,9 +94,9 @@ describe('useStacksGroup', () => {
       },
     });
     await screen.findByText('editable');
-    await waitFor(() => expect(fake.listenerCount('StackInfoUpdated')).toBe(1));
-    act(() => fake.emit('StackInfoUpdated', { ...initial, name: 'updated live' }, 'update'));
-    const key = resourceQueryKey('listStacks');
+    await waitFor(() => expect(fake.listenerCount('StackCatalogUpdated')).toBe(1));
+    act(() => fake.emit('StackCatalogUpdated', { ...initial, name: 'updated live' }, 'update'));
+    const key = resourceQueryKey('listStacks', { query: { catalog: true } });
     const cached = view.queryClient.getQueryData<ResourceResponse<'listStacks'>>(key)!;
     act(() =>
       view.queryClient.setQueryData(key, {
@@ -142,12 +142,12 @@ describe('useStacksGroup', () => {
 
     expect(await screen.findByText('api')).toBeVisible();
     await waitFor(() => {
-      expect(fake.listenerCount('StackInfoUpdated')).toBe(1);
+      expect(fake.listenerCount('StackCatalogUpdated')).toBe(1);
     });
 
     act(() => {
       fake.emit(
-        'StackInfoUpdated',
+        'StackCatalogUpdated',
         createStack({
           id: '00000000-0000-0000-0000-000000000003',
           name: 'other-platform',
@@ -161,12 +161,12 @@ describe('useStacksGroup', () => {
     await view.user.click(screen.getByRole('button', { name: 'change platform' }));
     expect(await screen.findByText('next-api')).toBeVisible();
     await waitFor(() => {
-      expect(fake.listenerCount('StackInfoUpdated')).toBe(1);
+      expect(fake.listenerCount('StackCatalogUpdated')).toBe(1);
     });
 
     act(() => {
       fake.emit(
-        'StackInfoUpdated',
+        'StackCatalogUpdated',
         createStack({
           id: '00000000-0000-0000-0000-000000000004',
           name: 'stale-platform-event',
@@ -178,6 +178,6 @@ describe('useStacksGroup', () => {
     expect(screen.queryByText('stale-platform-event')).not.toBeInTheDocument();
 
     view.unmount();
-    expect(fake.listenerCount('StackInfoUpdated')).toBe(0);
+    expect(fake.listenerCount('StackCatalogUpdated')).toBe(0);
   });
 });

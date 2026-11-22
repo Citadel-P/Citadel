@@ -92,6 +92,9 @@ pub struct StackCapabilities {
 #[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StackView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<crate::api::resources::schema_models::stacks::StackCatalogGitSchema>)]
+    pub catalog_git: Option<citadel_stacks::StackCatalogGit>,
     #[schema(value_type = crate::api::resources::platforms::workload_health_views::WorkloadHealth)]
     pub probe_health: citadel_primitives::health::WorkloadHealth,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -149,6 +152,7 @@ impl TryFrom<AuthorizedResource<citadel_stacks::Stack>> for StackView {
         let permission = value.effective_permission;
         let value = value.resource;
         Ok(Self {
+            catalog_git: value.catalog_git,
             probe_health: value.probe_health,
             copy_eligibility: None,
             backup_coverage: None,

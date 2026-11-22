@@ -14,7 +14,13 @@ pub struct GitCheckInputs {
 
 pub struct StackCheckCandidate {
     pub id: Uuid,
-    pub git_inputs: Option<GitCheckInputs>,
+    pub work: StackCheckWork,
+}
+
+pub enum StackCheckWork {
+    Images,
+    CompareGit(GitCheckInputs),
+    PendingGit(GitCheckInputs, i64),
 }
 
 pub trait StackRepository: Send + Sync {
@@ -25,6 +31,18 @@ pub trait StackRepository: Send + Sync {
         limit: i64,
         reference: Option<Uuid>,
     ) -> BoxFuture<'_, Result<Vec<StackCheckCandidate>, StackError>>;
+    fn pending_git_action(
+        &self,
+        id: Uuid,
+        row_version: i64,
+        inputs: GitCheckInputs,
+    ) -> BoxFuture<'_, Result<Option<crate::StackUpdateAction>, StackError>>;
+    fn claim_git_apply_retry(
+        &self,
+        id: Uuid,
+        row_version: i64,
+        inputs: GitCheckInputs,
+    ) -> BoxFuture<'_, Result<bool, StackError>>;
     fn save_update_check<'a>(
         &'a self,
         actor: ActorId,

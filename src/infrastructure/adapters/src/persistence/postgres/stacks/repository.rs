@@ -23,6 +23,33 @@ impl StackRepository for PostgresStackRepository {
         self.update_check_candidates_impl(after, images, limit, reference)
     }
 
+    fn pending_git_action(
+        &self,
+        id: Uuid,
+        row_version: i64,
+        inputs: GitCheckInputs,
+    ) -> BoxFuture<'_, Result<Option<citadel_stacks::StackUpdateAction>, StackError>> {
+        Box::pin(update_checks::pending_git_action(
+            &self.pool,
+            id,
+            row_version,
+            inputs,
+        ))
+    }
+    fn claim_git_apply_retry(
+        &self,
+        id: Uuid,
+        row_version: i64,
+        inputs: GitCheckInputs,
+    ) -> BoxFuture<'_, Result<bool, StackError>> {
+        Box::pin(update_checks::claim_git_apply_retry(
+            &self.pool,
+            id,
+            row_version,
+            inputs,
+        ))
+    }
+
     fn save_update_check<'a>(
         &'a self,
         actor: ActorId,
