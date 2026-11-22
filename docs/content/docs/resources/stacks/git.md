@@ -228,7 +228,7 @@ Add shared paths only when changes there should mark the Stack outdated; leave
 
 ## Update Policy
 
-For branch-tracking Git stacks, Citadel stores the exact deployed commit in the stack release source metadata.
+For branch-tracking Git stacks, Citadel stores the exact deployed commit in the stack release source metadata. When a sync finds the same commit and the Stack has already checked it with the current configuration, its last check time can be older than the repository’s last sync. A pending update remains eligible for the next check.
 
 - **Notify Only**: mark the stack outdated and emit an alert for relevant Git changes or service image updates.
 - **Auto Deploy Stack**: automatically reapply the stack when relevant Git paths change or a service image update is detected.

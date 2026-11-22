@@ -176,7 +176,6 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
             ),
         ),
         execution: Arc::clone(&git_execution),
-        realtime: None,
         cancellation,
     }))
     .merge(webhooks_http::router(WebhooksHttpState {

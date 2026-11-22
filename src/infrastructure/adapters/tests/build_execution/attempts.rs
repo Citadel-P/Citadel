@@ -11,6 +11,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
         .claim_next(Utc::now() - Duration::minutes(5))
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_eq!(first.run.id, queued.id);
     let persisted: Uuid = sqlx::query_scalar("SELECT attemptid FROM buildruns WHERE id=$1")
@@ -93,6 +94,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .is_none()
     );
     // Independent work remains eligible behind the delayed oldest run.
@@ -107,6 +109,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
         .claim_next(Utc::now() - Duration::minutes(5))
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_eq!(other_claim.run.id, other_run.id);
     let mut failed = success_result('a');
@@ -141,6 +144,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
         .claim_next(Utc::now() - Duration::minutes(5))
         .await
         .unwrap()
+        .claim
         .unwrap();
     assert_eq!(second.run.id, first.run.id);
     assert_eq!(second.run.queued_at, queued.queued_at);
@@ -264,6 +268,7 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
             .claim_next(Utc::now() - Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .is_none()
     );
     let expired = store.get_run(expired.id).await.unwrap();

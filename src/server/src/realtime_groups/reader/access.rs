@@ -177,7 +177,14 @@ impl ApplicationGroupReader {
                 ResourceType::Build
             }
             BuildRun(id) => {
-                permission_id = Some(self.builds.run_project_id(*id).await.map_err(failure)?);
+                permission_id = Some(match self.builds.run_project_id(*id).await {
+                    Ok(project) => project,
+                    // A pruned run can stay joined until the client receives its removal.
+                    Err(citadel_builds::BuildError::NotFound) => lease
+                        .scope(&g.name)
+                        .ok_or(RealtimeReadError::Authorization)?,
+                    Err(error) => return Err(failure(error)),
+                });
                 ResourceType::Build
             }
             BuildAgentPools => ResourceType::BuildAgentPool,

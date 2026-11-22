@@ -28,4 +28,7 @@ it('updates the policy header from its subscribed snapshot without another GET',
   expect(read).toHaveBeenCalledTimes(1);
   act(() => fake.emit('BackupPolicyInfoUpdated', { id: 'other-policy', latestRun: { status: 'Succeeded' } }, 'update'));
   expect(screen.getByText('Failed')).toBeVisible();
+  act(() => fake.emit('BackupPolicyInfoUpdated', { id: 'policy-1' }, 'delete'));
+  expect(await screen.findByText('Loading')).toBeVisible();
+  expect(read).toHaveBeenCalledTimes(1);
 });

@@ -94,3 +94,19 @@ pub struct BackupExecutionResult {
     pub logs: Vec<BackupLog>,
     pub items: Vec<BackupRunItemResult>,
 }
+
+/// Identifies committed changes for readers. Successful retention can also expire older runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BackupChange {
+    Policy(Uuid),
+    Run {
+        policy: Uuid,
+        run: Uuid,
+        retention: bool,
+    },
+    Restore {
+        policy: Uuid,
+        restore: Uuid,
+    },
+    Resync,
+}

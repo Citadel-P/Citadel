@@ -65,3 +65,27 @@ pub struct BuildPlatformSnapshot {
     pub builder_kind: Option<String>,
     pub build_agent_pool_id: Option<Uuid>,
 }
+
+/// Scope of a committed change to Build state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuildChange {
+    ProjectRuns(uuid::Uuid),
+    Resync,
+}
+
+impl BuildChange {
+    /// A claim pass emits at most one hint, even when recovery spans many projects.
+    pub fn include_project(change: &mut Option<Self>, project: Uuid) {
+        *change = Some(match *change {
+            None => Self::ProjectRuns(project),
+            Some(Self::ProjectRuns(current)) if current == project => Self::ProjectRuns(project),
+            Some(_) => Self::Resync,
+        });
+    }
+}
+
+#[derive(Default)]
+pub struct BuildClaimOutcome {
+    pub claim: Option<BuildClaim>,
+    pub change: Option<BuildChange>,
+}

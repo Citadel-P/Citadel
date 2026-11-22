@@ -7,7 +7,7 @@ use sha2::Digest;
 #[derive(Clone, Copy)]
 enum CheckMode {
     Manual,
-    Git,
+    Git(crate::GitCheckInputs),
     Images,
 }
 
@@ -107,7 +107,7 @@ impl StackService {
         let _guard = cancel.clone().drop_guard();
         let scan = match mode {
             CheckMode::Manual => scanner.scan(&snapshot, &cancel),
-            CheckMode::Git => scanner.scan_cached(&snapshot, &cancel),
+            CheckMode::Git(_) => scanner.scan_cached(&snapshot, &cancel),
             CheckMode::Images => scanner.scan_images_cached(&snapshot, &cancel),
         };
         let next = tokio::select! {
@@ -119,7 +119,16 @@ impl StackService {
         // The scan only reads Docker/Git. Compare-and-swap at commit rejects a
         // concurrent Apply/edit; no durable processing lease needs crash recovery.
         self.store
-            .save_update_check(actor, administrator, &snapshot, &next)
+            .save_update_check(
+                actor,
+                administrator,
+                &snapshot,
+                &next,
+                match mode {
+                    CheckMode::Git(inputs) => Some(inputs),
+                    _ => None,
+                },
+            )
             .await?;
         self.notifier.changed(id, "updated");
         let mut checked = snapshot;
@@ -145,13 +154,23 @@ impl StackService {
         images: bool,
         cancellation: &CancellationToken,
     ) -> Result<(), StackError> {
+        self.run_scoped_update_check_pass(images, None, cancellation)
+            .await
+    }
+
+    pub async fn run_scoped_update_check_pass(
+        &self,
+        images: bool,
+        reference: Option<Uuid>,
+        cancellation: &CancellationToken,
+    ) -> Result<(), StackError> {
         // Detection/Notify is available in Community. Gate only automatic Apply.
         let actor = ActorId::new(Uuid::from_u128(1));
         let mut after = Uuid::nil();
         loop {
             let ids = self
                 .store
-                .update_check_candidates(after, images, 25)
+                .update_check_candidates(after, images, 25, reference)
                 .await?;
             if ids.is_empty() {
                 break;
@@ -163,14 +182,15 @@ impl StackService {
                     .and_then(|s| s.image_batch())
             };
             let mut batch = new_batch();
-            for id in ids {
+            for candidate in ids {
+                let id = candidate.id;
                 after = id;
                 if cancellation.is_cancelled() || self.shutdown.is_cancelled() {
                     return Ok(());
                 }
                 let result = async {
                     let checked = self
-                        .check_updates_mode(actor, true, id, if images { CheckMode::Images } else { CheckMode::Git }, batch.as_deref(), cancellation)
+                        .check_updates_mode(actor, true, id, candidate.git_inputs.map_or(CheckMode::Images, CheckMode::Git), batch.as_deref(), cancellation)
                         .await?;
                     let behavior = match checked.spec.as_ref().ok_or(StackError::NotFound)? {
                         StackSpec::Git {
@@ -429,7 +449,7 @@ pub(super) async fn refresh_applied_images(
         // advertised remote digest is what Docker actually deployed.
         let next = scanner.scan_images(&snapshot, &cancel).await?;
         store
-            .save_update_check(actor, administrator, &snapshot, &next)
+            .save_update_check(actor, administrator, &snapshot, &next, None)
             .await
     };
     tokio::select! {

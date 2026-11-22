@@ -775,10 +775,9 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     let mut after = None;
     loop {
         use citadel_instance::{SchedulePurpose, ScheduleReader};
-        let kind = SchedulePurpose::Backup;
         let page =
             citadel_adapters::persistence::postgres::instance::PostgresSchedules(pool.clone())
-                .page(Some(kind), after.map(|id| (kind, id)), 64)
+                .discover(SchedulePurpose::Backup, after, 64)
                 .await
                 .unwrap();
         assert!(page.len() <= 64);

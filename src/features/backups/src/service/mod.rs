@@ -14,7 +14,7 @@ pub struct BackupService {
     tracking: Arc<tokio::sync::Semaphore>,
     progress: tokio::sync::broadcast::Sender<Arc<progress::BackupProgressItem>>,
     on_repository_change: Option<Arc<dyn Fn(Uuid) + Send + Sync>>,
-    on_change: Option<Arc<dyn Fn() + Send + Sync>>,
+    on_change: Option<Arc<dyn Fn(BackupChange) + Send + Sync>>,
     store: Arc<dyn BackupPersistence>,
     executor: Arc<dyn BackupExecutor>,
     planner: Arc<dyn BackupSourcePlanner>,
@@ -105,14 +105,17 @@ impl BackupService {
         tokio::select! { biased; () = shutdown.cancelled() => None, permit = self.tracking.clone().acquire_owned() => permit.ok() }
     }
 
-    pub fn with_change_notifier(mut self, notifier: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn with_change_notifier(
+        mut self,
+        notifier: Arc<dyn Fn(BackupChange) + Send + Sync>,
+    ) -> Self {
         self.on_change = Some(notifier);
         self
     }
 
-    pub(super) fn changed(&self) {
+    pub(super) fn changed(&self, owner: BackupChange) {
         if let Some(notifier) = &self.on_change {
-            notifier();
+            notifier(owner);
         }
     }
 
@@ -151,9 +154,7 @@ impl BackupService {
         after: Option<Uuid>,
         cancellation: &CancellationToken,
     ) -> Result<Option<Uuid>, BackupError> {
-        let next = self.executor.reconcile_cleanup(after, cancellation).await?;
-        self.changed();
-        Ok(next)
+        self.executor.reconcile_cleanup(after, cancellation).await
     }
 
     pub fn store(&self) -> &Arc<dyn BackupPersistence> {

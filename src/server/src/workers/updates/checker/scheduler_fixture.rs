@@ -113,7 +113,12 @@ impl Dispatch for ReleaseFixture {
         let cfg = self.settings().await;
         runtime::deadline(&self.service, cfg.enabled, cfg.interval_hours).await
     }
-    async fn batch(&self, p: Purpose, cancel: &CancellationToken) -> Result<(), String> {
+    async fn batch(
+        &self,
+        p: Purpose,
+        _: Option<uuid::Uuid>,
+        cancel: &CancellationToken,
+    ) -> Result<(), String> {
         if p != Purpose::Release {
             return Ok(());
         }
@@ -126,7 +131,7 @@ pub(super) async fn run_enabled(
     policy: watch::Receiver<CheckSchedule>,
     cancel: CancellationToken,
 ) -> Result<(), std::convert::Infallible> {
-    let (_keep, git) = watch::channel(());
+    let (_keep, git) = watch::channel((0, uuid::Uuid::nil()));
     let (_license, license) = watch::channel(());
     drive(
         ReleaseFixture {
@@ -146,7 +151,7 @@ pub(super) async fn first_run(
     setup: watch::Receiver<()>,
     cancel: CancellationToken,
 ) -> Result<(), std::convert::Infallible> {
-    let (_keep, git) = watch::channel(());
+    let (_keep, git) = watch::channel((0, uuid::Uuid::nil()));
     let (_license, license) = watch::channel(());
     drive(
         ReleaseFixture {

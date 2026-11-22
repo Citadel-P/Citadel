@@ -5,19 +5,33 @@ use citadel_primitives::AuthorizedResource;
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
 
+/// Identifies the release configuration and healthy Git ref evaluated by a scheduled check.
+#[derive(Debug, Clone, Copy)]
+pub struct GitCheckInputs {
+    pub release_revision: Uuid,
+    pub ref_revision: Uuid,
+}
+
+pub struct StackCheckCandidate {
+    pub id: Uuid,
+    pub git_inputs: Option<GitCheckInputs>,
+}
+
 pub trait StackRepository: Send + Sync {
     fn update_check_candidates(
         &self,
         after: Uuid,
         images: bool,
         limit: i64,
-    ) -> BoxFuture<'_, Result<Vec<Uuid>, StackError>>;
+        reference: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<Vec<StackCheckCandidate>, StackError>>;
     fn save_update_check<'a>(
         &'a self,
         actor: ActorId,
         administrator: bool,
         expected: &'a crate::Stack,
         state: &'a crate::StackUpdateState,
+        git_inputs: Option<GitCheckInputs>,
     ) -> BoxFuture<'a, Result<(), StackError>>;
     fn claim_apply_versioned(
         &self,

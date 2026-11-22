@@ -88,7 +88,7 @@ pub(super) async fn run_group_connection(
                     "InstallationSettings" => Some("InstallationSettingsChanged"),
                     _ => None,
                 }.filter(|_| subscription.principal.is_administrator());
-                if event.resource_type!="License" && administrator_event.is_none() && !state.groups.values().any(|g|g.group.affected_by(&event)) {
+                if event.resource_type!="License" && administrator_event.is_none() && !state.groups.values().any(|g|g.group.affected_with_lease(&event, &subscription.lease)) {
                     continue;
                 }
                 // Readers without a generation contract retain their conservative
@@ -101,7 +101,7 @@ pub(super) async fn run_group_connection(
                     send_group_message(socket,service,&crate::realtime_groups::ClientEvent::new(target,vec![])).await?;
                 }
                 let mut oversized = Vec::new();
-                for (name,joined) in state.groups.iter_mut().filter(|(_,g)|g.group.affected_by(&event)) {
+                for (name,joined) in state.groups.iter_mut().filter(|(_,g)|g.group.affected_with_lease(&event, &subscription.lease)) {
                     // Inventory I/O must not pause this connection's active streams.
                     let snapshot={
                         let read=tokio::time::timeout(service.inner.subscribe_timeout,reader.read_with_lease(&subscription.principal,&joined.group,Some(&event),&subscription.lease));

@@ -53,9 +53,7 @@ impl PostgresStackRepository {
         filter: &'a StackFilter,
     ) -> BoxFuture<'a, Result<Vec<AuthorizedResource<citadel_stacks::Stack>>, StackError>> {
         Box::pin(async move {
-            let sql = format!(
-                r#"{AUTHORIZED_CTES}{PROJECTION}
-WHERE ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(rp.level_mask,0)) >= {READ})
+            const FILTER: &str = r#"WHERE ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(rp.level_mask,0)) >= 1)
   AND ($3::uuid IS NULL OR r.platformid=$3)
   AND ($5::uuid[] IS NULL OR s.id=ANY($5))
   AND ($6::text[] IS NULL OR s.id IN (SELECT c.stackid FROM containers c WHERE c.platformid=$3 AND c.dockercontainerid=ANY($6)
@@ -67,9 +65,24 @@ WHERE ($2 OR GREATEST(COALESCE(g.level_mask,0),COALESCE(rp.level_mask,0)) >= {RE
   AND NOT EXISTS (SELECT 1 FROM unnest($4::text[]) requested(name) WHERE NOT EXISTS (
     SELECT 1 FROM resourcetags link JOIN tags tag ON tag.id=link.tagid
     WHERE link.resourcetype='Stack' AND link.resourceid=s.id
-      AND (lower(tag.name)=lower(requested.name) OR tag.id::text=requested.name)))
-ORDER BY s.createdat DESC,s.name,s.id"#
-            );
+      AND (lower(tag.name)=lower(requested.name) OR tag.id::text=requested.name)))"#;
+            const ORDER: &str = "s.createdat DESC, s.name, s.id";
+            // Bound authorized keys before projecting activity, tags and runtime observations.
+            let sql = if filter.limit.is_some() {
+                format!(
+                    r#"{AUTHORIZED_CTES}, page AS MATERIALIZED (
+                    SELECT s.id FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid
+                    LEFT JOIN global_permission g ON TRUE
+                    LEFT JOIN resource_permissions rp ON rp.resourceid=s.id
+                    {FILTER} ORDER BY {ORDER} LIMIT $7
+                )
+                SELECT item.* FROM page CROSS JOIN LATERAL (
+                    {PROJECTION} WHERE s.id=page.id LIMIT 1
+                ) item ORDER BY item.createdat DESC,item.name,item.id"#
+                )
+            } else {
+                format!("{AUTHORIZED_CTES}{PROJECTION} {FILTER} ORDER BY {ORDER} LIMIT $7")
+            };
             sqlx::query(AssertSqlSafe(sql))
                 .bind(actor.value())
                 .bind(administrator)
@@ -77,6 +90,7 @@ ORDER BY s.createdat DESC,s.name,s.id"#
                 .bind(&filter.tags)
                 .bind(filter.resource_ids.as_deref())
                 .bind(filter.container_ids.as_deref())
+                .bind(filter.limit)
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?

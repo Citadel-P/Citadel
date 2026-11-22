@@ -30,7 +30,7 @@ pub trait GitRepositoryExecutionPersistence: Send + Sync {
     fn enqueue_due<'a>(
         &'a self,
         limit: usize,
-    ) -> BoxFuture<'a, Result<usize, GitRepositoryExecutionError>>;
+    ) -> BoxFuture<'a, Result<Vec<Uuid>, GitRepositoryExecutionError>>;
     fn claim_next<'a>(
         &'a self,
         stale_before: DateTime<Utc>,
@@ -71,6 +71,7 @@ pub trait GitRepositoryPersistence: Send + Sync {
         actor_id: ActorId,
         administrator: bool,
         tag_ids: &'a [Uuid],
+        owner: Option<Uuid>,
     ) -> BoxFuture<'a, Result<Vec<GitRepository>, GitRepositoryError>>;
     fn get_git_repository<'a>(
         &'a self,

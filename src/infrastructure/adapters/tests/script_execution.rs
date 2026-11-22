@@ -326,10 +326,9 @@ async fn script_claim_is_exclusive_and_interrupted_runs_recover() {
     let mut after = None;
     loop {
         use citadel_instance::{SchedulePurpose, ScheduleReader};
-        let kind = SchedulePurpose::Script;
         let page =
             citadel_adapters::persistence::postgres::instance::PostgresSchedules(pool.clone())
-                .page(Some(kind), after.map(|id| (kind, id)), 64)
+                .discover(SchedulePurpose::Script, after, 64)
                 .await
                 .unwrap();
         assert!(page.len() <= 64);

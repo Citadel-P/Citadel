@@ -40,7 +40,7 @@ async fn empty_workers_use_read_only_hints_without_recovery_transactions() {
         copies.recover_current().await.unwrap();
         assert!(copies.pending(None).await.unwrap().is_empty());
         assert!(!agents.pending_work().await.unwrap());
-        assert!(builds.claim_next(before).await.unwrap().is_none());
+        assert!(builds.claim_next(before).await.unwrap().claim.is_none());
         assert!(builds.next_retry_at().await.unwrap().is_none());
         assert!(backups.claim_backup(before).await.unwrap().is_none());
         assert!(

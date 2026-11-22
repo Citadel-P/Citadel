@@ -1,3 +1,6 @@
+#[path = "realtime_groups/builds.rs"]
+mod builds;
+
 use super::*;
 use citadel_adapters::persistence::postgres::identity::users::repository::PostgresUserRepository;
 use citadel_adapters::persistence::postgres::{
@@ -2251,4 +2254,41 @@ async fn script_run_snapshots_authorize_and_reconcile_status_and_cleanup() {
         .unwrap();
     let rejoined = reader.read(&f.administrator, &group, None).await.unwrap();
     assert_eq!(rejoined.events[0].arguments[0]["ids"], json!([]));
+}
+
+#[path = "realtime_groups/backup_changes.rs"]
+mod backup_changes;
+#[path = "realtime_groups/scoped_fixture.rs"]
+mod scoped_fixture;
+
+#[path = "realtime_groups/git_changes.rs"]
+mod git_changes;
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn workload_capacity_is_reported_before_mapping_rows_beyond_the_bound() {
+    use citadel_server::realtime::RealtimeReadError;
+    let f = fixture().await;
+    let spec: citadel_deployments::DeploymentSpec = serde_json::from_value(json!({
+        "image":{"$type":"External","registryId":"00000000-0000-0000-0000-000000000100","imageTag":"nginx"}
+    })).unwrap();
+    let valid = spec.to_storage_value().unwrap();
+    // A broken third row would make unbounded domain mapping fail before the capacity check.
+    for (name, value) in [("a", valid.clone()), ("b", valid), ("c", json!({}))] {
+        sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,createdat,createdbyactorid) VALUES($1,$2,$3,$4,'Healthy','2025-01-01',$5)")
+            .bind(Uuid::now_v7()).bind(name).bind(f.platform_id).bind(value).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    }
+    let mut reader = reader(&f);
+    reader.snapshot_limit = 1;
+    assert!(matches!(
+        reader
+            .read(
+                &f.administrator,
+                &Group::parse("deployments").unwrap(),
+                None
+            )
+            .await,
+        Err(RealtimeReadError::SnapshotCapacity)
+    ));
+    cleanup(f).await;
 }

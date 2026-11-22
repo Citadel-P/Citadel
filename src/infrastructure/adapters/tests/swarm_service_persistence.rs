@@ -213,6 +213,7 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
                 true,
                 &SwarmServiceFilter {
                     platform_id: Some(platform_id),
+                    limit: Some(2),
                     ..Default::default()
                 },
             )
@@ -558,17 +559,19 @@ async fn image_scanner_includes_swarm_stacks_and_deduplicates_resources() {
         citadel_adapters::persistence::postgres::stacks::PostgresStackRepository::new(pool.clone());
     assert!(
         stack_store
-            .update_check_candidates(Uuid::nil(), true, 100)
+            .update_check_candidates(Uuid::nil(), true, 100, None)
             .await
             .unwrap()
-            .contains(&stack.id)
+            .iter()
+            .any(|candidate| candidate.id == stack.id)
     );
     assert!(
         !stack_store
-            .update_check_candidates(Uuid::nil(), false, 100)
+            .update_check_candidates(Uuid::nil(), false, 100, None)
             .await
             .unwrap()
-            .contains(&stack.id)
+            .iter()
+            .any(|candidate| candidate.id == stack.id)
     );
     let mut definition = spec(registry, 1);
     definition.update_behavior = UpdateBehavior::Notify;

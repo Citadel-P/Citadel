@@ -387,6 +387,8 @@ impl ApplicationGroupReader {
     ) -> Result<GroupSnapshot, RealtimeReadError> {
         // Leave time for mapping and delivering the authoritative rows even when
         // the base read has already used the optional hints' share of the deadline.
+        let catalog_limit =
+            i64::try_from(self.snapshot_limit.saturating_add(1)).unwrap_or(i64::MAX);
         let hint_deadline = tokio::time::Instant::now() + self.snapshot_timeout.mul_f32(0.8);
         if matches!(g.topic(), Topic::InstanceJobs | Topic::InstanceSchedules) {
             self.jobs_service(p)?;
@@ -538,12 +540,7 @@ impl ApplicationGroupReader {
                     .await
                     .map_err(failure)?,
             ),
-            Topic::BuildRun(..) => Some(
-                self.builds
-                    .run_project_id(id.unwrap())
-                    .await
-                    .map_err(failure)?,
-            ),
+            Topic::BuildRun(run) => return self.build_run_snapshot(p, g, *run, e, lease).await,
             Topic::ContainerInfo(..) => return self.container_info(p, g, e, lease).await,
             _ => id,
         };
@@ -559,6 +556,12 @@ impl ApplicationGroupReader {
             lease,
         )
         .await?;
+        if e.is_none()
+            && matches!(g.topic(), Topic::BackupRun(_) | Topic::BackupRestoreRun(_))
+            && let (Some(lease), Some(owner)) = (lease, permission_id)
+        {
+            lease.set_scope(&g.name, owner);
+        }
         if let Some(snapshot) = Self::container_patch_snapshot(g, e, id) {
             return Ok(snapshot);
         }
@@ -600,18 +603,6 @@ impl ApplicationGroupReader {
             && e.is_some_and(|event| event.payload["dockerResourceType"] == "nodeAgentCoverage")
         {
             return event("SwarmNodeAgentCoverageChanged", id.unwrap());
-        }
-        if matches!(g.topic(), Topic::BuildRun(..))
-            && let Some(event) =
-                e.filter(|event| event.event_kind == "buildLogs" && Some(event.resource_id) == id)
-        {
-            return Ok(GroupSnapshot {
-                rows: vec![],
-                events: vec![ClientEvent::new(
-                    "BuildRunLogsAppended",
-                    vec![json!(id.unwrap()), event.payload["entries"].clone()],
-                )],
-            });
         }
         let sample = e.is_some_and(|e| e.payload["dockerResourceType"] == "containerStats");
         match g.topic() {
@@ -953,7 +944,7 @@ impl ApplicationGroupReader {
             Topic::Deployments => {
                 let selection = WorkloadSelection::new(e, "deploymentIds");
                 let style = selection.style();
-                let views = self
+                let resources = self
                     .deployments
                     .list_authorized(
                         actor,
@@ -962,18 +953,20 @@ impl ApplicationGroupReader {
                             platform_id: selection.platform,
                             resource_ids: selection.owners,
                             container_ids: selection.references,
+                            limit: Some(catalog_limit),
                             ..Default::default()
                         },
                     )
                     .await
-                    .map_err(failure)?
+                    .map_err(failure)?;
+                if resources.len() > self.snapshot_limit {
+                    return Err(RealtimeReadError::SnapshotCapacity);
+                }
+                let views = resources
                     .into_iter()
                     .map(crate::api::resources::deployments::views::DeploymentView::try_from)
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?;
-                if views.len() > self.snapshot_limit {
-                    return Err(RealtimeReadError::SnapshotCapacity);
-                }
                 let views = crate::api::resources::deployments::views::decorate_list(
                     p,
                     views,
@@ -1014,7 +1007,7 @@ impl ApplicationGroupReader {
             Topic::Stacks => {
                 let selection = WorkloadSelection::new(e, "stackIds");
                 let style = selection.style();
-                let views = self
+                let resources = self
                     .stacks
                     .list_authorized(
                         actor,
@@ -1023,18 +1016,20 @@ impl ApplicationGroupReader {
                             platform_id: selection.platform,
                             resource_ids: selection.owners,
                             container_ids: selection.references,
+                            limit: Some(catalog_limit),
                             ..Default::default()
                         },
                     )
                     .await
-                    .map_err(failure)?
+                    .map_err(failure)?;
+                if resources.len() > self.snapshot_limit {
+                    return Err(RealtimeReadError::SnapshotCapacity);
+                }
+                let views = resources
                     .into_iter()
                     .map(crate::api::resources::stacks::views::StackView::try_from)
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?;
-                if views.len() > self.snapshot_limit {
-                    return Err(RealtimeReadError::SnapshotCapacity);
-                }
                 let views = crate::api::resources::stacks::views::decorate_list(
                     p,
                     views,
@@ -1149,27 +1144,29 @@ impl ApplicationGroupReader {
             Topic::SwarmServices(..) => {
                 let selection = WorkloadSelection::new(e, "serviceIds");
                 let style = selection.style();
-                let views = self.services
+                let resources = self
+                    .services
                     .list_authorized(
                         actor,
                         admin,
                         &citadel_swarm_services::SwarmServiceFilter {
                             platform_id: id,
-                            resource_ids:selection.owners,
+                            resource_ids: selection.owners,
                             container_ids: selection.references,
+                            limit: Some(catalog_limit),
                             ..Default::default()
                         },
                     )
                     .await
-                    .map_err(failure)?
-                    .into_iter()
+                    .map_err(failure)?;
+                if resources.len() > self.snapshot_limit {
+                    return Err(RealtimeReadError::SnapshotCapacity);
+                }
+                let views = resources.into_iter()
                     .map(
                         crate::api::resources::swarm_services::views::ManagedSwarmServiceView::try_from,
                     )
                     .collect::<Result<Vec<_>, _>>().map_err(failure)?;
-                if views.len() > self.snapshot_limit {
-                    return Err(RealtimeReadError::SnapshotCapacity);
-                }
                 let views = crate::api::resources::swarm_services::views::decorate_list(
                     p,
                     views,
@@ -1180,31 +1177,33 @@ impl ApplicationGroupReader {
                 .await;
                 rows("SwarmServiceInfoUpdated", views, style)
             }
-            Topic::GitRepositories => rows(
-                "GitRepositoryInfoUpdated",
-                crate::api::resources::git_repositories::views::authorized_repositories(
-                    &self.identity,
-                    p,
-                    self.git_repositories
-                        .list_git_repositories(actor, admin, &[])
-                        .await
-                        .map_err(failure)?,
+            Topic::GitRepositories => {
+                let owner = e.and_then(|event| event.changed_owner("GitRepository"));
+                rows(
+                    "GitRepositoryInfoUpdated",
+                    crate::api::resources::git_repositories::views::authorized_repositories(
+                        &self.identity,
+                        p,
+                        self.git_repositories
+                            .list_git_repositories(actor, admin, &[], owner)
+                            .await
+                            .map_err(failure)?,
+                    )
+                    .await
+                    .map_err(failure)?,
+                    owner.map_or(RowStyle::Update, RowStyle::OwnerPatch),
                 )
-                .await
-                .map_err(failure)?,
-                RowStyle::Update,
-            ),
+            }
             Topic::GitRepo(..) => rows(
                 "GitRepositoryInfoUpdated",
                 crate::api::resources::git_repositories::views::authorized_repositories(
                     &self.identity,
                     p,
-                    vec![
-                        self.git_repositories
-                            .get_git_repository(id.unwrap())
-                            .await
-                            .map_err(failure)?,
-                    ],
+                    match self.git_repositories.get_git_repository(id.unwrap()).await {
+                        Ok(value) => vec![value],
+                        Err(citadel_git::GitRepositoryError::NotFound) if e.is_some() => vec![],
+                        Err(error) => return Err(failure(error)),
+                    },
                 )
                 .await
                 .map_err(failure)?,
@@ -1286,31 +1285,33 @@ impl ApplicationGroupReader {
                 .map_err(failure)?,
                 RowStyle::Update,
             ),
-            Topic::BackupPolicies => rows(
-                "BackupPolicyInfoUpdated",
-                crate::api::resources::backups::views::authorized_policies(
-                    &self.identity,
-                    p,
-                    self.backups
-                        .list_policies(actor, admin)
-                        .await
-                        .map_err(failure)?,
+            Topic::BackupPolicies => {
+                let owner = e.and_then(|event| event.changed_owner("BackupPolicy"));
+                rows(
+                    "BackupPolicyInfoUpdated",
+                    crate::api::resources::backups::views::authorized_policies(
+                        &self.identity,
+                        p,
+                        self.backups
+                            .list_policies(actor, admin, owner)
+                            .await
+                            .map_err(failure)?,
+                    )
+                    .await
+                    .map_err(failure)?,
+                    owner.map_or(RowStyle::Update, RowStyle::OwnerPatch),
                 )
-                .await
-                .map_err(failure)?,
-                RowStyle::Update,
-            ),
+            }
             Topic::BackupPolicy(..) => rows(
                 "BackupPolicyInfoUpdated",
                 crate::api::resources::backups::views::authorized_policies(
                     &self.identity,
                     p,
-                    vec![
-                        self.backups
-                            .get_policy(id.unwrap())
-                            .await
-                            .map_err(failure)?,
-                    ],
+                    match self.backups.get_policy(id.unwrap()).await {
+                        Ok(value) => vec![value],
+                        Err(citadel_backups::BackupError::NotFound) if e.is_some() => vec![],
+                        Err(error) => return Err(failure(error)),
+                    },
                 )
                 .await
                 .map_err(failure)?,
@@ -1363,6 +1364,11 @@ impl ApplicationGroupReader {
                 ],
                 RowStyle::Update,
             ),
+            Topic::BuildProjects
+                if let Some(project) = e.and_then(PublishedRuntimeEvent::changed_build_project) =>
+            {
+                self.build_project_patch(p, project, lease).await
+            }
             Topic::BuildProjects => rows(
                 "BuildProjectInfoUpdated",
                 crate::api::resources::builds::authorized::authorized_projects(
@@ -1379,7 +1385,11 @@ impl ApplicationGroupReader {
                 crate::api::resources::builds::authorized::authorized_projects(
                     self.builds.as_ref(),
                     p,
-                    vec![self.builds.get(id.unwrap()).await.map_err(failure)?],
+                    match self.builds.get(id.unwrap()).await {
+                        Ok(value) => vec![value],
+                        Err(citadel_builds::BuildError::NotFound) if e.is_some() => vec![],
+                        Err(error) => return Err(failure(error)),
+                    },
                 )
                 .await
                 .map_err(failure)?,
@@ -1420,16 +1430,6 @@ impl ApplicationGroupReader {
                     .map(crate::api::resources::builds::views::BuildRunView::try_from)
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(failure)?,
-                RowStyle::Update,
-            ),
-            Topic::BuildRun(..) => rows(
-                "BuildRunInfoUpdated",
-                vec![
-                    crate::api::resources::builds::views::BuildRunView::try_from(
-                        self.builds.get_run(id.unwrap()).await.map_err(failure)?,
-                    )
-                    .map_err(failure)?,
-                ],
                 RowStyle::Update,
             ),
             _ => Err(RealtimeReadError::Authorization),

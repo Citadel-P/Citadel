@@ -174,7 +174,12 @@ impl Dispatch for Arc<Store> {
         self.active.fetch_sub(1, Ordering::SeqCst);
         Ok(true)
     }
-    async fn batch(&self, _: Purpose, _: &CancellationToken) -> Result<(), String> {
+    async fn batch(
+        &self,
+        _: Purpose,
+        _: Option<uuid::Uuid>,
+        _: &CancellationToken,
+    ) -> Result<(), String> {
         Ok(())
     }
     async fn deadline(&self, _: Purpose) -> Result<Option<DateTime<Utc>>, String> {
@@ -186,7 +191,7 @@ async fn mixed_burst_is_bounded_and_an_edit_during_admission_is_reconciled() {
     let store = Store::new(20, 20);
     let token = CancellationToken::new();
     let (send, recv) = mpsc::channel(16);
-    let (_g, git) = watch::channel(());
+    let (_g, git) = watch::channel((0, uuid::Uuid::nil()));
     let (_l, license) = watch::channel(());
     let run = tokio::spawn(drive(
         store.clone(),
@@ -341,7 +346,7 @@ async fn entitlement_change_discovers_a_previously_blocked_schedule_without_edit
     store.eligible.store(false, Ordering::SeqCst);
     let cancel = CancellationToken::new();
     let (_send, recv) = mpsc::channel(1);
-    let (_g, git) = watch::channel(());
+    let (_g, git) = watch::channel((0, uuid::Uuid::nil()));
     let (license, changes) = watch::channel(());
     let task = tokio::spawn(drive(
         store.clone(),
@@ -374,7 +379,7 @@ async fn blocked_scripts_leave_capacity_for_other_purposes_and_definition_reads(
         store.hold_only_scripts.store(true, Ordering::SeqCst);
         let cancel = CancellationToken::new();
         let (tx, rx) = mpsc::channel(8);
-        let (_git, g) = watch::channel(());
+        let (_git, g) = watch::channel((0, uuid::Uuid::nil()));
         let (_license, l) = watch::channel(());
         let task = tokio::spawn(drive(
             store.clone(),
@@ -586,4 +591,26 @@ async fn all_schedule_purposes_dispatch_in_their_declared_mode() {
         counts[index] += 1;
     }
     assert_eq!(counts, [3, 3, 4]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn repeated_ref_wakes_coalesce_and_overflow_preserves_the_periodic_sweep() {
+    use super::planner::{Key, Planner};
+    let store = Store::new(0, 0);
+    let mut planner = Planner::new(&store);
+    let fallback = Key::Batch(Purpose::StackGit);
+    let original = planner.queue.scheduled(fallback).unwrap();
+    let first = Uuid::from_u128(1);
+    for _ in 0..200 {
+        planner.wake_ref(first);
+    }
+    assert!(planner.queue.contains(Key::GitRef(first)));
+    assert_eq!(planner.queue.scheduled(fallback), Some(original));
+    for i in 2..=128 {
+        planner.wake_ref(Uuid::from_u128(i));
+    }
+    let overflow = Uuid::from_u128(129);
+    planner.wake_ref(overflow);
+    assert!(!planner.queue.contains(Key::GitRef(overflow)));
+    assert!(planner.queue.scheduled(fallback).unwrap().0 < original.0);
 }

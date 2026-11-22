@@ -13,7 +13,7 @@ pub struct BuildService {
     pool_change: Option<Arc<dyn Fn() + Send + Sync>>,
     pool_checker: Option<Arc<dyn BuildPoolChecker>>,
     on_log: Option<BuildLogNotifier>,
-    on_change: Option<Arc<dyn Fn() + Send + Sync>>,
+    on_change: Option<Arc<dyn Fn(BuildChange) + Send + Sync>>,
     store: Arc<dyn BuildRepository>,
     executor: Arc<dyn BuildExecutor>,
     active: Mutex<std::collections::HashMap<Uuid, CancellationToken>>,
@@ -50,11 +50,11 @@ impl BuildService {
     }
 
     pub async fn claim_next(&self) -> Result<Option<BuildClaim>, BuildError> {
-        let claim = self.store.claim_next(Utc::now() - self.stale_after).await?;
-        if claim.is_some() {
-            self.changed();
+        let outcome = self.store.claim_next(Utc::now() - self.stale_after).await?;
+        if let Some(change) = outcome.change {
+            self.changed(change);
         }
-        Ok(claim)
+        Ok(outcome.claim)
     }
 
     pub fn with_cleanup(
@@ -98,7 +98,7 @@ impl BuildService {
                 &self.shutdown,
             )
             .await?;
-        self.changed();
+        self.changed(BuildChange::Resync);
         if let Some(notify) = &self.pool_change {
             notify();
         }
@@ -115,7 +115,7 @@ impl BuildService {
         };
         let (cursor, changed) = cleanup.process_batch(after, cancellation).await?;
         if changed {
-            self.changed();
+            self.changed(BuildChange::Resync);
             if let Some(notify) = &self.pool_change {
                 notify();
             }
@@ -128,14 +128,17 @@ impl BuildService {
         self
     }
 
-    pub fn with_change_notifier(mut self, notifier: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn with_change_notifier(
+        mut self,
+        notifier: Arc<dyn Fn(BuildChange) + Send + Sync>,
+    ) -> Self {
         self.on_change = Some(notifier);
         self
     }
 
-    pub(super) fn changed(&self) {
+    pub(super) fn changed(&self, change: BuildChange) {
         if let Some(notifier) = &self.on_change {
-            notifier();
+            notifier(change);
         }
     }
 

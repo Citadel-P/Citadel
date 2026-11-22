@@ -18,8 +18,8 @@ pub(super) async fn bounded<T>(
     }
 }
 
-pub(super) async fn wait<F, R>(
-    mut completion: watch::Receiver<()>,
+pub(super) async fn wait<F, R, T>(
+    mut completion: watch::Receiver<T>,
     mut read: F,
 ) -> Result<String, GitRepositoryExecutionError>
 where

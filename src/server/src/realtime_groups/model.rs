@@ -33,6 +33,39 @@ impl Group {
     pub fn reference(&self) -> Option<&str> {
         self.topic.reference()
     }
+    pub(crate) fn affected_with_lease(
+        &self,
+        event: &PublishedRuntimeEvent,
+        lease: &crate::realtime::AuthorizationLease,
+    ) -> bool {
+        if let (Topic::BuildRun(_), Some(project)) = (self.topic(), event.changed_build_project()) {
+            return lease.matches_scope(&self.name, project);
+        }
+        if matches!(
+            self.topic(),
+            Topic::BackupRun(_) | Topic::BackupRestoreRun(_)
+        ) && let Some(policy) = event.changed_owner("BackupPolicy")
+        {
+            if !lease.matches_scope(&self.name, policy) {
+                return false;
+            }
+            if let Some(run) = event.payload["backupRun"]
+                .as_str()
+                .and_then(|s| s.parse::<Uuid>().ok())
+            {
+                return matches!(self.topic(), Topic::BackupRun(id) if *id == run || event.payload["retention"] == true);
+            }
+            if let Some(restore) = event.payload["restoreRun"]
+                .as_str()
+                .and_then(|s| s.parse::<Uuid>().ok())
+            {
+                return matches!(self.topic(), Topic::BackupRestoreRun(id) if *id == restore);
+            }
+            return true;
+        }
+        self.affected_by(event)
+    }
+
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
         if matches!(self.topic(), Topic::InstanceJobs | Topic::InstanceSchedules) {
             return false;
@@ -266,6 +299,19 @@ impl Group {
             Topic::SwarmService(..) | Topic::SwarmServices(..) => {
                 event.resource_type == "SwarmService"
             }
+            Topic::GitRepo(id) if let Some(owner) = event.changed_owner("GitRepository") => {
+                *id == owner
+            }
+            Topic::BackupPolicy(id) | Topic::BackupRuns(id) | Topic::BackupRestoreRuns(id)
+                if let Some(policy) = event.changed_owner("BackupPolicy") =>
+            {
+                *id == policy
+                    && match self.topic() {
+                        Topic::BackupRuns(_) => event.payload.get("restoreRun").is_none(),
+                        Topic::BackupRestoreRuns(_) => event.payload.get("backupRun").is_none(),
+                        _ => true,
+                    }
+            }
             Topic::GitRepo(..) | Topic::GitRepositories => event.resource_type == "GitRepository",
             Topic::Script(..) | Topic::Scripts | Topic::ScriptRuns(..) => {
                 event.resource_type == "Script" && event.affects_resource(self.id())
@@ -278,6 +324,11 @@ impl Group {
             | Topic::BackupRestoreRun(..) => event.resource_type == "BackupPolicy",
             Topic::BackupRepository(..) | Topic::BackupRepositories => {
                 event.resource_type == "BackupRepository" && event.affects_resource(self.id())
+            }
+            Topic::BuildProject(id) | Topic::BuildRuns(id)
+                if event.changed_build_project().is_some() =>
+            {
+                event.resource_id == *id
             }
             Topic::BuildProject(..)
             | Topic::BuildProjects
@@ -334,6 +385,7 @@ pub enum RowStyle {
     Update,
     // Upserts only; omitted owners are not deletions.
     UpdatePatch,
+    OwnerPatch(Uuid),
     Daemon,
     DockerResource,
     // Complete state for one Docker ID, not the entire Platform inventory.
@@ -520,15 +572,33 @@ impl GroupSubscription {
                 }
                 continue;
             }
-            if matches!(batch.style, RowStyle::UpdatePatch) {
+            if matches!(batch.style, RowStyle::UpdatePatch | RowStyle::OwnerPatch(_)) {
+                if let RowStyle::OwnerPatch(id) = batch.style
+                    && batch.rows.is_empty()
+                    && self
+                        .known
+                        .entry(batch.target)
+                        .or_default()
+                        .remove(&id.to_string())
+                {
+                    events.push(ClientEvent::new(
+                        batch.target,
+                        vec![json!({"id":id}), json!("delete")],
+                    ));
+                }
                 let known = self.known.entry(batch.target).or_default();
                 for row in batch.rows {
                     if let Some(id) = row["id"].as_str() {
                         if !known.contains(id) && known.len() >= limit {
                             return Err(RealtimeReadError::SnapshotCapacity);
                         }
-                        known.insert(id.to_owned());
-                        events.push(ClientEvent::new(batch.target, vec![row, json!("update")]));
+                        let added = known.insert(id.to_owned());
+                        let action = if added && matches!(batch.style, RowStyle::OwnerPatch(_)) {
+                            "create"
+                        } else {
+                            "update"
+                        };
+                        events.push(ClientEvent::new(batch.target, vec![row, json!(action)]));
                     }
                 }
                 continue;
@@ -569,13 +639,26 @@ impl GroupSubscription {
                         batch.target,
                         vec![Value::Null, json!("destroy"), json!(removed)],
                     )),
+                    // The run list is a bounded window. Only the detail group
+                    // confirms that an open run itself has disappeared.
+                    RowStyle::Update if matches!(self.group.topic(), Topic::BuildRun(_)) => {
+                        events.push(ClientEvent::new(
+                            batch.target,
+                            vec![
+                                json!({"id": removed}),
+                                json!("delete"),
+                                json!(&self.group.name),
+                            ],
+                        ));
+                    }
                     RowStyle::Update | RowStyle::UpdatePatch => events.push(ClientEvent::new(
                         batch.target,
                         vec![json!({"id":removed}), json!("delete")],
                     )),
                     RowStyle::DockerResourcePatch(_)
                     | RowStyle::DaemonPatch(_)
-                    | RowStyle::PlatformPatch(_) => unreachable!(),
+                    | RowStyle::PlatformPatch(_)
+                    | RowStyle::OwnerPatch(_) => unreachable!(),
                 }
             }
             for row in batch.rows {
@@ -607,7 +690,8 @@ impl GroupSubscription {
                     }
                     RowStyle::DockerResourcePatch(_)
                     | RowStyle::DaemonPatch(_)
-                    | RowStyle::PlatformPatch(_) => unreachable!(),
+                    | RowStyle::PlatformPatch(_)
+                    | RowStyle::OwnerPatch(_) => unreachable!(),
                     // "update" upserts in the existing hooks and avoids duplicate
                     // creates when the initial REST read and group join overlap.
                     RowStyle::Update | RowStyle::UpdatePatch => vec![row, json!("update")],

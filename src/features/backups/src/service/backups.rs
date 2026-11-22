@@ -30,7 +30,11 @@ impl BackupService {
         claim: BackupClaim,
         shutdown: &CancellationToken,
     ) -> Result<bool, BackupError> {
-        self.changed();
+        self.changed(BackupChange::Run {
+            policy: claim.policy.id,
+            run: claim.run.id,
+            retention: false,
+        });
         let token = shutdown.child_token();
         self.progress(
             claim.run.id,
@@ -155,7 +159,11 @@ impl BackupService {
             )
             && self.store.defer_backup(&claim).await?
         {
-            self.changed();
+            self.changed(BackupChange::Run {
+                policy: claim.policy.id,
+                run: claim.run.id,
+                retention: false,
+            });
             return Ok(true);
         }
         let confirmed = completion::persist(claim.run.id, shutdown, || async {
@@ -184,7 +192,14 @@ impl BackupService {
                 status.as_str(),
                 message.as_deref().unwrap_or("Backup run completed."),
             );
-            self.changed();
+            self.changed(BackupChange::Run {
+                policy: claim.policy.id,
+                run: claim.run.id,
+                retention: matches!(
+                    status,
+                    BackupRunStatus::Succeeded | BackupRunStatus::SucceededWithWarnings
+                ),
+            });
         }
         Ok(true)
     }

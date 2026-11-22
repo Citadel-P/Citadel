@@ -121,6 +121,19 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
             .allows(citadel_stacks::permissions::WriteStack::REQUIREMENT)
     );
 
+    let bounded = store
+        .list_authorized(
+            ActorId::new(reader),
+            false,
+            &StackFilter {
+                limit: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(bounded.len(), 1);
+    assert_eq!(bounded[0].id, created.id);
     verify_team_access(&pool, &store, created.id).await;
 
     let first_claim = store

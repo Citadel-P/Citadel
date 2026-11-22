@@ -10,4 +10,5 @@ const MIGRATIONS: &[EmbeddedMigration] = &[
     EmbeddedMigration { id: "0008", name: "job_diagnostics", file: "0008_job_diagnostics.sql", sql: include_str!("0008_job_diagnostics.sql"), transactional: true },
     EmbeddedMigration { id: "0009", name: "job_history_write_overhead", file: "0009_job_history_write_overhead.sql", sql: include_str!("0009_job_history_write_overhead.sql"), transactional: true },
     EmbeddedMigration { id: "0010", name: "image_update_schedule", file: "0010_image_update_schedule.sql", sql: include_str!("0010_image_update_schedule.sql"), transactional: true },
+    EmbeddedMigration { id: "0011", name: "stack_git_check_inputs", file: "0011_stack_git_check_inputs.sql", sql: include_str!("0011_stack_git_check_inputs.sql"), transactional: true },
 ];

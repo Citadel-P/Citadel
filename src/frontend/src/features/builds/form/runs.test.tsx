@@ -48,6 +48,8 @@ describe('BuildRunsTab', () => {
     expect(screen.getByText('Queued', { selector: '[data-slot="badge"]' })).toBeVisible();
     act(() => fake.emit('BuildRunInfoUpdated', { ...run, status: 'Running' }, 'update'));
     expect(await screen.findByText('Running')).toBeVisible();
+    act(() => fake.emit('BuildRunInfoUpdated', { id: runId }, 'delete'));
+    expect(screen.queryByText('Webhook')).toBeNull();
     expect(read).toHaveBeenCalledTimes(1);
   });
 
@@ -95,6 +97,10 @@ describe('BuildRunsTab', () => {
     expect(await within(sheet).findByText('Application image run')).toBeVisible();
     expect(within(sheet).getByText(String(label))).toBeVisible();
     expect(within(sheet).getByText('Application source')).toBeVisible();
+    act(() => fake.emit('BuildRunInfoUpdated', { id: runId }, 'delete'));
+    expect(sheet).toBeVisible();
+    act(() => fake.emit('BuildRunInfoUpdated', { id: runId }, 'delete', `build-run:${runId}`));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });
 

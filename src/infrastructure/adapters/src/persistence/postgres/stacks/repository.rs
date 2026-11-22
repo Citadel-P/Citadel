@@ -18,8 +18,9 @@ impl StackRepository for PostgresStackRepository {
         after: Uuid,
         images: bool,
         limit: i64,
-    ) -> BoxFuture<'_, Result<Vec<Uuid>, StackError>> {
-        self.update_check_candidates_impl(after, images, limit)
+        reference: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<Vec<StackCheckCandidate>, StackError>> {
+        self.update_check_candidates_impl(after, images, limit, reference)
     }
 
     fn save_update_check<'a>(
@@ -28,8 +29,9 @@ impl StackRepository for PostgresStackRepository {
         administrator: bool,
         expected: &'a citadel_stacks::Stack,
         state: &'a StackUpdateState,
+        git_inputs: Option<GitCheckInputs>,
     ) -> BoxFuture<'a, Result<(), StackError>> {
-        self.save_update_check_impl(actor, administrator, expected, state)
+        self.save_update_check_impl(actor, administrator, expected, state, git_inputs)
     }
 
     fn enqueue_webhook<'a>(

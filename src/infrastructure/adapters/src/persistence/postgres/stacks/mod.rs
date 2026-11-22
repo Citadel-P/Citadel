@@ -7,10 +7,11 @@ use citadel_primitives::ActorId;
 use citadel_primitives::{EffectivePermission, PermissionPolicy, PermissionRequirement};
 use citadel_stacks::permissions as policy;
 use citadel_stacks::{
-    CreateStack, ImportComposeProject, ResourceBindingSnapshot, StackDeletionClaim,
-    StackDriftPolicy, StackError, StackFilter, StackImportClaim, StackOperationClaim, StackRelease,
-    StackReleaseSource, StackReleaseStatus, StackRepository, StackRuntimeResult, StackSource,
-    StackSpec, StackStateClaim, StackUpdateState, UpdateStack, normalize_project_name,
+    CreateStack, GitCheckInputs, ImportComposeProject, ResourceBindingSnapshot,
+    StackCheckCandidate, StackDeletionClaim, StackDriftPolicy, StackError, StackFilter,
+    StackImportClaim, StackOperationClaim, StackRelease, StackReleaseSource, StackReleaseStatus,
+    StackRepository, StackRuntimeResult, StackSource, StackSpec, StackStateClaim, StackUpdateState,
+    UpdateStack, normalize_project_name,
 };
 use citadel_tags::TagSummary;
 use futures_util::future::BoxFuture;

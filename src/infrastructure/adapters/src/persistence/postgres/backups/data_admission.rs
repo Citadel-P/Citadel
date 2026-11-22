@@ -74,6 +74,10 @@ impl BackupDataAdmission for PostgresBackupDataAdmission {
                 backup,
             )
             .await?;
+            sqlx::query("SELECT pg_notify('citadel_resource_recovery','backup')")
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?;
             tx.commit().await.map_err(storage)?;
             Ok(())
         })

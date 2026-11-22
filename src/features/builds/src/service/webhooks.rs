@@ -10,7 +10,7 @@ impl BuildService {
         self.ensure_execution_entitlements(project, "Webhook")
             .await?;
         self.store.enqueue_webhook(project, branch, commit).await?;
-        self.changed();
+        self.changed(BuildChange::ProjectRuns(project.id));
         Ok(())
     }
 }

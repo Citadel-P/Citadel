@@ -90,13 +90,15 @@ pub async fn register(
         .await?;
     for channel in [
         "citadel_backup_coverage",
+        "citadel_resource_recovery",
         "citadel_resource_copies",
         "citadel_stack_drift",
         "citadel_schedules",
     ] {
         target_listener.listen(channel).await?;
     }
-    let notifications = crate::workers::notifications::DatabaseNotificationHub::new();
+    let notifications = crate::workers::notifications::DatabaseNotificationHub::new()
+        .with_realtime(dependencies.realtime.clone());
     let coverage_listener = citadel_adapters::persistence::postgres::backups::coverage::changes::PostgresCoverageChanges::from_notifications(&dependencies.pool, notifications.scoped(ScopedTopic::Coverage));
     let copy_listener = citadel_adapters::persistence::postgres::resource_copies::changes::PostgresCopyChanges::from_notifications(notifications.scoped(ScopedTopic::Copies));
     let schedule_listener = notifications.scoped(ScopedTopic::Schedules);

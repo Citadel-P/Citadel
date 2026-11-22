@@ -6,8 +6,11 @@ impl PostgresStackRepository {
         after: Uuid,
         images: bool,
         limit: i64,
-    ) -> BoxFuture<'_, Result<Vec<Uuid>, StackError>> {
-        Box::pin(update_checks::candidates(&self.pool, after, images, limit))
+        reference: Option<Uuid>,
+    ) -> BoxFuture<'_, Result<Vec<StackCheckCandidate>, StackError>> {
+        Box::pin(update_checks::candidates(
+            &self.pool, after, images, limit, reference,
+        ))
     }
 }
 impl PostgresStackRepository {
@@ -17,6 +20,7 @@ impl PostgresStackRepository {
         administrator: bool,
         expected: &'a citadel_stacks::Stack,
         state: &'a StackUpdateState,
+        git_inputs: Option<GitCheckInputs>,
     ) -> BoxFuture<'a, Result<(), StackError>> {
         Box::pin(update_checks::save(
             self,
@@ -24,6 +28,7 @@ impl PostgresStackRepository {
             administrator,
             expected,
             state,
+            git_inputs,
         ))
     }
 }

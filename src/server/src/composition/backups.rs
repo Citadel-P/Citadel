@@ -91,9 +91,8 @@ pub(super) fn build(
         .with_repository_change_notifier(citadel_server::realtime::backup_repository_callback(
             realtime_hub.clone(),
         ))
-        .with_change_notifier(citadel_server::realtime::change_callback(
+        .with_change_notifier(citadel_server::realtime::backup_change_callback(
             realtime_hub.clone(),
-            "BackupPolicy",
         )),
     );
     Ok(backups)

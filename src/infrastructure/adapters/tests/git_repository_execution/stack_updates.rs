@@ -1,3 +1,5 @@
+#[path = "stack_git_inputs.rs"]
+mod stack_git_inputs;
 #[path = "../fixtures/workload_image_peer.rs"]
 mod stack_images;
 use citadel_adapters::connectors::routing::stacks::StackRuntimeRouter;
@@ -32,8 +34,8 @@ pub async fn verify(
         spec: serde_json::from_value(json!({"$type":"Git","gitRepoId":repository,"branch":"main","composePaths":["compose.yaml"],"updateBehavior":"Notify"})).unwrap(),
         description: None, drift_policy: None, tag_ids: vec![], duplicate_source: None,
     };
-    let stack = store.create(actor, true, &input).await.unwrap();
     let source: StackReleaseSource = serde_json::from_value(json!({"sourceType":"Git","gitRepositoryId":repository,"branch":"main","resolvedCommitSha":applied,"composePaths":["compose.yaml"]})).unwrap();
+    let stack = store.create(actor, true, &input).await.unwrap();
     sqlx::query("UPDATE stackreleases SET source=$2,status='Healthy' WHERE id=$1")
         .bind(stack.current_stack_release_id)
         .bind(source.to_storage_value().unwrap())
@@ -49,6 +51,7 @@ pub async fn verify(
         ),
         git.clone(),
     );
+    stack_git_inputs::verify(pool, &store, &scanner, &git, actor, stack.id).await;
     for relevant in [false, true] {
         if let Some(StackSpec::Git { watch_paths, .. }) = &mut stack.resource.spec {
             *watch_paths = if relevant {
@@ -173,17 +176,19 @@ pub async fn verify(
         .unwrap();
     assert!(
         store
-            .update_check_candidates(Uuid::nil(), true, 100)
+            .update_check_candidates(Uuid::nil(), true, 100, None)
             .await
             .unwrap()
-            .contains(&stack.id)
+            .iter()
+            .any(|row| row.id == stack.id)
     );
     assert!(
         !store
-            .update_check_candidates(Uuid::nil(), false, 100)
+            .update_check_candidates(Uuid::nil(), false, 100, None)
             .await
             .unwrap()
-            .contains(&stack.id)
+            .iter()
+            .any(|row| row.id == stack.id)
     );
     let cache = Arc::new(
         citadel_adapters::connectors::registries::digest_cache::ImageDigestCache::default(),

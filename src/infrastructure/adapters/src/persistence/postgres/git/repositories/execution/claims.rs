@@ -28,7 +28,7 @@ impl PostgresGitRepositoryExecutionPersistence {
     pub(super) fn enqueue_due_impl<'a>(
         &'a self,
         limit: usize,
-    ) -> BoxFuture<'a, Result<usize, GitRepositoryExecutionError>> {
+    ) -> BoxFuture<'a, Result<Vec<Uuid>, GitRepositoryExecutionError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let rows = sqlx::query(
@@ -45,8 +45,10 @@ LIMIT $1
             .fetch_all(&mut *transaction)
             .await
             .map_err(storage)?;
+            let mut owners = Vec::with_capacity(rows.len());
             for row in &rows {
                 let id: Uuid = row.try_get("id").map_err(storage)?;
+                owners.push(id);
                 let branch: String = row.try_get("branch").map_err(storage)?;
                 let actor_id: Uuid = row.try_get("createdbyactorid").map_err(storage)?;
                 upsert_pending_ref(&mut transaction, id, &branch, "Poll").await?;
@@ -66,7 +68,7 @@ LIMIT $1
                     .map_err(storage)?;
             }
             transaction.commit().await.map_err(storage)?;
-            Ok(rows.len())
+            Ok(owners)
         })
     }
 }
@@ -171,7 +173,7 @@ impl PostgresGitRepositoryExecutionPersistence {
             return Ok(());
         }
         let mut transaction = self.pool.begin().await.map_err(storage)?;
-        sqlx::query(
+        let recovered = sqlx::query(
                 r#"
 WITH candidates AS MATERIALIZED (
   SELECT repository.id, (COALESCE(jsonb_array_length(repository.onclone::jsonb->'commands'),0)>0 OR COALESCE(jsonb_array_length(repository.onpull::jsonb->'commands'),0)>0) AS hooks FROM gitrepositories repository
@@ -196,6 +198,12 @@ FROM stale WHERE gitrepositories.id=stale.gitrepositoryid
             .execute(&mut *transaction)
             .await
             .map_err(storage)?;
+        if recovered.rows_affected() > 0 {
+            sqlx::query("SELECT pg_notify('citadel_resource_recovery','git')")
+                .execute(&mut *transaction)
+                .await
+                .map_err(storage)?;
+        }
         transaction.commit().await.map_err(storage)?;
         *last = Some(tokio::time::Instant::now());
         Ok(())

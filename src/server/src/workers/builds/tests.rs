@@ -197,6 +197,7 @@ async fn retention_obeys_configuration_and_preserves_referenced_builds() {
             .claim_next(chrono::Utc::now() - chrono::Duration::minutes(5))
             .await
             .unwrap()
+            .claim
             .unwrap();
         assert_eq!(claim.run.id, run.id);
         store
@@ -296,7 +297,8 @@ async fn project_retention_preserves_both_json_contracts_and_notifies_after_comm
         Arc::new(FailedExecutor),
         chrono::Duration::minutes(5),
     )
-    .with_change_notifier(Arc::new(move || {
+    .with_change_notifier(Arc::new(move |change| {
+        assert_eq!(change, citadel_builds::BuildChange::ProjectRuns(project.id));
         observed.fetch_add(1, Ordering::SeqCst);
     }));
     let mut runs = Vec::new();
@@ -349,10 +351,26 @@ async fn project_retention_preserves_both_json_contracts_and_notifies_after_comm
         12,
         "one claim and one committed completion invalidation per run"
     );
+    let expired = store.enqueue(actor, project.id, "Manual").await.unwrap();
+    sqlx::query("UPDATE buildruns SET queuedat=now()-interval '25 hours' WHERE id=$1")
+        .bind(expired.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(service.claim_next().await.unwrap().is_none());
+    assert_eq!(
+        store.get_run(expired.id).await.unwrap().status,
+        citadel_builds::BuildRunStatus::Failed
+    );
+    assert_eq!(
+        notifications.load(Ordering::SeqCst),
+        13,
+        "expiry is committed without a new claim"
+    );
     assert!(!service.process_one(&token).await.unwrap());
     assert_eq!(
         notifications.load(Ordering::SeqCst),
-        12,
+        13,
         "idle polling must not notify"
     );
     pool.close().await;

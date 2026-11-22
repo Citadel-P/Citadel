@@ -51,7 +51,12 @@ impl Dispatch for Catalog {
     ) -> Result<bool, String> {
         panic!("unexpected calendar admission")
     }
-    async fn batch(&self, _: Purpose, _: &CancellationToken) -> Result<(), String> {
+    async fn batch(
+        &self,
+        _: Purpose,
+        _: Option<uuid::Uuid>,
+        _: &CancellationToken,
+    ) -> Result<(), String> {
         panic!("unexpected batch before startup delay")
     }
 }
@@ -139,7 +144,7 @@ async fn committed_stack_edits_wake_git_and_the_authorized_schedule_catalog() {
         .unwrap();
     let hub_task = tokio::spawn(hub.run(Box::new(listener), stop.clone()));
     let (g, mut deadlines) = watch::channel(None);
-    let (_git, git) = watch::channel(());
+    let (_git, git) = watch::channel((0, uuid::Uuid::nil()));
     let (_license, license) = watch::channel(());
     let coordinator = tokio::spawn(drive(
         Catalog {

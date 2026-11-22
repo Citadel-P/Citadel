@@ -41,6 +41,7 @@ impl From<AuthorizedResource<crate::Stack>> for StackConfig {
 
 #[derive(Debug, Clone, Default)]
 pub struct StackFilter {
+    pub limit: Option<i64>,
     pub resource_ids: Option<Vec<Uuid>>,
     pub container_ids: Option<Vec<String>>,
     pub tags: Vec<String>,

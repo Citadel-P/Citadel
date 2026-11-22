@@ -7,9 +7,7 @@ use crate::{
         },
         error::{ApiError, HttpResult, api_result, no_store},
         request_validation::{ApiQuery, invalid_json},
-        resource_access::{
-            authorize_global, authorize_resource, publish_resource_change, require_actor,
-        },
+        resource_access::{authorize_global, authorize_resource, require_actor},
         resources::{
             capabilities::ResourceCapabilitiesView,
             git_repositories::{
@@ -56,7 +54,6 @@ pub struct GitRepositoriesHttpState {
     pub identity: Arc<IdentityService>,
     pub repository: Arc<dyn citadel_git::GitRepositoryPersistence>,
     pub execution: Arc<GitRepositoryExecutionService>,
-    pub realtime: Option<RealtimeHub>,
     pub cancellation: CancellationToken,
 }
 
@@ -372,9 +369,6 @@ async fn sync(
             .map_err(ApiError::internal),
         &headers,
     )?;
-    if let Some(realtime) = &state.realtime {
-        realtime.publish_resource_change("GitRepository", id, "gitRepositoryChanged");
-    }
     Ok(no_store(
         Json(api_result(
             GitRepositoryView::try_from(repository).map_err(ApiError::internal),
@@ -501,6 +495,7 @@ async fn list_git_repositories(
                 principal.actor_id,
                 principal.is_administrator(),
                 &filters.tags,
+                None,
             )
             .await
             .map_err(metadata_error),
@@ -662,7 +657,9 @@ async fn create_git_repository(
             .map_err(metadata_error),
         &headers,
     )?;
-    publish_resource_change(&state.realtime, "GitRepository", "gitRepositoryChanged");
+    if let Some(hub) = &state.realtime {
+        hub.publish_resource_change("GitRepository", repository.id, "ownerChanged");
+    }
     Ok(no_store(
         Json(api_result(
             GitRepositoryView::try_from(repository).map_err(ApiError::internal),
@@ -742,7 +739,9 @@ async fn mutate_git_repository(
             .map_err(metadata_error),
         &headers,
     )?;
-    publish_resource_change(&state.realtime, "GitRepository", "gitRepositoryChanged");
+    if let Some(hub) = &state.realtime {
+        hub.publish_resource_change("GitRepository", repository.id, "ownerChanged");
+    }
     Ok(no_store(
         Json(api_result(
             GitRepositoryView::try_from(repository).map_err(ApiError::internal),
@@ -871,7 +870,11 @@ async fn delete_git_repositories(
             .map_err(metadata_error),
         &headers,
     )?;
-    publish_resource_change(&state.realtime, "GitRepository", "gitRepositoryChanged");
+    if let Some(hub) = &state.realtime {
+        for id in input.ids {
+            hub.publish_resource_change("GitRepository", id, "ownerChanged");
+        }
+    }
     Ok(no_store(StatusCode::NO_CONTENT.into_response()))
 }
 
@@ -925,7 +928,7 @@ async fn capabilities(
 pub struct GitCatalogHttpState {
     pub git_repositories: std::sync::Arc<dyn citadel_git::GitRepositoryPersistence>,
     pub identity: std::sync::Arc<citadel_identity::IdentityService>,
-    pub realtime: Option<crate::realtime::RealtimeHub>,
+    pub realtime: Option<RealtimeHub>,
 }
 
 pub fn catalog_router(state: GitCatalogHttpState) -> axum::Router {

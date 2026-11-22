@@ -26,8 +26,8 @@ pub struct GitRepositoryExecutionService {
     cli: Arc<GitCli>,
     cache_root: PathBuf,
     stale_after: Duration,
-    on_change: Option<Arc<dyn Fn() + Send + Sync>>,
-    completion: tokio::sync::watch::Sender<()>,
+    on_change: Option<Arc<dyn Fn(Option<Uuid>) + Send + Sync>>,
+    completion: tokio::sync::watch::Sender<(u64, Uuid)>,
 }
 
 impl GitRepositoryExecutionService {
@@ -46,24 +46,27 @@ impl GitRepositoryExecutionService {
             cache_root,
             stale_after,
             on_change: None,
-            completion: tokio::sync::watch::channel(()).0,
+            completion: tokio::sync::watch::channel((0, Uuid::nil())).0,
         }
     }
 
     #[must_use]
-    pub fn with_change_notifier(mut self, on_change: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn with_change_notifier(
+        mut self,
+        on_change: Arc<dyn Fn(Option<Uuid>) + Send + Sync>,
+    ) -> Self {
         self.on_change = Some(on_change);
         self
     }
 
     /// Coalescing wake-up after synchronization has committed to storage.
-    pub fn subscribe_completion(&self) -> tokio::sync::watch::Receiver<()> {
+    pub fn subscribe_completion(&self) -> tokio::sync::watch::Receiver<(u64, Uuid)> {
         self.completion.subscribe()
     }
 
-    pub(super) fn changed(&self) {
+    pub(super) fn changed(&self, owner: Option<Uuid>) {
         if let Some(on_change) = &self.on_change {
-            on_change();
+            on_change(owner);
         }
     }
 

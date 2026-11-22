@@ -284,7 +284,7 @@ async fn synchronization_claims_recover_and_real_git_results_are_persisted() {
             cache,
             Duration::from_secs(60),
         )
-        .with_change_notifier(Arc::new(move || {
+        .with_change_notifier(Arc::new(move |_| {
             changes.fetch_add(1, Ordering::SeqCst);
         })),
     );
@@ -662,6 +662,7 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
         ActorId::new(actor),
         true,
         &[],
+        None,
     )
     .await
     .unwrap()
@@ -981,11 +982,11 @@ async fn poll_activity_scope_and_webhook_failure_snapshot_match_job_policy() {
     sqlx::query("UPDATE gitrepositoryrefs SET lastsyncedat=now()-interval '5 minutes' WHERE gitrepositoryid=$1").bind(id).execute(&pool).await.unwrap();
     assert_eq!(
         store.enqueue_due(100).await.unwrap(),
-        2,
+        [id, id],
         "poll both default branch and branch subscribed by a Git Stack"
     );
     assert_eq!(
-        store.enqueue_due(100).await.unwrap(),
+        store.enqueue_due(100).await.unwrap().len(),
         0,
         "overlapping scheduler ticks cannot duplicate queued branches"
     );

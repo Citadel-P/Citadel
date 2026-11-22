@@ -220,14 +220,26 @@ async fn stack_update_resolution_is_durable_exact_and_does_not_reopen() {
         .await;
     f.alerts.acknowledge(f.actor, &[old.id]).await.unwrap();
     stacks
-        .save_update_check(f.actor, true, &stack, &state("sha256:new", "sha256:old"))
+        .save_update_check(
+            f.actor,
+            true,
+            &stack,
+            &state("sha256:new", "sha256:old"),
+            None,
+        )
         .await
         .unwrap();
     f.drain().await;
     f.resolved(old.id, false).await; // A partial update cannot close an aggregate alert.
     assert!(
         stacks
-            .save_update_check(f.actor, true, &stack, &state("sha256:new", "sha256:new"))
+            .save_update_check(
+                f.actor,
+                true,
+                &stack,
+                &state("sha256:new", "sha256:new"),
+                None
+            )
             .await
             .is_err()
     );
@@ -238,7 +250,13 @@ async fn stack_update_resolution_is_durable_exact_and_does_not_reopen() {
         .await
         .unwrap();
     stacks
-        .save_update_check(f.actor, true, &current, &state("sha256:new", "sha256:new"))
+        .save_update_check(
+            f.actor,
+            true,
+            &current,
+            &state("sha256:new", "sha256:new"),
+            None,
+        )
         .await
         .unwrap();
     f.resolved(old.id, false).await; // Only the committed queue worker resolves it.
@@ -279,6 +297,7 @@ async fn stack_update_resolution_is_durable_exact_and_does_not_reopen() {
             true,
             &current,
             &state("sha256:newer", "sha256:newer"),
+            None,
         )
         .await
         .unwrap();
@@ -291,7 +310,13 @@ async fn stack_update_resolution_is_durable_exact_and_does_not_reopen() {
         .await
         .unwrap();
     stacks
-        .save_update_check(f.actor, true, &current, &state("sha256:new", "sha256:new"))
+        .save_update_check(
+            f.actor,
+            true,
+            &current,
+            &state("sha256:new", "sha256:new"),
+            None,
+        )
         .await
         .unwrap();
     let reopened = f

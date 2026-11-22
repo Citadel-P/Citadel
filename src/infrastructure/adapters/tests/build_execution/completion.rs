@@ -152,16 +152,16 @@ impl BuildRepository for Store {
     fn claim_next<'a>(
         &'a self,
         stale_before: DateTime<Utc>,
-    ) -> BoxFuture<'a, Result<Option<BuildClaim>, BuildError>> {
+    ) -> BoxFuture<'a, Result<BuildClaimOutcome, BuildError>> {
         self.claims.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
-            let mut claim = self.inner.claim_next(stale_before).await?;
+            let mut outcome = self.inner.claim_next(stale_before).await?;
             if self.mode == 6
-                && let Some(claim) = &mut claim
+                && let Some(claim) = &mut outcome.claim
             {
                 claim.run.timeout_seconds = 1;
             }
-            Ok(claim)
+            Ok(outcome)
         })
     }
     fn finish<'a>(
@@ -385,8 +385,9 @@ pub(super) async fn verify(pool: &sqlx::PgPool, actor: ActorId, input: &BuildPro
         }
         let changes = Arc::new(AtomicUsize::new(0));
         let observed = changes.clone();
-        service = service.with_change_notifier(Arc::new(move || {
+        service = service.with_change_notifier(Arc::new(move |change| {
             observed.fetch_add(1, Ordering::SeqCst);
+            assert_eq!(change, citadel_builds::BuildChange::ProjectRuns(project.id));
         }));
         let observer = async {
             if matches!(mode, 0 | 3) {

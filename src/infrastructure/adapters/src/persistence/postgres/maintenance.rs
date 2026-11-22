@@ -44,7 +44,7 @@ pub async fn reconcile(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> 
     if crate::persistence::postgres::builds::recover(&mut tx, before)
         .await
         .map_err(protocol)?
-        > 0
+        .is_some()
     {
         changed.extend(["BuildProject", "BuildRun"]);
     }

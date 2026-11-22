@@ -76,7 +76,7 @@ pub(super) fn build(
             data_root.join("git-repositories"),
             Duration::from_secs(10 * 60),
         )
-        .with_change_notifier(citadel_server::realtime::change_callback(
+        .with_change_notifier(citadel_server::realtime::owner_change_callback(
             realtime_hub.clone(),
             "GitRepository",
         )),

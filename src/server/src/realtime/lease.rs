@@ -32,19 +32,18 @@ impl AuthorizationLease {
     pub(super) fn clear(&self) {
         self.decisions.lock().unwrap().clear();
     }
-    pub(crate) fn set_scope(&self, group: &str, platform: Uuid) {
+    pub(crate) fn set_scope(&self, group: &str, owner: Uuid) {
         let mut scopes = self.scopes.lock().unwrap();
         if scopes.len() >= 64 && !scopes.contains_key(group) {
             scopes.clear();
         }
-        scopes.insert(group.to_owned(), platform);
+        scopes.insert(group.to_owned(), owner);
     }
-    pub(crate) fn matches_scope(&self, group: &str, platform: Uuid) -> bool {
-        self.scopes
-            .lock()
-            .unwrap()
-            .get(group)
-            .is_none_or(|id| *id == platform)
+    pub(crate) fn scope(&self, group: &str) -> Option<Uuid> {
+        self.scopes.lock().unwrap().get(group).copied()
+    }
+    pub(crate) fn matches_scope(&self, group: &str, owner: Uuid) -> bool {
+        self.scope(group).is_none_or(|id| id == owner)
     }
     fn current(&self, principal: &ActorPrincipal) -> Result<(), RealtimeReadError> {
         if principal.actor_id != self.actor

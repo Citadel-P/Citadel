@@ -55,7 +55,7 @@ pub use service::{
     calculate_drift, import_runtime_fingerprint,
 };
 
-pub use repository::StackRepository;
+pub use repository::{GitCheckInputs, StackCheckCandidate, StackRepository};
 
 pub use runtime::{
     StackBindingResolverPort, StackBuildImageResolverPort, StackRuntime,

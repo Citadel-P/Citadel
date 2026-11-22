@@ -55,7 +55,7 @@ impl GitRepositoryExecutionPersistence for PostgresGitRepositoryExecutionPersist
     fn enqueue_due<'a>(
         &'a self,
         limit: usize,
-    ) -> BoxFuture<'a, Result<usize, GitRepositoryExecutionError>> {
+    ) -> BoxFuture<'a, Result<Vec<Uuid>, GitRepositoryExecutionError>> {
         self.enqueue_due_impl(limit)
     }
 

@@ -1,5 +1,5 @@
 //! Backups HTTP routes, authorization and local request handling.
-use crate::api::resources::backups::patch::typed_patch;
+use crate::api::{mutation_notifications::CommittedOwner, resources::backups::patch::typed_patch};
 use crate::{
     api::{
         error::{ApiError, HttpResult, api_result, no_store},
@@ -13,6 +13,7 @@ use crate::{
     },
     openapi::router::OpenApiRouterExt,
 };
+use citadel_backups::BackupChange;
 
 use axum::{
     Json, Router,
@@ -329,7 +330,7 @@ async fn list_policies(
     let records = result(
         s.backups
             .store()
-            .list_policies(p.actor_id, p.is_administrator())
+            .list_policies(p.actor_id, p.is_administrator(), None)
             .await,
         &h,
     )?;
@@ -396,17 +397,13 @@ async fn create_policy(
             .await,
         &h,
     )?;
-    Ok(no_store(
-        Json(api_result(
-            BackupPolicyView::try_from(result(
-                s.backups.store().create_policy(p.actor_id, &i).await,
-                &h,
-            )?)
-            .map_err(ApiError::internal),
-            &h,
-        )?)
-        .into_response(),
-    ))
+    let policy = result(s.backups.store().create_policy(p.actor_id, &i).await, &h)?;
+    let owner = CommittedOwner(policy.id);
+    let view = api_result(
+        BackupPolicyView::try_from(policy).map_err(ApiError::internal),
+        &h,
+    )?;
+    Ok(no_store((Extension(owner), Json(view)).into_response()))
 }
 
 #[utoipa::path(
@@ -553,20 +550,19 @@ async fn update_policy(
             &h,
         )?;
     }
-    Ok(no_store(
-        Json(api_result(
-            BackupPolicyView::try_from(result(
-                s.backups
-                    .store()
-                    .update_policy(p.actor_id, id, current.row_version, &input)
-                    .await,
-                &h,
-            )?)
-            .map_err(ApiError::internal),
-            &h,
-        )?)
-        .into_response(),
-    ))
+    let policy = result(
+        s.backups
+            .store()
+            .update_policy(p.actor_id, id, current.row_version, &input)
+            .await,
+        &h,
+    )?;
+    let owner = CommittedOwner(policy.id);
+    let view = api_result(
+        BackupPolicyView::try_from(policy).map_err(ApiError::internal),
+        &h,
+    )?;
+    Ok(no_store((Extension(owner), Json(view)).into_response()))
 }
 
 #[utoipa::path(
@@ -605,17 +601,16 @@ async fn rename_policy(
         &h,
     )
     .await?;
-    Ok(no_store(
-        Json(api_result(
-            BackupPolicyView::try_from(result(
-                s.backups.store().rename_policy(p.actor_id, &input).await,
-                &h,
-            )?)
-            .map_err(ApiError::internal),
-            &h,
-        )?)
-        .into_response(),
-    ))
+    let policy = result(
+        s.backups.store().rename_policy(p.actor_id, &input).await,
+        &h,
+    )?;
+    let owner = CommittedOwner(policy.id);
+    let view = api_result(
+        BackupPolicyView::try_from(policy).map_err(ApiError::internal),
+        &h,
+    )?;
+    Ok(no_store((Extension(owner), Json(view)).into_response()))
 }
 
 #[utoipa::path(
@@ -672,20 +667,19 @@ async fn update_policy_metadata(
         citadel_backups::policies::metadata::description_patch(&patch),
         &h,
     )?;
-    Ok(no_store(
-        Json(api_result(
-            BackupPolicyView::try_from(result(
-                s.backups
-                    .store()
-                    .update_policy_description(p.actor_id, id, description)
-                    .await,
-                &h,
-            )?)
-            .map_err(ApiError::internal),
-            &h,
-        )?)
-        .into_response(),
-    ))
+    let policy = result(
+        s.backups
+            .store()
+            .update_policy_description(p.actor_id, id, description)
+            .await,
+        &h,
+    )?;
+    let owner = CommittedOwner(policy.id);
+    let view = api_result(
+        BackupPolicyView::try_from(policy).map_err(ApiError::internal),
+        &h,
+    )?;
+    Ok(no_store((Extension(owner), Json(view)).into_response()))
 }
 
 async fn authorize_policy_dependencies(
@@ -804,7 +798,7 @@ async fn archive_policy(
     )
     .await?;
     result(s.backups.store().archive_policy(id).await, &h)?;
-    Ok(StatusCode::NO_CONTENT.into_response())
+    Ok((Extension(CommittedOwner(id)), StatusCode::NO_CONTENT).into_response())
 }
 
 #[utoipa::path(
@@ -1415,13 +1409,19 @@ async fn queue_restore(
     ValidatedJson(i): ValidatedJson<RestoreInput>,
 ) -> HttpResult {
     let p = actor(p, &h)?;
+    let (run, owner) = enqueue_restore(&s, &p, id, i, &h).await?;
     Ok(no_store(
-        Json(api_result(
-            BackupRestoreRunView::try_from(enqueue_restore(&s, &p, id, i, &h).await?)
-                .map_err(ApiError::internal),
-            &h,
-        )?)
-        .into_response(),
+        (
+            Extension(BackupChange::Restore {
+                policy: owner,
+                restore: run.id,
+            }),
+            Json(api_result(
+                BackupRestoreRunView::try_from(run).map_err(ApiError::internal),
+                &h,
+            )?),
+        )
+            .into_response(),
     ))
 }
 
@@ -1431,7 +1431,7 @@ async fn enqueue_restore(
     id: Uuid,
     i: RestoreInput,
     h: &HeaderMap,
-) -> HttpResult<citadel_backups::BackupRestoreRun> {
+) -> HttpResult<(citadel_backups::BackupRestoreRun, Uuid)> {
     let source = result(s.backups.store().get_run(id).await, h)?;
     api_result(
         s.identity
@@ -1467,7 +1467,7 @@ async fn enqueue_restore(
             .await,
         h,
     )?;
-    Ok(run)
+    Ok((run, source.backup_policy_id))
 }
 
 #[utoipa::path(
@@ -1644,7 +1644,14 @@ async fn cancel_restore(
     )
     .await?;
     result(s.backups.cancel_restore(id).await, &h)?;
-    Ok(StatusCode::NO_CONTENT.into_response())
+    Ok((
+        Extension(BackupChange::Restore {
+            policy: source.backup_policy_id,
+            restore: id,
+        }),
+        StatusCode::NO_CONTENT,
+    )
+        .into_response())
 }
 
 #[utoipa::path(
@@ -1749,11 +1756,18 @@ async fn queue_backup(
     let input = input.map(|ValidatedJson(v)| v).unwrap_or_default();
     let run = enqueue_backup(&s, &p, id, input, &h).await?;
     Ok(no_store(
-        Json(api_result(
-            BackupRunView::try_from(run).map_err(ApiError::internal),
-            &h,
-        )?)
-        .into_response(),
+        (
+            Extension(BackupChange::Run {
+                policy: id,
+                run: run.id,
+                retention: false,
+            }),
+            Json(api_result(
+                BackupRunView::try_from(run).map_err(ApiError::internal),
+                &h,
+            )?),
+        )
+            .into_response(),
     ))
 }
 
@@ -2002,7 +2016,15 @@ async fn cancel_backup(
     )
     .await?;
     result(s.backups.cancel_backup(id).await, &h)?;
-    Ok(StatusCode::NO_CONTENT.into_response())
+    Ok((
+        Extension(BackupChange::Run {
+            policy: run.backup_policy_id,
+            run: id,
+            retention: false,
+        }),
+        StatusCode::NO_CONTENT,
+    )
+        .into_response())
 }
 
 #[utoipa::path(
@@ -2038,15 +2060,23 @@ async fn run_backup(
     )?;
     let progress = s.backups.subscribe_progress(); // Subscribe before enqueue: fast workers must not lose completion.
     let run = enqueue_backup(&s, &p, id, input, &h).await?;
-    Ok(response(
-        s,
-        p,
-        id,
-        run.id,
-        false,
-        progress,
-        format!("Backup run queued for \"{}\".", run.policy_name_snapshot),
-    ))
+    Ok((
+        Extension(BackupChange::Run {
+            policy: id,
+            run: run.id,
+            retention: false,
+        }),
+        response(
+            s,
+            p,
+            id,
+            run.id,
+            false,
+            progress,
+            format!("Backup run queued for \"{}\".", run.policy_name_snapshot),
+        ),
+    )
+        .into_response())
 }
 
 #[utoipa::path(
@@ -2081,17 +2111,23 @@ async fn run_restore(
         &h,
     )?;
     let progress = s.backups.subscribe_progress();
-    let run = enqueue_restore(&s, &p, id, input, &h).await?;
-    let source = result(s.backups.store().get_run(id).await, &h)?;
-    Ok(response(
-        s,
-        p,
-        source.backup_policy_id,
-        run.id,
-        true,
-        progress,
-        "Volume restore queued.".into(),
-    ))
+    let (run, owner) = enqueue_restore(&s, &p, id, input, &h).await?;
+    Ok((
+        Extension(BackupChange::Restore {
+            policy: owner,
+            restore: run.id,
+        }),
+        response(
+            s,
+            p,
+            owner,
+            run.id,
+            true,
+            progress,
+            "Volume restore queued.".into(),
+        ),
+    )
+        .into_response())
 }
 
 fn response(

@@ -17,6 +17,7 @@ pub struct SwarmServiceDuplicateDraft {
 
 #[derive(Debug, Clone, Default)]
 pub struct SwarmServiceFilter {
+    pub limit: Option<i64>,
     pub resource_ids: Option<Vec<Uuid>>,
     pub container_ids: Option<Vec<String>>,
     pub tags: Vec<String>,

@@ -396,7 +396,7 @@ For the shared listener URL format and provider setup, see [Webhooks](/guides/we
 
 Open the **Runs** tab on a build project to see run history.
 
-Use the log action on a run to view persisted logs. Active runs stream logs live while the sheet is open. Logs are stored with the run until retention removes that run.
+Select **View logs** to see a run’s saved output. Active runs stream new lines while the log is open. If retention removes the run, its log closes and the run disappears from the list.
 
 Run statuses:
 

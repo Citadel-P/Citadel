@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { AuthorizedProject, BuildRunStatus } from '@/api/generated/api.types';
 import { GenericActionBarButtons } from '@/components/custom/action-bar';
 import { StateIndicator } from '@/components/custom/state-indicator';
@@ -82,6 +83,7 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
       },
     ],
     useData(id: string) {
+      const client = useQueryClient();
       const { data, isLoading, error, refetch, isFetching } = useRead('getBuildProject', { id });
       const [build, setBuild] = useState<BuildFormResource | undefined>(data?.data as BuildFormResource | undefined);
       const lastDataRef = useRef<AuthorizedProject | undefined>(data?.data);
@@ -94,12 +96,20 @@ export const BuildFormComponents: RequiredFormComponents<BuildFormResource> = {
       }, [data?.data]);
 
       const handleBuildProjectInfoUpdated = useCallback(
-        (project: AuthorizedProject) => {
+        (project: AuthorizedProject, action: string) => {
           if (project.id !== id) return;
+          if (action === 'delete') {
+            const queryKey = ['getBuildProject', { id }];
+            void client.cancelQueries({ queryKey, exact: true });
+            client.setQueryData(queryKey, null);
+            lastDataRef.current = undefined;
+            setBuild(undefined);
+            return;
+          }
 
           setBuild((prev) => mergeBuildProjectUpdate(prev, project));
         },
-        [id],
+        [id, client],
       );
 
       const setupEventListeners = useCallback(
