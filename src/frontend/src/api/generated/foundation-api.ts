@@ -177,6 +177,7 @@ export const foundationOperations = {
   getInstanceJobHistory: { method: 'GET', path: '/api/v1/instance/jobs/history' },
   getInstanceJobs: { method: 'GET', path: '/api/v1/instance/jobs' },
   getInstanceRestart: { method: 'GET', path: '/api/v1/instance/restart' },
+  getInstanceScheduleGroups: { method: 'GET', path: '/api/v1/instance/schedules/groups' },
   getInstanceSchedules: { method: 'GET', path: '/api/v1/instance/schedules' },
   getInstanceUpdateOperation: { method: 'GET', path: '/api/v1/updates/operations/{id}' },
   getInstanceUpdates: { method: 'GET', path: '/api/v1/updates' },

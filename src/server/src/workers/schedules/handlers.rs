@@ -124,7 +124,14 @@ impl Dispatch for Handlers {
                 .accept_occurrence(minute)
                 .await
                 .map_err(|e| e.to_string()),
-            _ => Ok(false),
+            Purpose::Backup => Ok(false),
+            Purpose::Release
+            | Purpose::Git
+            | Purpose::Image
+            | Purpose::DeploymentImages
+            | Purpose::StackImages
+            | Purpose::ServiceImages
+            | Purpose::StackGit => unreachable!("batch schedule used as a calendar"),
         }
     }
 
@@ -132,6 +139,7 @@ impl Dispatch for Handlers {
         let Some(_permit) = self.admission.enter("Scheduled checks", cancel).await else {
             return Ok(());
         };
+        let _batch = self.instance.start_schedule_batch(purpose);
         match purpose {
             Purpose::Git => self
                 .git
@@ -181,7 +189,9 @@ impl Dispatch for Handlers {
                 )
                 .await
             }
-            _ => unreachable!("calendar schedules accept occurrences"),
+            Purpose::Script | Purpose::Backup | Purpose::Install => {
+                unreachable!("calendar schedules accept occurrences")
+            }
         }
     }
 }

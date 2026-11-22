@@ -52,10 +52,27 @@ impl<T: Send + Sync> NotificationSource for Changes<T> {
     }
 }
 impl ScheduleReader for ReleaseFixture {
-    fn page(
+    fn counts<'a>(
+        &'a self,
+        _: &'a str,
+        _: &'a citadel_instance::ScheduleCatalogPolicy,
+    ) -> BoxFuture<'a, Result<Vec<citadel_instance::ScheduleCount>, InstanceError>> {
+        unreachable!("workers do not read catalog counts")
+    }
+    fn page<'a>(
+        &'a self,
+        _: &'a [Purpose],
+        _: &'a str,
+        _: i64,
+        _: i64,
+        _: &'a citadel_instance::ScheduleCatalogPolicy,
+    ) -> BoxFuture<'a, Result<Vec<ScheduleDefinition>, InstanceError>> {
+        unreachable!("workers do not read numbered catalog pages")
+    }
+    fn discover(
         &self,
-        _: Option<Purpose>,
-        _: Option<(Purpose, Uuid)>,
+        _: Purpose,
+        _: Option<Uuid>,
         _: i64,
     ) -> BoxFuture<'_, Result<Vec<ScheduleDefinition>, InstanceError>> {
         Box::pin(async { Ok(vec![]) })

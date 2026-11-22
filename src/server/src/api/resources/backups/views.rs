@@ -3,7 +3,9 @@ use crate::api::resources::capabilities::ResourceCapabilitiesView;
 use crate::api::resources::webhooks::views::WebhookView;
 use crate::api::{error::ApiError, resource_access::capabilities_from_permission};
 use chrono::{DateTime, Utc};
-use citadel_identity::{ActorPrincipal, IdentityService};
+use citadel_backups::permissions::RestoreBackupPolicy;
+use citadel_identity::{ActorPrincipal, IdentityService, PermissionGrant};
+use citadel_primitives::PermissionPolicy;
 use citadel_primitives::PlatformStatus;
 use citadel_primitives::ResourceControlState;
 use citadel_primitives::ResourceType;
@@ -69,6 +71,24 @@ impl TryFrom<citadel_backups::BackupRepository> for BackupRepositoryView {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupPolicyCapabilitiesView {
+    #[serde(flatten)]
+    pub access: ResourceCapabilitiesView,
+    pub can_restore: bool,
+}
+
+impl BackupPolicyCapabilitiesView {
+    pub(crate) fn for_actor(permission: Option<PermissionGrant>, administrator: bool) -> Self {
+        Self {
+            access: permission.into(),
+            can_restore: administrator
+                || permission.is_some_and(|grant| grant.allows(RestoreBackupPolicy::REQUIREMENT)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupPolicyView {
@@ -76,7 +96,7 @@ pub struct BackupPolicyView {
     #[schema(required = true)]
     pub latest_run: Option<BackupRunView>,
     #[schema(required = true)]
-    pub capabilities: Option<crate::api::resources::capabilities::ResourceCapabilitiesView>,
+    pub capabilities: Option<BackupPolicyCapabilitiesView>,
     pub id: Uuid,
     pub name: String,
     pub normalized_name: String,
@@ -633,7 +653,10 @@ pub(crate) async fn authorized_policies(
         .map(|item| {
             let permission = permissions.get(&item.id).copied().flatten();
             let mut view = BackupPolicyView::try_from(item).map_err(ApiError::internal)?;
-            view.capabilities = Some(capabilities_from_permission(permission));
+            view.capabilities = Some(BackupPolicyCapabilitiesView::for_actor(
+                permission,
+                principal.is_administrator(),
+            ));
             Ok(view)
         })
         .collect()

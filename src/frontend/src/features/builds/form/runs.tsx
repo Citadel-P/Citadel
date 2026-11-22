@@ -43,7 +43,9 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
   const { runId: requestedRunId, clearRunId } = useBuildRunQuery();
   const queryClient = useQueryClient();
   const reconcile = useReconcileBuildRun();
-  const cancelRun = useMutate('cancelBuildRun', { onSuccess: (_, { id }) => reconcile(resource.id, id) });
+  const { mutateAsync: cancelRun, isPending: cancelPending } = useMutate('cancelBuildRun', {
+    onSuccess: (_, { id }) => reconcile(resource.id, id),
+  });
   const formatDateTime = useProfileDateTimeFormatter();
   const readArgs = useMemo(() => ({ query: { projectId: resource.id, limit: 50 } }), [resource.id]);
   const { data, isLoading } = useRead('listBuildRuns', readArgs);
@@ -208,7 +210,7 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
   const handleCancel = useCallback(
     async (run: BuildRunView) => {
       try {
-        await cancelRun.mutateAsync({ id: run.id } as any);
+        await cancelRun({ id: run.id });
         toast.success('Build cancellation requested');
       } catch {
         /**Nope */
@@ -218,8 +220,8 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
   );
 
   const columns = useMemo(
-    () => runColumns(setLogRunId, handleCancel, cancelRun.isPending, formatDateTime),
-    [cancelRun.isPending, formatDateTime, handleCancel],
+    () => runColumns(setLogRunId, handleCancel, cancelPending, formatDateTime),
+    [cancelPending, formatDateTime, handleCancel],
   );
 
   return (
@@ -232,7 +234,7 @@ export function BuildRunsTab({ resource }: { resource: AuthorizedProject }) {
         logs={logViewerEntries}
         logEntryCount={logEntries.length}
         isLoading={logs.isLoading}
-        cancelPending={cancelRun.isPending}
+        cancelPending={cancelPending}
         formatDateTime={formatDateTime}
         onCancel={handleCancel}
         onOpenChange={(open) => {
@@ -362,12 +364,14 @@ function BuildRunLogsSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const active = run ? isActiveBuildRun(run) : false;
+  const profile = useRead('getCurrentProfile', undefined, { enabled: open && Boolean(run?.triggeredByActorId) });
+  const canReadActor = open && profile.data?.data.authorization.isAdministrator === true;
   const actorQuery = useRead(
     'getActor',
     { id: run?.triggeredByActorId ?? '' },
-    { enabled: Boolean(run?.triggeredByActorId) },
+    { enabled: canReadActor && Boolean(run?.triggeredByActorId) },
   );
-  const actor = actorQuery.data?.data;
+  const actor = canReadActor ? actorQuery.data?.data : undefined;
   const description = run ? `${run.trigger} run on ${run.branch}` : isLoading ? 'Loading build logs...' : 'Build logs';
 
   return (

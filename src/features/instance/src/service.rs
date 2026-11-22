@@ -10,7 +10,7 @@ pub struct InstanceService {
     repository: Arc<dyn InstanceRepository>,
     jobs: Option<Arc<dyn crate::InstanceJobsReader>>,
     schedules: Option<Arc<dyn crate::ScheduleReader>>,
-    schedule_changes: tokio::sync::watch::Sender<()>,
+    schedule_changes: tokio::sync::watch::Sender<crate::ScheduleActivity>,
     automation: tokio::sync::watch::Sender<Option<bool>>,
     schedule_deadlines: std::sync::RwLock<
         std::collections::BTreeMap<crate::SchedulePurpose, chrono::DateTime<chrono::Utc>>,
@@ -37,32 +37,43 @@ impl InstanceService {
             self.notify_schedules();
         }
     }
-    pub fn schedule_blocker(&self, p: crate::SchedulePurpose) -> Option<&'static str> {
+    pub fn schedule_blocker(
+        &self,
+        p: crate::SchedulePurpose,
+    ) -> Option<crate::SchedulePolicyBlocker> {
+        use crate::SchedulePolicyBlocker::{Blocked, EligibilityUnknown};
         use crate::SchedulePurpose::*;
         let policy = &self.installation_policy;
         match p {
             Script if !policy.running.scripts_enabled => {
-                Some("Script execution is disabled in Core settings.")
+                Some(Blocked("Script execution is disabled in Core settings."))
             }
             Backup if !policy.running.backups_enabled => {
-                Some("Backups are disabled in Core settings.")
+                Some(Blocked("Backups are disabled in Core settings."))
             }
             Install | Release if !policy.update_checks_allowed => {
-                Some("Updates are disabled in Core settings.")
+                Some(Blocked("Updates are disabled in Core settings."))
             }
             Script | Backup | Install => match *self.automation.borrow() {
                 Some(true) => None,
-                Some(false) => Some("Requires Automated Operations."),
-                None => Some("Schedule eligibility is unavailable."),
+                Some(false) => Some(Blocked("Requires Automated Operations.")),
+                None => Some(EligibilityUnknown),
             },
             _ => None,
         }
     }
     pub fn apply_schedule_policy(&self, row: &mut crate::ScheduleDefinition) {
+        self.apply_schedule_blocker(row, self.schedule_blocker(row.purpose));
+    }
+    fn apply_schedule_blocker(
+        &self,
+        row: &mut crate::ScheduleDefinition,
+        blocker: Option<crate::SchedulePolicyBlocker>,
+    ) {
         if !row.enabled {
             return;
         }
-        if let Some(reason) = self.schedule_blocker(row.purpose) {
+        if let Some(crate::SchedulePolicyBlocker::Blocked(reason)) = blocker {
             row.blocker = Some(reason.into());
         } else if row.script_timeout_seconds.is_some_and(|seconds| {
             seconds < 1
@@ -74,15 +85,31 @@ impl InstanceService {
         }) {
             row.blocker =
                 Some("The script timeout exceeds the limit configured for this Core.".into());
+        } else if row.blocker.is_none() {
+            row.blocker = blocker.map(|reason| reason.reason().into());
         }
     }
     pub fn notify_schedules(&self) {
-        self.schedule_changes.send_replace(());
+        self.schedule_changes
+            .send_modify(|state| state.catalog_revision = state.catalog_revision.wrapping_add(1));
+    }
+    /// The scheduler admits at most one batch of each purpose at a time.
+    pub fn start_schedule_batch(
+        &self,
+        purpose: crate::SchedulePurpose,
+    ) -> crate::ScheduleBatchGuard<'_> {
+        self.schedule_changes.send_modify(|state| {
+            state.active_batches.insert(purpose);
+        });
+        crate::ScheduleBatchGuard {
+            purpose,
+            changes: &self.schedule_changes,
+        }
     }
     pub fn schedule_changes(
         &self,
         principal: &ActorPrincipal,
-    ) -> Result<tokio::sync::watch::Receiver<()>, InstanceError> {
+    ) -> Result<tokio::sync::watch::Receiver<crate::ScheduleActivity>, InstanceError> {
         if !principal.is_administrator() {
             return Err(InstanceError::Forbidden);
         }
@@ -99,27 +126,81 @@ impl InstanceService {
             .insert(p, at);
         self.notify_schedules();
     }
-    pub async fn schedules(
+    fn catalog_policy(&self, attention_only: bool) -> crate::ScheduleCatalogPolicy {
+        crate::ScheduleCatalogPolicy {
+            blockers: crate::SchedulePurpose::ALL
+                .into_iter()
+                .filter_map(|p| self.schedule_blocker(p).map(|reason| (p, reason)))
+                .collect(),
+            max_script_timeout: self
+                .installation_policy
+                .running
+                .scripts_maximum_timeout_seconds,
+            attention_only,
+        }
+    }
+    pub async fn schedule_counts(
         &self,
         principal: &ActorPrincipal,
-        kind: Option<crate::SchedulePurpose>,
-        cursor: Option<(crate::SchedulePurpose, uuid::Uuid)>,
-    ) -> Result<Vec<crate::ScheduleDefinition>, InstanceError> {
+        search: &str,
+    ) -> Result<Vec<crate::ScheduleCount>, InstanceError> {
+        self.schedule_catalog(principal)?
+            .counts(search.trim(), &self.catalog_policy(false))
+            .await
+    }
+
+    fn schedule_catalog(
+        &self,
+        principal: &ActorPrincipal,
+    ) -> Result<&dyn crate::ScheduleReader, InstanceError> {
         if !principal.is_administrator() {
             return Err(InstanceError::Forbidden);
         }
-        let mut rows = self
-            .schedules
-            .as_ref()
-            .ok_or_else(|| InstanceError::Conflict("Schedule catalog unavailable.".into()))?
-            .page(kind, cursor, 51)
+        self.schedules
+            .as_deref()
+            .ok_or_else(|| InstanceError::Conflict("Schedule catalog unavailable.".into()))
+    }
+
+    pub async fn schedules(
+        &self,
+        principal: &ActorPrincipal,
+        resource: Option<&str>,
+        search: &str,
+        page: u32,
+        page_size: u32,
+        attention_only: bool,
+    ) -> Result<Vec<crate::ScheduleDefinition>, InstanceError> {
+        let reader = self.schedule_catalog(principal)?;
+        if page == 0 || !(1..=200).contains(&page_size) {
+            return Err(InstanceError::Validation(
+                "Expected a positive page and a page size between 1 and 200.".into(),
+            ));
+        }
+        let purposes: Vec<_> = crate::SchedulePurpose::ALL
+            .into_iter()
+            .filter(|p| resource.is_none_or(|r| p.resource() == r))
+            .collect();
+        if purposes.is_empty() {
+            return Err(InstanceError::Validation(
+                "Unknown schedule resource.".into(),
+            ));
+        }
+        let policy = self.catalog_policy(attention_only);
+        let mut rows = reader
+            .page(
+                &purposes,
+                search.trim(),
+                i64::from(page - 1) * i64::from(page_size),
+                i64::from(page_size),
+                &policy,
+            )
             .await?;
         let deadlines = self.schedule_deadlines.read().expect("schedule deadlines");
         for row in &mut rows {
             if row.purpose.fixed_interval().is_some() {
                 row.anchor = deadlines.get(&row.purpose).copied();
             }
-            self.apply_schedule_policy(row);
+            self.apply_schedule_blocker(row, policy.blockers.get(&row.purpose).copied());
         }
         Ok(rows)
     }
@@ -187,7 +268,7 @@ impl InstanceService {
             repository,
             jobs: None,
             schedules: None,
-            schedule_changes: tokio::sync::watch::channel(()).0,
+            schedule_changes: tokio::sync::watch::channel(Default::default()).0,
             automation: tokio::sync::watch::channel(None).0,
             schedule_deadlines: Default::default(),
             job_history: None,

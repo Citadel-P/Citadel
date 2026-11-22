@@ -1599,17 +1599,8 @@ impl GroupReadPort for ApplicationGroupReader {
     ) -> BoxFuture<'a, Result<Option<GroupStream>, RealtimeReadError>> {
         Box::pin(async move {
             if matches!(g.topic(), Topic::InstanceSchedules) {
-                let mut changes = self.jobs_service(p)?.schedule_changes(p).map_err(failure)?;
-                let token = cancel.clone();
-                let stream: GroupStream = Box::pin(async_stream::try_stream! {
-                    loop{
-                        changes.borrow_and_update();
-                        yield ClientEvent::new("InstanceSchedulesChanged",vec![]);
-                        tokio::select!{()=token.cancelled()=>break,()=tokio::time::sleep(std::time::Duration::from_secs(1))=>{}}
-                        tokio::select!{()=token.cancelled()=>break,r=changes.changed()=>if r.is_err(){break}}
-                    }
-                });
-                return Ok(Some(stream));
+                return super::schedules::stream(self.jobs_service(p)?.as_ref(), p, cancel)
+                    .map(Some);
             }
             if matches!(g.topic(), Topic::InstanceJobs) {
                 return self.jobs_stream(p, cancel).map(Some);

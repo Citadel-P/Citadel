@@ -19,6 +19,16 @@ pub enum SchedulePurpose {
     Image,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScheduleMode {
+    Calendar,
+    PersistedDeadline,
+    Fixed {
+        seconds: i64,
+        startup_label: &'static str,
+    },
+}
+
 impl SchedulePurpose {
     pub const ALL: [Self; 10] = [
         Self::Script,
@@ -46,19 +56,112 @@ impl SchedulePurpose {
             Self::Image => "Image",
         }
     }
+    pub fn resource(self) -> &'static str {
+        match self {
+            Self::Script => "script",
+            Self::Backup => "backup-policy",
+            Self::Install | Self::Release => "instance",
+            Self::Git => "git-repository",
+            Self::DeploymentImages => "deployment",
+            Self::ServiceImages => "swarm-service",
+            Self::StackImages | Self::StackGit => "stack",
+            Self::Image => "image",
+        }
+    }
     pub fn parse(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|p| p.name() == name)
     }
-    pub fn fixed_interval(self) -> Option<i64> {
+    pub const fn mode(self) -> ScheduleMode {
+        use ScheduleMode::*;
         match self {
-            Self::DeploymentImages | Self::ServiceImages | Self::StackImages => Some(7200),
-            Self::StackGit => Some(300),
+            Self::Script | Self::Backup | Self::Install => Calendar,
+            Self::Release | Self::Git | Self::Image => PersistedDeadline,
+            Self::DeploymentImages => Fixed {
+                seconds: 7200,
+                startup_label: "deployment-image-updates",
+            },
+            Self::ServiceImages => Fixed {
+                seconds: 7200,
+                startup_label: "service-image-updates",
+            },
+            Self::StackImages => Fixed {
+                seconds: 7200,
+                startup_label: "stack-updates",
+            },
+            Self::StackGit => Fixed {
+                seconds: 300,
+                startup_label: "stack-updates",
+            },
+        }
+    }
+
+    pub fn fixed_interval(self) -> Option<i64> {
+        match self.mode() {
+            ScheduleMode::Fixed { seconds, .. } => Some(seconds),
             _ => None,
         }
     }
 }
 
+#[derive(Default)]
+pub struct ScheduleActivity {
+    pub catalog_revision: u64,
+    pub active_batches: std::collections::BTreeSet<SchedulePurpose>,
+}
+
+pub struct ScheduleBatchGuard<'a> {
+    pub(crate) purpose: SchedulePurpose,
+    pub(crate) changes: &'a tokio::sync::watch::Sender<ScheduleActivity>,
+}
+impl Drop for ScheduleBatchGuard<'_> {
+    fn drop(&mut self) {
+        self.changes.send_modify(|activity| {
+            activity.active_batches.remove(&self.purpose);
+        });
+    }
+}
+
+pub const SCHEDULE_PAGE_SIZE: u32 = 25;
+
+#[derive(Clone, Copy)]
+pub enum SchedulePolicyBlocker {
+    EligibilityUnknown,
+    Blocked(&'static str),
+}
+
+impl SchedulePolicyBlocker {
+    pub fn reason(self) -> &'static str {
+        match self {
+            Self::EligibilityUnknown => "Schedule eligibility is unavailable.",
+            Self::Blocked(reason) => reason,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct ScheduleCatalogPolicy {
+    pub blockers: std::collections::BTreeMap<SchedulePurpose, SchedulePolicyBlocker>,
+    pub max_script_timeout: u32,
+    pub attention_only: bool,
+}
+
+pub struct ScheduleCount {
+    pub purpose: SchedulePurpose,
+    pub total: i64,
+    pub attention: i64,
+}
+
+pub struct ScheduledRun {
+    pub queued_at: DateTime<Utc>,
+    pub id: Uuid,
+    pub status: String,
+}
+
 pub struct ScheduleDefinition {
+    pub resource_status: Option<String>,
+    pub needs_attention: bool,
+    pub latest_run: Option<ScheduledRun>,
+    pub active_run_status: Option<String>,
     pub purpose: SchedulePurpose,
     pub owner: Uuid,
     pub name: String,
@@ -78,8 +181,9 @@ impl ScheduleDefinition {
         if !self.enabled || self.blocker.is_some() {
             return None;
         }
-        if let Some(cron) = &self.cron {
-            let schedule = CronSchedule::parse(cron, self.zone.as_deref()?).ok()?;
+        if self.purpose.mode() == ScheduleMode::Calendar {
+            let schedule =
+                CronSchedule::parse(self.cron.as_deref()?, self.zone.as_deref()?).ok()?;
             return calendar_deadline(&schedule, self.anchor, now);
         }
         match self.purpose {
@@ -105,10 +209,23 @@ pub fn calendar_deadline(
 }
 
 pub trait ScheduleReader: Send + Sync {
-    fn page(
+    fn counts<'a>(
+        &'a self,
+        search: &'a str,
+        policy: &'a ScheduleCatalogPolicy,
+    ) -> BoxFuture<'a, Result<Vec<ScheduleCount>, InstanceError>>;
+    fn page<'a>(
+        &'a self,
+        purposes: &'a [SchedulePurpose],
+        search: &'a str,
+        offset: i64,
+        limit: i64,
+        policy: &'a ScheduleCatalogPolicy,
+    ) -> BoxFuture<'a, Result<Vec<ScheduleDefinition>, InstanceError>>;
+    fn discover(
         &self,
-        purpose: Option<SchedulePurpose>,
-        after: Option<(SchedulePurpose, Uuid)>,
+        purpose: SchedulePurpose,
+        after: Option<Uuid>,
         limit: i64,
     ) -> BoxFuture<'_, Result<Vec<ScheduleDefinition>, InstanceError>>;
     fn one(

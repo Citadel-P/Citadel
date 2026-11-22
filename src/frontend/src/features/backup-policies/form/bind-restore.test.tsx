@@ -13,7 +13,13 @@ vi.mock('@/lib/hooks', async (importOriginal) => ({
   useRead: (endpoint: string, args?: { id?: string }) => ({
     data:
       endpoint === 'getPlatfom'
-        ? { data: { id: args?.id, type: args?.id === 'docker' ? PlatformType.Docker : PlatformType.DockerSwarm } }
+        ? {
+            data: {
+              id: args?.id,
+              capabilities: { canWrite: args?.id !== 'read-only' },
+              type: args?.id === 'platform' ? PlatformType.DockerSwarm : PlatformType.Docker,
+            },
+          }
         : endpoint === 'lookup'
           ? { data: [{ id: 'platform', name: 'Swarm' }] }
           : {
@@ -138,4 +144,15 @@ it('selects a successful snapshot and resets overwrite confirmation when its sou
       overwriteExisting: false,
     }),
   });
+});
+
+it('keeps Restore disabled for a target platform with only Read access', async () => {
+  const readOnlyTarget = {
+    ...run,
+    sourceSnapshot: { $type: 'DockerVolume', platformId: 'read-only', volumeName: 'data' },
+    items: [],
+  } as BackupRunView;
+  renderCitadel(<BackupRestoreDialog run={readOnlyTarget} onClose={() => {}} />);
+  expect(screen.getByText(/target platform where you have Write access/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Restore' })).toBeDisabled();
 });

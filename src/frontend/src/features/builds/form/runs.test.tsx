@@ -98,6 +98,53 @@ describe('BuildRunsTab', () => {
   });
 });
 
+it.each([false, true])(
+  'opens logs and requests the actor name only for administrators (admin=%s)',
+  async (administrator) => {
+    const actorId = 'abcde123-0000-4000-8000-000000000001';
+    const run = {
+      id: runId,
+      buildProjectId: projectId,
+      projectNameSnapshot: 'Application',
+      triggeredByActorId: actorId,
+      status: 'Queued',
+      trigger: 'Manual',
+      queuedAt: '2026-10-04T12:00:00Z',
+      imageReferences: [],
+    };
+    const readActor = vi.fn(() => HttpResponse.json({ name: 'Build operator', type: 'User' }));
+    server.use(
+      http.get('http://localhost/api/v1/profile', () =>
+        HttpResponse.json({ authorization: { isAdministrator: administrator } }),
+      ),
+      http.get('http://localhost/api/v1/profile/preferences', () => HttpResponse.json({})),
+      http.get('http://localhost/api/v1/buildRuns', () => HttpResponse.json({ runs: [run] })),
+      http.get(`http://localhost/api/v1/buildRuns/${runId}`, () => HttpResponse.json(run)),
+      http.get(`http://localhost/api/v1/buildRuns/${runId}/logs`, () =>
+        HttpResponse.json({
+          logs: [
+            { id: 'line', buildRunId: runId, createdAt: run.queuedAt, stream: 'stdout', message: 'Reading Dockerfile' },
+          ],
+        }),
+      ),
+      http.get(`http://localhost/api/v1/actors/${actorId}`, readActor),
+    );
+    const fake = new FakeRealtimeConnection();
+    const { user, queryClient } = renderCitadel(<BuildRunsTab resource={{ id: projectId } as AuthorizedProject} />, {
+      groups: {
+        connectionFactory: () => fake.asRealtimeConnection(),
+        startConnection: (connection) => connection.start(),
+      },
+    });
+    await user.click(await screen.findByTitle('View logs'));
+    const sheet = await screen.findByRole('dialog');
+    await waitFor(() => expect(queryClient.getQueryState(['getCurrentProfile', {}])?.status).toBe('success'));
+    expect(await within(sheet).findByText(administrator ? 'Build operator (User)' : 'abcde123...')).toBeVisible();
+    expect(await within(sheet).findByText(/Reading Dockerfile/)).toBeVisible();
+    expect(readActor).toHaveBeenCalledTimes(administrator ? 1 : 0);
+  },
+);
+
 it('renders the build list when a queued run has no platform snapshot', async () => {
   const project = {
     capabilities: { canRead: true, canWrite: true, canExecute: true },

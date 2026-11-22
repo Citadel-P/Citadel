@@ -29,6 +29,10 @@ struct Store {
     backups: usize,
     accepted: Mutex<Vec<(Purpose, Uuid, DateTime<Utc>)>>,
     active: AtomicUsize,
+    hold_only_scripts: AtomicBool,
+    reads: Mutex<Vec<(Purpose, Uuid)>>,
+    last_script_page: Notify,
+    projections: Mutex<std::collections::BTreeMap<Purpose, DateTime<Utc>>>,
     maximum: AtomicUsize,
     pages: AtomicUsize,
     eligible: AtomicBool,
@@ -43,6 +47,10 @@ impl Store {
             backups,
             accepted: Default::default(),
             active: Default::default(),
+            hold_only_scripts: Default::default(),
+            reads: Default::default(),
+            last_script_page: Default::default(),
+            projections: Default::default(),
             maximum: Default::default(),
             pages: Default::default(),
             eligible: AtomicBool::new(true),
@@ -53,6 +61,10 @@ impl Store {
     }
     fn definition(p: Purpose, id: Uuid) -> ScheduleDefinition {
         ScheduleDefinition {
+            resource_status: None,
+            needs_attention: false,
+            latest_run: None,
+            active_run_status: None,
             purpose: p,
             owner: id,
             name: "fixture".into(),
@@ -69,23 +81,44 @@ impl Store {
     }
 }
 impl ScheduleReader for Store {
-    fn page(
+    fn counts<'a>(
+        &'a self,
+        _: &'a str,
+        _: &'a citadel_instance::ScheduleCatalogPolicy,
+    ) -> BoxFuture<'a, Result<Vec<citadel_instance::ScheduleCount>, InstanceError>> {
+        unreachable!("workers do not read catalog counts")
+    }
+    fn page<'a>(
+        &'a self,
+        _: &'a [Purpose],
+        _: &'a str,
+        _: i64,
+        _: i64,
+        _: &'a citadel_instance::ScheduleCatalogPolicy,
+    ) -> BoxFuture<'a, Result<Vec<ScheduleDefinition>, InstanceError>> {
+        unreachable!("workers do not read numbered catalog pages")
+    }
+    fn discover(
         &self,
-        p: Option<Purpose>,
-        after: Option<(Purpose, Uuid)>,
+        p: Purpose,
+        after: Option<Uuid>,
         limit: i64,
     ) -> BoxFuture<'_, Result<Vec<ScheduleDefinition>, InstanceError>> {
         Box::pin(async move {
             self.pages.fetch_add(1, Ordering::SeqCst);
-            let p = p.unwrap();
             let count = match p {
                 Purpose::Script => self.scripts,
                 Purpose::Backup => self.backups,
                 _ => 0,
             };
+            if p == Purpose::Script
+                && after.map_or(0, |id| id.as_u128()) + limit as u128 > count as u128
+            {
+                self.last_script_page.notify_one();
+            }
             Ok((1..=count)
                 .map(|i| Uuid::from_u128(i as u128))
-                .filter(|id| after.is_none_or(|(_, last)| *id > last))
+                .filter(|id| after.is_none_or(|last| *id > last))
                 .take(limit as usize)
                 .map(|id| Self::definition(p, id))
                 .collect())
@@ -96,7 +129,11 @@ impl ScheduleReader for Store {
         p: Purpose,
         id: Uuid,
     ) -> BoxFuture<'_, Result<Option<ScheduleDefinition>, InstanceError>> {
-        Box::pin(async move { Ok(Some(Self::definition(p, id))) })
+        Box::pin(async move {
+            self.reads.lock().unwrap().push((p, id));
+            self.wake.notify_one();
+            Ok(Some(Self::definition(p, id)))
+        })
     }
     fn batch_deadline(
         &self,
@@ -117,7 +154,9 @@ impl Dispatch for Arc<Store> {
         self.as_ref()
     }
     fn notify(&self) {}
-    fn set_deadline(&self, _: Purpose, _: DateTime<Utc>) {}
+    fn set_deadline(&self, p: Purpose, at: DateTime<Utc>) {
+        self.projections.lock().unwrap().insert(p, at);
+    }
     async fn occurrence(
         &self,
         p: Purpose,
@@ -129,7 +168,9 @@ impl Dispatch for Arc<Store> {
         self.maximum.fetch_max(active, Ordering::SeqCst);
         self.accepted.lock().unwrap().push((p, id, minute));
         self.wake.notify_one();
-        tokio::select! {permit=self.release.acquire()=>permit.unwrap().forget(),()=cancel.cancelled()=>{}}
+        if p == Purpose::Script || !self.hold_only_scripts.load(Ordering::SeqCst) {
+            tokio::select! {permit=self.release.acquire()=>permit.unwrap().forget(),()=cancel.cancelled()=>{}}
+        }
         self.active.fetch_sub(1, Ordering::SeqCst);
         Ok(true)
     }
@@ -155,13 +196,16 @@ async fn mixed_burst_is_bounded_and_an_edit_during_admission_is_reconciled() {
         token.clone(),
     ));
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        while store.maximum.load(Ordering::SeqCst) < 12 {
+        while store.maximum.load(Ordering::SeqCst) < 8 {
             store.wake.notified().await;
         }
         let (p, id, minute) = store.accepted.lock().unwrap()[0];
         send.send(RuntimeNotification::Schedule(format!("{}:{id}", p.name())))
             .await
             .unwrap();
+        while !store.reads.lock().unwrap().contains(&(p, id)) {
+            store.wake.notified().await;
+        }
         store.release.add_permits(50);
         loop {
             let done = {
@@ -218,10 +262,10 @@ async fn expired_busy_retry_cannot_create_a_late_execution() {
 #[test]
 fn rebuild_pages_cannot_override_edits_or_leak_a_removed_deadline() {
     use super::planner::{Key, Output, Planner};
-    use citadel_runtime::delayed_queue::DelayedQueue;
+    use super::queue::Queues;
     let store = Store::new(0, 0);
     let mut planner = Planner::new(&store);
-    planner.queue = DelayedQueue::new(8);
+    planner.queue = Queues::default();
     let id = Uuid::from_u128(42);
     let purpose = Purpose::Script;
     let discover = Key::Discover(purpose);
@@ -229,23 +273,24 @@ fn rebuild_pages_cannot_override_edits_or_leak_a_removed_deadline() {
     let calendar = Key::Calendar(purpose, id);
     // Start discovery, then commit a disable while its page is in flight.
     let claim = |planner: &mut Planner, key| {
-        planner.queue.wake(key, Utc::now());
-        planner.queue.promote(Utc::now());
-        assert_eq!(planner.queue.start().unwrap().0, key);
+        planner.queue.wake(key);
+        assert_eq!(
+            planner.queue.start(tokio::time::Instant::now()).unwrap().0,
+            key
+        );
         planner.request(key).generation
     };
     // A generation owns its page cursors and tracks edits until the last page.
     let _ = claim(&mut planner, Key::Eligibility);
-    planner.finish(Key::Eligibility, Ok(Output::Next(None)), &store);
-    planner.queue = DelayedQueue::new(8);
+    planner.finish(Key::Eligibility, Ok(Output::Eligibility), &store);
+    planner.queue = Queues::default();
     let generation = claim(&mut planner, discover);
     planner.notification(
         RuntimeNotification::Schedule(format!("Script:{id}")),
         &store,
     );
-    let _ = claim(&mut planner, load);
-    planner.finish(load, Ok(Output::Definition(generation, None)), &store);
-    // A page from before the edit must not put the calendar back.
+    // The edit is pending while the older page finishes in this purpose's read slot.
+    assert!(planner.queue.start(tokio::time::Instant::now()).is_none());
     planner.finish(
         discover,
         Ok(Output::Page(
@@ -254,6 +299,9 @@ fn rebuild_pages_cannot_override_edits_or_leak_a_removed_deadline() {
         )),
         &store,
     );
+    assert!(!planner.queue.contains(calendar));
+    let _ = claim(&mut planner, load);
+    planner.finish(load, Ok(Output::Definition(generation, None)), &store);
     assert!(!planner.queue.contains(calendar));
 }
 
@@ -317,4 +365,225 @@ async fn entitlement_change_discovers_a_previously_blocked_schedule_without_edit
     assert_eq!(store.accepted.lock().unwrap()[0].0, Purpose::Script);
     cancel.cancel();
     task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn blocked_scripts_leave_capacity_for_other_purposes_and_definition_reads() {
+    for size in [4, 512] {
+        let store = Store::new(size, 0);
+        store.hold_only_scripts.store(true, Ordering::SeqCst);
+        let cancel = CancellationToken::new();
+        let (tx, rx) = mpsc::channel(8);
+        let (_git, g) = watch::channel(());
+        let (_license, l) = watch::channel(());
+        let task = tokio::spawn(drive(
+            store.clone(),
+            Box::new(Signal(rx)),
+            g,
+            l,
+            cancel.clone(),
+        ));
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            store.last_script_page.notified().await;
+            while store.active.load(Ordering::SeqCst) != 4 {
+                store.wake.notified().await;
+            }
+            // The Script FIFO and its dispatch slots remain occupied during both reads and admissions.
+            for p in [Purpose::Backup, Purpose::Install] {
+                tx.send(RuntimeNotification::Schedule(format!(
+                    "{}:{}",
+                    p.name(),
+                    Uuid::nil()
+                )))
+                .await
+                .unwrap();
+            }
+            loop {
+                let accepted = store.accepted.lock().unwrap().clone();
+                if [Purpose::Backup, Purpose::Install]
+                    .iter()
+                    .all(|p| accepted.iter().any(|(kind, _, _)| kind == p))
+                {
+                    break;
+                }
+                store.wake.notified().await;
+            }
+            assert_eq!(store.reads.lock().unwrap().len(), 2);
+            // Each calendar family has one initial page, then one more per full Script page.
+            assert_eq!(
+                store.pages.load(Ordering::SeqCst),
+                3 + size / super::planner::PAGE as usize
+            );
+            assert_eq!(
+                store
+                    .accepted
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|(p, _, _)| *p == Purpose::Script)
+                    .count(),
+                4
+            );
+            assert!(store.maximum.load(Ordering::SeqCst) <= 12);
+        })
+        .await
+        .unwrap();
+        cancel.cancel();
+        task.await.unwrap().unwrap();
+        assert_eq!(store.active.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn clock_corrections_preserve_elapsed_timers_and_recompute_calendar_occurrences() {
+    use super::{
+        planner::{Key, Output, Planner},
+        queue::{Clock, Deadline},
+    };
+    use std::time::Duration as Elapsed;
+    let store = Store::new(0, 0);
+    let clock = Clock::now();
+    let mut planner = Planner::new_at(&store, clock);
+    let id = Uuid::from_u128(712);
+    let load = Key::Load(Purpose::Script, id);
+    planner.queue.wake(load);
+    while let Some((key, _)) = planner.queue.start(clock.elapsed) {
+        if key == load {
+            planner.finish(
+                key,
+                Ok(Output::Definition(
+                    0,
+                    Some(Store::definition(Purpose::Script, id)),
+                )),
+                &store,
+            );
+            break;
+        }
+        planner.queue.finish(key, None);
+    }
+    let retry = Key::Batch(Purpose::Release);
+    planner.queue.replace(retry, Some(Deadline::after(30)));
+    let git = Key::Batch(Purpose::Git);
+    let due = clock.wall + Duration::hours(2);
+    planner.queue.replace_wall(git, Some(due), clock);
+
+    for correction in [Duration::hours(-1), Duration::hours(1)] {
+        let elapsed = Elapsed::from_secs(10);
+        let changed = Clock {
+            wall: clock.wall + Duration::seconds(10) + correction,
+            elapsed: clock.elapsed + elapsed,
+        };
+        planner.clock_changed(changed, &store);
+        for p in [
+            Purpose::StackGit,
+            Purpose::DeploymentImages,
+            Purpose::StackImages,
+            Purpose::ServiceImages,
+        ] {
+            let citadel_instance::ScheduleMode::Fixed {
+                seconds,
+                startup_label,
+            } = p.mode()
+            else {
+                panic!()
+            };
+            let interval = Elapsed::from_secs(seconds as u64)
+                + crate::workers::schedule::startup_offset(startup_label);
+            assert_eq!(
+                planner.queue.scheduled(Key::Batch(p)).unwrap().0,
+                clock.elapsed + interval
+            );
+            assert_eq!(
+                store.projections.lock().unwrap()[&p],
+                changed.wall + Duration::from_std(interval - elapsed).unwrap()
+            );
+        }
+        let calendar = planner
+            .queue
+            .scheduled(Key::Calendar(Purpose::Script, id))
+            .unwrap();
+        assert_eq!(calendar.0, changed.elapsed);
+        assert_eq!(
+            calendar.1.unwrap().timestamp(),
+            changed.wall.timestamp().div_euclid(60) * 60
+        );
+        assert_eq!(
+            planner.queue.scheduled(retry).unwrap().0,
+            clock.elapsed + Elapsed::from_secs(30)
+        );
+        assert_eq!(
+            planner.queue.scheduled(git).unwrap().0,
+            changed.elapsed + (due - changed.wall).to_std().unwrap()
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn full_execution_lanes_reserve_reads_without_a_zero_delay_timer() {
+    use super::{planner::Key, queue::Queues};
+    let mut q = Queues::default();
+    for i in 0..512 {
+        q.wake(Key::Calendar(Purpose::Script, Uuid::from_u128(i)));
+        q.wake(Key::Calendar(Purpose::Backup, Uuid::from_u128(i)));
+    }
+    for purpose in [Purpose::StackGit, Purpose::Image, Purpose::Release] {
+        q.wake(Key::Batch(purpose));
+    }
+    for purpose in Purpose::ALL {
+        q.wake(Key::Discover(purpose));
+    }
+    let mut executions = 0;
+    let mut reads = 0;
+    while let Some((key, _)) = q.start(tokio::time::Instant::now()) {
+        if matches!(key, Key::Discover(_)) {
+            reads += 1;
+        } else {
+            executions += 1;
+        }
+    }
+    assert_eq!((executions, reads), (10, 2));
+    assert!(
+        q.next_deadline().is_none(),
+        "only completion or an external change can free capacity"
+    );
+}
+
+#[tokio::test]
+async fn all_schedule_purposes_dispatch_in_their_declared_mode() {
+    use super::{
+        coordinator::Request,
+        planner::{Key, Output},
+    };
+    use citadel_instance::ScheduleMode;
+    let store = Store::new(0, 0);
+    store.hold_only_scripts.store(true, Ordering::SeqCst);
+    store.release.add_permits(1);
+    let cron =
+        Arc::new(citadel_primitives::schedule::CronSchedule::parse("* * * * *", "UTC").unwrap());
+    let now = Utc::now();
+    let minute = DateTime::from_timestamp(now.timestamp().div_euclid(60) * 60, 0).unwrap();
+    let mut counts = [0; 3];
+    let mut unique = std::collections::BTreeSet::new();
+    for purpose in Purpose::ALL {
+        assert!(unique.insert(purpose));
+        let (key, index) = match purpose.mode() {
+            ScheduleMode::Calendar => (Key::Calendar(purpose, Uuid::nil()), 0),
+            ScheduleMode::PersistedDeadline => (Key::Batch(purpose), 1),
+            ScheduleMode::Fixed { .. } => (Key::Batch(purpose), 2),
+        };
+        let request = Request {
+            key,
+            recurrence: Some(cron.clone()),
+            cursor: None,
+            generation: 0,
+        };
+        let result = request
+            .reconcile(&store, minute, &CancellationToken::new())
+            .await
+            .unwrap();
+        assert_eq!(matches!(result, Output::Next(_)), index == 0);
+        assert_eq!(matches!(result, Output::BatchFinished), index != 0);
+        counts[index] += 1;
+    }
+    assert_eq!(counts, [3, 3, 4]);
 }

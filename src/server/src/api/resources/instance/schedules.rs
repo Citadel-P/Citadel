@@ -3,44 +3,42 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Deserialize, utoipa::IntoParams)]
+pub struct ScheduleGroupQuery {
+    /// Case-insensitive substring of the resource name.
+    pub search: Option<String>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct SchedulePurposeCount {
+    pub resource: String,
+    pub purpose: String,
+    pub count: i64,
+    pub attention: i64,
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct ScheduleQuery {
-    pub purpose: Option<String>,
-    pub after: Option<String>,
-}
-impl ScheduleQuery {
-    pub fn purpose(&self) -> Result<Option<SchedulePurpose>, citadel_instance::InstanceError> {
-        self.purpose.as_deref().map(parse).transpose()
-    }
-    pub fn cursor(
-        &self,
-    ) -> Result<Option<(SchedulePurpose, Uuid)>, citadel_instance::InstanceError> {
-        self.after
-            .as_deref()
-            .map(|s| {
-                let (p, id) = s.split_once(':').ok_or_else(invalid)?;
-                let purpose = parse(p)?;
-                if self
-                    .purpose
-                    .as_deref()
-                    .is_some_and(|filter| filter != purpose.name())
-                {
-                    return Err(invalid());
-                }
-                Ok((purpose, id.parse().map_err(|_| invalid())?))
-            })
-            .transpose()
-    }
-}
-fn parse(p: &str) -> Result<SchedulePurpose, citadel_instance::InstanceError> {
-    SchedulePurpose::parse(p).ok_or_else(invalid)
-}
-fn invalid() -> citadel_instance::InstanceError {
-    citadel_instance::InstanceError::Validation("Invalid schedule purpose or page cursor.".into())
+    /// Resource group, for example script, instance or stack. Omit to include all groups.
+    pub resource: Option<String>,
+    /// Case-insensitive substring of the resource name.
+    pub search: Option<String>,
+    /// One-based page number.
+    pub page: Option<u32>,
+    #[serde(rename = "pageSize")]
+    pub page_size: Option<u32>,
+    #[serde(rename = "attentionOnly")]
+    pub attention_only: Option<bool>,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduleView {
+    /// Status of the owning resource. Instance-wide schedules have no resource indicator.
+    pub resource_status: Option<String>,
+    pub needs_attention: bool,
+    pub latest_run: Option<ScheduleRunView>,
+    /// Current scheduled script or backup run, while active.
+    pub active_run_status: Option<String>,
     pub purpose: String,
     pub owner_id: Uuid,
     pub name: String,
@@ -56,30 +54,38 @@ pub struct ScheduleView {
 }
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct ScheduleRunView {
+    pub queued_at: chrono::DateTime<chrono::Utc>,
+    pub id: Uuid,
+    pub status: String,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SchedulePage {
     pub items: Vec<ScheduleView>,
-    pub next_cursor: Option<String>,
 }
 impl From<Vec<ScheduleDefinition>> for SchedulePage {
-    fn from(mut rows: Vec<ScheduleDefinition>) -> Self {
-        let next_cursor =
-            (rows.len() > 50).then(|| format!("{}:{}", rows[49].purpose.name(), rows[49].owner));
-        rows.truncate(50);
+    fn from(rows: Vec<ScheduleDefinition>) -> Self {
         let now = chrono::Utc::now();
         let items = rows
             .into_iter()
             .map(|d| {
                 let next_at = d.next_time(now);
                 ScheduleView {
+                    resource_status: d.resource_status,
+                    active_run_status: d.active_run_status,
+                    needs_attention: d.needs_attention,
+                    latest_run: d.latest_run.map(|r| ScheduleRunView {
+                        queued_at: r.queued_at,
+                        id: r.id,
+                        status: r.status,
+                    }),
                     next_at,
                     reason: if !d.enabled {
                         Some("Scheduling is disabled for this resource.".into())
-                    } else if let Some(reason) = d.blocker {
-                        Some(reason)
-                    } else if next_at.is_none() {
-                        Some("No eligible deadline is available.".into())
                     } else {
-                        None
+                        d.blocker
                     },
                     purpose: d.purpose.name().into(),
                     system_managed: d.purpose.fixed_interval().is_some()
@@ -95,6 +101,6 @@ impl From<Vec<ScheduleDefinition>> for SchedulePage {
                 }
             })
             .collect();
-        Self { items, next_cursor }
+        Self { items }
     }
 }

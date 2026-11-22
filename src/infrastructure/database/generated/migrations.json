@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 12,
+  "schemaVersion": 10,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "20b879d43cf239f981054e432087e915ca71cbe552ece23eeea8eca972637375"
+    "sha256": "6484bf71ce0c6580692f356bb47e5154d44f102cfad900b594aa18efdcd4eb72"
   },
   "migrations": [
     {
@@ -81,23 +81,7 @@
       "id": "0010",
       "name": "image_update_schedule",
       "file": "0010_image_update_schedule.sql",
-      "sha256": "3e7b9c08402117d78ef73ff81290e4ffedc9941ad29e5a474072d9228313a547",
-      "transactional": true,
-      "generatedBy": "citadel-xtask-v1"
-    },
-    {
-      "id": "0011",
-      "name": "build_spec_references",
-      "file": "0011_build_spec_references.sql",
-      "sha256": "dca6a2aa89f2ad7be884a4f4569a28203bae829b26b2e13ea9b9e9172b578443",
-      "transactional": true,
-      "generatedBy": "citadel-xtask-v1"
-    },
-    {
-      "id": "0012",
-      "name": "resource_schedules",
-      "file": "0012_resource_schedules.sql",
-      "sha256": "1bd73fc866d53b47a57aa169edd643919ac960749fd62dceaa7e3845409bcc97",
+      "sha256": "038f0108baac466b0af74cdaa49fe21430616744a92199a71ff330c010f3622e",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

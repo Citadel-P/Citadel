@@ -2,10 +2,11 @@
 use super::{
     Handlers,
     handlers::Dispatch,
-    planner::{CALENDARS, Key, Output, PAGE, Planner, Time, later},
+    planner::{Key, Output, PAGE, Planner, Time, later},
+    queue::Clock,
 };
 use chrono::{DateTime, Duration, Utc};
-use citadel_instance::{SchedulePurpose as Purpose, calendar_deadline};
+use citadel_instance::{ScheduleMode, SchedulePurpose as Purpose, calendar_deadline};
 use citadel_primitives::schedule::CronSchedule;
 use citadel_runtime::notifications::{NotificationSource, RuntimeNotification};
 use futures_util::{FutureExt, StreamExt, stream::FuturesUnordered};
@@ -14,7 +15,6 @@ use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-const PARALLEL: usize = 12;
 pub(super) struct Request {
     pub key: Key,
     pub recurrence: Option<Arc<CronSchedule>>,
@@ -31,7 +31,7 @@ impl Request {
         match self.key {
             Key::Eligibility => {
                 h.refresh_eligibility().await?;
-                Ok(Output::Next(Some(later(15 * 60))))
+                Ok(Output::Eligibility)
             }
             Key::Load(p, id) => {
                 let mut def = if h.eligible(p) {
@@ -44,10 +44,10 @@ impl Request {
                 }
                 Ok(Output::Definition(self.generation, def))
             }
-            Key::Discover(p) if CALENDARS.contains(&p) => {
+            Key::Discover(p) if p.mode() == ScheduleMode::Calendar => {
                 let mut defs = if h.eligible(p) {
                     h.reader()
-                        .page(Some(p), self.cursor.map(|id| (p, id)), PAGE)
+                        .discover(p, self.cursor, PAGE)
                         .await
                         .map_err(|e| e.to_string())?
                 } else {
@@ -125,23 +125,22 @@ pub(crate) async fn drive(
     let mut planner = Planner::new(&h);
     let mut work = FuturesUnordered::new();
     let mut release_token = cancel.child_token();
-    let mut previous = (Utc::now(), tokio::time::Instant::now());
+    let mut previous = Clock::now();
     let h = &h;
     loop {
         if cancel.is_cancelled() {
             break;
         }
-        let wall = Utc::now();
-        let expected = previous.0 + Duration::from_std(previous.1.elapsed()).unwrap_or_default();
-        if (wall - expected).num_seconds().unsigned_abs() > 5 {
-            planner.clock_changed(wall);
+        let clock = Clock::now();
+        if (clock.wall - previous.project(clock.elapsed))
+            .num_seconds()
+            .unsigned_abs()
+            > 5
+        {
+            planner.clock_changed(clock, h);
+            previous = clock;
         }
-        previous = (wall, tokio::time::Instant::now());
-        planner.queue.promote(wall);
-        while work.len() < PARALLEL {
-            let Some((key, due)) = planner.queue.start() else {
-                break;
-            };
+        while let Some((key, due)) = planner.queue.start(clock.elapsed) {
             let token = if key == Key::Batch(Purpose::Release) {
                 release_token.clone()
             } else {
@@ -150,7 +149,7 @@ pub(crate) async fn drive(
             let request = planner.request(key);
             work.push(
                 async move {
-                    let pending = request.reconcile(h, due, &token);
+                    let pending = request.reconcile(h, due.unwrap_or(clock.wall), &token);
                     let result = match key {
                         Key::Batch(_) | Key::Calendar(..) => pending.await,
                         _ => citadel_runtime::jobs::observe(pending).await,
@@ -161,15 +160,12 @@ pub(crate) async fn drive(
             );
         }
         let next = planner.queue.next_deadline();
-        let until_due = next.map(|at| (at - wall).to_std().unwrap_or_default());
+        let until_due = next.map(|at| at.saturating_duration_since(clock.elapsed));
         if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
-            let ready = planner.queue.ready_len() as u64;
-            job.backlog(ready, ready == 128);
+            let (ready, saturated) = planner.queue.backlog();
+            job.backlog(ready, saturated);
             if work.is_empty() {
-                job.waiting(
-                    "Next resource schedule or change",
-                    until_due.map(|d| tokio::time::Instant::now() + d),
-                );
+                job.waiting("Next resource schedule or change", next);
             }
         }
         let delay = until_due
@@ -185,10 +181,10 @@ pub(crate) async fn drive(
                 }
                 planner.notification(msg,h);
             }
-            Ok(())=licensing.changed()=>planner.queue.wake(Key::Eligibility,Utc::now()),
-            Ok(())=git.changed()=>planner.queue.wake(Key::Batch(Purpose::StackGit),Utc::now()),
+            Ok(())=licensing.changed()=>planner.queue.wake(Key::Eligibility),
+            Ok(())=git.changed()=>planner.queue.wake(Key::Batch(Purpose::StackGit)),
             Some((key,result))=work.next(),if !work.is_empty()=>planner.finish(key,result,h),
-            ()=tokio::time::sleep(delay),if work.len()<PARALLEL=>{}
+            ()=tokio::time::sleep(delay)=>{}
         }
     }
     // A release check already committing and other accepted admissions must settle on shutdown.

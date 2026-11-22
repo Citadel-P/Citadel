@@ -25,6 +25,8 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 #[path = "git_repository_execution/stack_updates.rs"]
 mod git_stack_updates;
+#[path = "git_repository_execution/schedule_edit.rs"]
+mod schedule_edit;
 #[path = "git_repository_execution/submodules.rs"]
 mod submodules;
 

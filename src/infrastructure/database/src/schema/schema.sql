@@ -3441,3 +3441,91 @@ CREATE TRIGGER schedule_services_applied_image AFTER UPDATE OF appliedimagediges
     FOR EACH ROW WHEN (OLD.appliedimagedigest IS DISTINCT FROM NEW.appliedimagedigest) EXECUTE FUNCTION notify_resource_schedule('Catalog','family');
 CREATE TRIGGER schedule_stack_release_state AFTER UPDATE OF status ON stackreleases
     FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status) EXECUTE FUNCTION notify_resource_schedule('Catalog','family');
+
+-- Only the current release contributes branches and rows to the schedule catalog.
+DROP TRIGGER schedule_stack_release_state ON stackreleases;
+CREATE FUNCTION notify_stack_release_schedule() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    source_type text;
+BEGIN
+    SELECT stacksource INTO source_type FROM stacks
+    WHERE id=NEW.stackid AND currentstackreleaseid=NEW.id;
+    IF NOT FOUND THEN RETURN NULL; END IF;
+
+    IF source_type='Git' AND
+       (CASE WHEN COALESCE(OLD.spec->>'CommitSha','')='' THEN
+            ARRAY[OLD.spec->>'GitRepoId',NULLIF(OLD.spec->>'Branch','')] END)
+       IS DISTINCT FROM
+       (CASE WHEN COALESCE(NEW.spec->>'CommitSha','')='' THEN
+            ARRAY[NEW.spec->>'GitRepoId',NULLIF(NEW.spec->>'Branch','')] END)
+    THEN
+        -- One family wake recomputes the minimum across former and new repositories.
+        PERFORM pg_notify('citadel_schedules','Git');
+    ELSE
+        PERFORM pg_notify('citadel_schedules','Catalog');
+    END IF;
+    RETURN NULL;
+END $$;
+CREATE TRIGGER schedule_stack_release_change AFTER UPDATE OF spec,platformid,status ON stackreleases
+    FOR EACH ROW WHEN (
+        (OLD.platformid, OLD.status, OLD.spec->>'GitRepoId', OLD.spec->>'Branch', OLD.spec->>'CommitSha',
+         OLD.spec->>'RegistryId', OLD.spec->>'UpdateBehavior') IS DISTINCT FROM
+        (NEW.platformid, NEW.status, NEW.spec->>'GitRepoId', NEW.spec->>'Branch', NEW.spec->>'CommitSha',
+         NEW.spec->>'RegistryId', NEW.spec->>'UpdateBehavior')
+    ) EXECUTE FUNCTION notify_stack_release_schedule();
+
+DROP TRIGGER schedule_stacks_change ON stacks;
+CREATE TRIGGER schedule_stacks_change AFTER UPDATE OF stacksource,currentstackreleaseid ON stacks
+    FOR EACH ROW WHEN ((OLD.stacksource,OLD.currentstackreleaseid) IS DISTINCT FROM (NEW.stacksource,NEW.currentstackreleaseid))
+    EXECUTE FUNCTION notify_resource_schedule('Git','family');
+CREATE TRIGGER schedule_stacks_name AFTER UPDATE OF name ON stacks
+    FOR EACH ROW WHEN (OLD.name IS DISTINCT FROM NEW.name) EXECUTE FUNCTION notify_resource_schedule('Catalog','family');
+CREATE TRIGGER schedule_deployment_platform AFTER UPDATE OF platformid ON deployments
+    FOR EACH ROW WHEN (OLD.platformid IS DISTINCT FROM NEW.platformid) EXECUTE FUNCTION notify_resource_schedule('Catalog','family');
+CREATE TRIGGER schedule_service_platform AFTER UPDATE OF platformid ON swarmservices
+    FOR EACH ROW WHEN (OLD.platformid IS DISTINCT FROM NEW.platformid) EXECUTE FUNCTION notify_resource_schedule('Catalog','family');
+
+-- Fence the due observation against the version obtained by the repository row lock.
+CREATE OR REPLACE VIEW git_schedule_branches AS
+SELECT repository.id, branches.branch, COALESCE(reference.lastsyncedat,repository.createdat) AS priority,
+       COALESCE(reference.lastsyncedat + make_interval(mins => COALESCE(repository.syncintervalminutes,5)), '-infinity') AS due,
+       repository.xmin AS repository_version
+FROM gitrepositories repository
+CROSS JOIN LATERAL (
+    SELECT repository.defaultbranch AS branch
+    UNION
+    SELECT COALESCE(NULLIF(release.spec->>'Branch',''), repository.defaultbranch)
+    FROM stacks stack JOIN stackreleases release ON release.id=stack.currentstackreleaseid
+    WHERE stack.stacksource='Git' AND release.spec->>'GitRepoId'=repository.id::text
+      AND COALESCE(release.spec->>'CommitSha','')=''
+) branches
+LEFT JOIN gitrepositoryrefs reference ON reference.gitrepositoryid=repository.id AND reference.branch=branches.branch
+WHERE branches.branch<>'' AND repository.syncmode='PullInterval' AND repository.controlstate='Idle'
+  AND NOT (COALESCE(reference.status='Degraded',false) AND
+    (COALESCE(jsonb_array_length(repository.onclone::jsonb->'commands'),0)>0 OR COALESCE(jsonb_array_length(repository.onpull::jsonb->'commands'),0)>0));
+
+-- Only a scheduled run changing phase affects the schedule catalog.
+CREATE TRIGGER schedule_script_run_progress AFTER UPDATE OF status ON scriptruns
+    FOR EACH ROW WHEN (NEW.trigger='Schedule' AND OLD.status IS DISTINCT FROM NEW.status)
+    EXECUTE FUNCTION notify_resource_schedule('Catalog','family');
+CREATE TRIGGER schedule_backup_run_progress AFTER UPDATE OF status ON backupruns
+    FOR EACH ROW WHEN (NEW.trigger='Schedule' AND OLD.status IS DISTINCT FROM NEW.status)
+    EXECUTE FUNCTION notify_resource_schedule('Catalog','family');
+
+-- Find the most recent retained scheduled run for each visible resource.
+CREATE INDEX ix_scriptruns_latest_scheduled ON scriptruns(scriptid,queuedat DESC,id DESC) WHERE trigger='Schedule';
+CREATE INDEX ix_backupruns_latest_scheduled ON backupruns(backuppolicyid,queuedat DESC,id DESC) WHERE trigger='Schedule';
+
+-- Resource dot changes refresh the catalog without rescheduling work.
+CREATE TRIGGER schedule_deployment_status AFTER UPDATE OF status ON deployments
+    FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status)
+    EXECUTE FUNCTION notify_resource_schedule('Catalog','family');
+CREATE TRIGGER schedule_service_health AFTER UPDATE OF health ON swarmservices
+    FOR EACH ROW WHEN (OLD.health IS DISTINCT FROM NEW.health)
+    EXECUTE FUNCTION notify_resource_schedule('Catalog','family');
+CREATE TRIGGER schedule_git_status AFTER UPDATE OF status ON gitrepositories
+    FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status)
+    EXECUTE FUNCTION notify_resource_schedule('Catalog','family');
+CREATE TRIGGER schedule_image_usage AFTER UPDATE OF containers ON images
+    FOR EACH ROW WHEN ((OLD.containers > 0) <> (NEW.containers > 0) AND json_array_length(NEW.tags) > 0)
+    EXECUTE FUNCTION notify_resource_schedule('Catalog','family');

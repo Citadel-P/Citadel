@@ -5,6 +5,10 @@ mod logs;
 mod platform_stats;
 mod processes;
 mod runtime;
+
+mod schedules;
+#[cfg(test)]
+pub(crate) use schedules::stream as schedule_stream;
 mod terminal;
 #[cfg(test)]
 mod tests;

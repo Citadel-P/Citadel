@@ -635,7 +635,7 @@ Successful runs show:
 If a policy contains multiple volumes or bind mounts, Citadel creates one backup
 item per storage target, each with its own status and snapshot metadata.
 
-The policy **Runs** tab contains backup and restore execution history and logs.
+The policy **Runs** tab contains backup and restore history and logs. Restoring a snapshot requires Execute access and the Restore permission on the policy, plus Write access to the target platform.
 The **Activities** tab records policy creation, configuration changes, renames,
 archival actions, and backup runs being queued, started, and completed. Use
 **Backup run failed** in the event filter to find failed completions.

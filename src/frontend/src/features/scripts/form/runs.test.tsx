@@ -38,7 +38,7 @@ const run: ScriptRunView = {
   errorMessage: null,
 };
 
-function setup(runs = [run], administrator = true) {
+function setup(runs = [run], administrator = true, route = '/') {
   const list = vi.fn(() => HttpResponse.json({ runs }));
   const actors = vi.fn(({ params }: { params: { id?: string | readonly string[] } }) =>
     HttpResponse.json({ id: params.id, type: 'User', name: params.id === initiator ? 'admin' : 'automation' }),
@@ -56,6 +56,7 @@ function setup(runs = [run], administrator = true) {
   );
   const fake = new FakeRealtimeConnection();
   const view = renderCitadel(<ScriptRunsTab resource={{ id: scriptId } as AuthorizedScript} />, {
+    route,
     groups: { connectionFactory: () => fake, startConnection: (connection) => connection.start() },
   });
   return { ...view, fake, list, actors };
@@ -154,4 +155,16 @@ it('distinguishes a queued run from a completed zero-duration run', async () => 
   expect(within(sheet).getByText('Not started')).toBeVisible();
   expect(within(sheet).queryByText('Started', { exact: true })).not.toBeInTheDocument();
   expect(within(sheet).queryByText('Finished', { exact: true })).not.toBeInTheDocument();
+});
+
+it('opens a linked scheduled run outside the current list using its script-scoped endpoint', async () => {
+  server.use(
+    http.get(`http://localhost/api/v1/scripts/${scriptId}/runs/${run.id}`, () =>
+      HttpResponse.json({ ...run, trigger: ScriptRunTrigger.Schedule }),
+    ),
+  );
+  setup([], false, `/scripts/edit/${scriptId}?runId=${run.id}#runs`);
+  const dialog = await screen.findByRole('dialog');
+  expect(await within(dialog).findByText('Prune images logs')).toBeVisible();
+  expect(await within(dialog).findByText('Pruned 34 images.')).toBeVisible();
 });

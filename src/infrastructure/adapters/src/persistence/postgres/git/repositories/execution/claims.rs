@@ -35,7 +35,7 @@ impl PostgresGitRepositoryExecutionPersistence {
                 r#"
 SELECT repository.id, branch.branch, repository.createdbyactorid
 FROM git_schedule_branches branch JOIN gitrepositories repository ON repository.id=branch.id
-WHERE branch.due <= CURRENT_TIMESTAMP AND repository.controlstate='Idle' AND repository.syncmode='PullInterval'
+WHERE repository.xmin=branch.repository_version AND branch.due <= CURRENT_TIMESTAMP AND repository.controlstate='Idle' AND repository.syncmode='PullInterval'
 ORDER BY branch.priority,repository.id,branch.branch
 FOR NO KEY UPDATE OF repository SKIP LOCKED
 LIMIT $1

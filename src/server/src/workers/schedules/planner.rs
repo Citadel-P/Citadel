@@ -1,12 +1,19 @@
-use super::handlers::Dispatch;
+use super::{
+    handlers::Dispatch,
+    queue::{Clock, Deadline, Queues},
+};
 use chrono::{DateTime, Duration, Utc};
-use citadel_instance::{ScheduleDefinition, SchedulePurpose as Purpose, calendar_deadline};
+use citadel_instance::{
+    ScheduleDefinition, ScheduleMode, SchedulePurpose as Purpose, calendar_deadline,
+};
 use citadel_primitives::schedule::CronSchedule;
-use citadel_runtime::{delayed_queue::DelayedQueue, notifications::RuntimeNotification};
+use citadel_runtime::notifications::RuntimeNotification;
+use std::time::Duration as Elapsed;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
+use tokio::time::Instant;
 use uuid::Uuid;
 pub(super) type Time = DateTime<Utc>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -22,17 +29,17 @@ struct Calendar {
     zone: String,
     parsed: Arc<CronSchedule>,
 }
-type Queue = DelayedQueue<Key, Time>;
 pub(super) const PAGE: i64 = 128;
 
-pub(super) const CALENDARS: [Purpose; 3] = [Purpose::Script, Purpose::Backup, Purpose::Install];
-const DYNAMIC: [Purpose; 3] = [Purpose::Release, Purpose::Git, Purpose::Image];
+fn purposes(mode: ScheduleMode) -> impl Iterator<Item = Purpose> {
+    Purpose::ALL.into_iter().filter(move |p| p.mode() == mode)
+}
 pub(super) fn later(seconds: i64) -> Time {
     Utc::now() + Duration::seconds(seconds)
 }
 
 fn configure(
-    q: &mut Queue,
+    q: &mut Queues,
     cal: &mut BTreeMap<(Purpose, Uuid), Calendar>,
     p: Purpose,
     id: Uuid,
@@ -62,19 +69,20 @@ fn configure(
     if next.is_none() {
         cal.remove(&key);
     }
-    q.replace(Key::Calendar(p, id), next);
+    q.replace(Key::Calendar(p, id), next.map(Deadline::Wall));
 }
 
 pub(super) enum Output {
     Next(Option<Time>),
     Definition(u64, Option<ScheduleDefinition>),
     BatchFinished,
+    Eligibility,
     Deadline(Option<Time>),
     Page(u64, Vec<ScheduleDefinition>),
 }
 
 pub(super) struct Planner {
-    pub queue: Queue,
+    pub queue: Queues,
     calendar: BTreeMap<(Purpose, Uuid), Calendar>,
     generation: u64,
     pages: BTreeMap<Purpose, Uuid>,
@@ -82,31 +90,33 @@ pub(super) struct Planner {
     edited: BTreeSet<(Purpose, Uuid)>,
     pending_reads: BTreeSet<(Purpose, Uuid)>,
     overflow: bool,
-    fixed: BTreeMap<Purpose, Time>,
-    first_batch: Time,
+    fixed: BTreeMap<Purpose, Instant>,
+    first_batch: Instant,
 }
 impl Planner {
     pub fn new(h: &impl Dispatch) -> Self {
-        let mut queue = Queue::new(128);
-        queue.wake(Key::Eligibility, Utc::now());
-        for p in DYNAMIC {
-            queue.wake(Key::Discover(p), Utc::now());
+        Self::new_at(h, Clock::now())
+    }
+
+    pub(super) fn new_at(h: &impl Dispatch, clock: Clock) -> Self {
+        let mut queue = Queues::default();
+        queue.wake(Key::Eligibility);
+        for p in purposes(ScheduleMode::PersistedDeadline) {
+            queue.wake(Key::Discover(p));
         }
         let mut fixed = BTreeMap::new();
         for p in Purpose::ALL {
-            if let Some(seconds) = p.fixed_interval() {
-                let label = match p {
-                    Purpose::DeploymentImages => "deployment-image-updates",
-                    Purpose::ServiceImages => "service-image-updates",
-                    Purpose::StackGit | Purpose::StackImages => "stack-updates",
-                    _ => unreachable!(),
-                };
-                let at = later(seconds)
-                    + Duration::from_std(super::super::schedule::startup_offset(label))
-                        .unwrap_or_default();
+            if let ScheduleMode::Fixed {
+                seconds,
+                startup_label,
+            } = p.mode()
+            {
+                let at = clock.elapsed
+                    + Elapsed::from_secs(seconds as u64)
+                    + super::super::schedule::startup_offset(startup_label);
                 fixed.insert(p, at);
-                queue.replace(Key::Batch(p), Some(at));
-                h.set_deadline(p, at);
+                queue.replace(Key::Batch(p), Some(Deadline::Elapsed(at)));
+                h.set_deadline(p, clock.project(at));
             }
         }
         Self {
@@ -119,18 +129,25 @@ impl Planner {
             pending_reads: Default::default(),
             overflow: false,
             fixed,
-            first_batch: later(60),
+            first_batch: clock.elapsed + Elapsed::from_secs(60),
         }
     }
 
-    pub fn clock_changed(&mut self, wall: Time) {
+    pub fn clock_changed(&mut self, clock: Clock, h: &impl Dispatch) {
+        for (&p, &at) in &self.fixed {
+            h.set_deadline(p, clock.project(at));
+        }
+        for p in purposes(ScheduleMode::PersistedDeadline) {
+            self.queue.rebase_wall(Key::Batch(p), clock);
+        }
         for (&(p, id), c) in &self.calendar {
-            self.queue.replace(
+            self.queue.replace_wall(
                 Key::Calendar(p, id),
-                calendar_deadline(&c.parsed, None, wall),
+                calendar_deadline(&c.parsed, None, clock.wall),
+                clock,
             );
         }
-        self.queue.wake(Key::Eligibility, wall);
+        self.queue.wake(Key::Eligibility);
     }
 
     fn rebuild(&mut self) {
@@ -141,22 +158,22 @@ impl Planner {
         for &(p, id) in self.calendar.keys() {
             self.stale.entry(p).or_default().insert(id);
         }
-        for p in CALENDARS {
+        for p in purposes(ScheduleMode::Calendar) {
             self.stale.entry(p).or_default();
-            self.queue.wake(Key::Discover(p), Utc::now());
+            self.queue.wake(Key::Discover(p));
         }
-        for p in DYNAMIC {
-            self.queue.wake(Key::Discover(p), Utc::now());
+        for p in purposes(ScheduleMode::PersistedDeadline) {
+            self.queue.wake(Key::Discover(p));
         }
     }
 
     pub fn notification(&mut self, msg: RuntimeNotification, h: &impl Dispatch) {
         h.notify();
         let RuntimeNotification::Schedule(payload) = msg else {
-            for p in DYNAMIC {
-                self.queue.wake(Key::Discover(p), Utc::now());
+            for p in purposes(ScheduleMode::PersistedDeadline) {
+                self.queue.wake(Key::Discover(p));
             }
-            self.queue.wake(Key::Eligibility, Utc::now());
+            self.queue.wake(Key::Eligibility);
             return;
         };
         let (name, id) = payload
@@ -171,7 +188,7 @@ impl Planner {
         }) else {
             return;
         };
-        if CALENDARS.contains(&p) {
+        if p.mode() == ScheduleMode::Calendar {
             let id = id.unwrap_or(Uuid::nil());
             if self.pending_reads.len() >= 256 && !self.pending_reads.contains(&(p, id)) {
                 self.overflow = true;
@@ -181,9 +198,9 @@ impl Planner {
                 self.edited.insert((p, id));
             }
             self.pending_reads.insert((p, id));
-            self.queue.wake(Key::Load(p, id), Utc::now());
-        } else if DYNAMIC.contains(&p) {
-            self.queue.wake(Key::Discover(p), Utc::now());
+            self.queue.wake(Key::Load(p, id));
+        } else if p.mode() == ScheduleMode::PersistedDeadline {
+            self.queue.wake(Key::Discover(p));
         }
     }
 
@@ -204,9 +221,9 @@ impl Planner {
         }
     }
 
-    fn page(&mut self, p: Purpose, epoch: u64, defs: Vec<ScheduleDefinition>) -> Option<Time> {
+    fn page(&mut self, p: Purpose, epoch: u64, defs: Vec<ScheduleDefinition>) -> Option<Deadline> {
         if epoch != self.generation {
-            return Some(Utc::now());
+            return Some(Deadline::after(0));
         }
         let last = defs.last().map(|d| d.owner);
         let more = defs.len() == PAGE as usize;
@@ -221,7 +238,7 @@ impl Planner {
         }
         if more {
             self.pages.insert(p, last.expect("full schedule page"));
-            return Some(Utc::now());
+            return Some(Deadline::after(0));
         }
         self.pages.remove(&p);
         self.edited.retain(|(kind, _)| *kind != p);
@@ -241,24 +258,24 @@ impl Planner {
                 // still wake Stack Git reconciliation before its next fallback.
                 let period = p.fixed_interval().expect("fixed schedule period");
                 let anchor = self.fixed.get_mut(&p).expect("fixed schedule anchor");
-                let now = Utc::now();
-                if *anchor <= now {
-                    *anchor +=
-                        Duration::seconds(((now - *anchor).num_seconds() / period + 1) * period);
+                let clock = Clock::now();
+                if *anchor <= clock.elapsed {
+                    let periods = (clock.elapsed - *anchor).as_secs() / period as u64 + 1;
+                    *anchor += Elapsed::from_secs(periods * period as u64);
                 }
-                h.set_deadline(p, *anchor);
-                Some(*anchor)
+                h.set_deadline(p, clock.project(*anchor));
+                Some(Deadline::Elapsed(*anchor))
             }
             (_, Err(e)) => {
                 tracing::warn!(%e,?key,"Schedule reconciliation will retry");
-                Some(later(match key {
+                Some(Deadline::after(match key {
                     Key::Batch(Purpose::Git | Purpose::Image) => 60,
                     Key::Batch(Purpose::Release) => 30,
                     _ => 10,
                 }))
             }
             (Key::Load(..), Ok(Output::Definition(epoch, _))) if epoch != self.generation => {
-                Some(Utc::now())
+                Some(Deadline::after(0))
             }
             (Key::Load(p, id), Ok(Output::Definition(_, def))) => {
                 if let Some(stale) = self.stale.get_mut(&p) {
@@ -269,24 +286,30 @@ impl Planner {
             }
             (Key::Discover(p), Ok(Output::Page(epoch, defs))) => self.page(p, epoch, defs),
             (Key::Discover(p), Ok(Output::Deadline(due))) => {
-                let due = if matches!(p, Purpose::Git | Purpose::Image) {
-                    due.map(|t| t.max(self.first_batch))
-                } else {
-                    due
-                };
+                let due = due.map(|at| {
+                    if matches!(p, Purpose::Git | Purpose::Image)
+                        && Instant::now() < self.first_batch
+                        && at <= Clock::now().project(self.first_batch)
+                    {
+                        Deadline::Elapsed(self.first_batch)
+                    } else {
+                        Deadline::Wall(at)
+                    }
+                });
                 self.queue.replace(Key::Batch(p), due);
                 None
             }
-            (Key::Eligibility, Ok(Output::Next(next))) => {
+            (Key::Eligibility, Ok(Output::Eligibility)) => {
                 self.rebuild();
-                next
+                Some(Deadline::after(15 * 60))
             }
             (Key::Batch(p), Ok(Output::BatchFinished)) => {
-                self.queue.replace(Key::Discover(p), Some(later(2)));
+                self.queue
+                    .replace(Key::Discover(p), Some(Deadline::after(2)));
                 h.notify();
                 None
             }
-            (Key::Calendar(..), Ok(Output::Next(next))) => next,
+            (Key::Calendar(..), Ok(Output::Next(next))) => next.map(Deadline::Wall),
             _ => unreachable!("reconciliation result must match its request"),
         };
         self.queue.finish(key, next);
@@ -297,7 +320,7 @@ impl Planner {
         }
         if self.overflow && self.pending_reads.len() < 128 {
             self.overflow = false;
-            self.queue.wake(Key::Eligibility, Utc::now());
+            self.queue.wake(Key::Eligibility);
         }
     }
 }

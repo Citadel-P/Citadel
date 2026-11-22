@@ -85,6 +85,24 @@ impl<K: Ord + Copy, D: Ord + Copy> DelayedQueue<K, D> {
         self.deadlines.first().map(|(at, _)| *at)
     }
 
+    /// The waiting deadline, including a replacement received while the key is running.
+    pub fn scheduled(&self, key: K) -> Option<D> {
+        self.by_key
+            .get(&key)
+            .copied()
+            .or_else(|| {
+                self.ready
+                    .iter()
+                    .find(|(other, _)| *other == key)
+                    .map(|(_, at)| *at)
+            })
+            .or_else(|| self.running.get(&key).copied().flatten().flatten())
+    }
+
+    pub fn running_len(&self) -> usize {
+        self.running.len()
+    }
+
     pub fn ready_len(&self) -> usize {
         self.ready.len()
     }

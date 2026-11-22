@@ -35,4 +35,8 @@ pub use service::InstanceService;
 mod tests;
 
 mod schedules;
-pub use schedules::{ScheduleDefinition, SchedulePurpose, ScheduleReader, calendar_deadline};
+pub use schedules::{
+    SCHEDULE_PAGE_SIZE, ScheduleActivity, ScheduleBatchGuard, ScheduleCatalogPolicy, ScheduleCount,
+    ScheduleDefinition, ScheduleMode, SchedulePolicyBlocker, SchedulePurpose, ScheduleReader,
+    ScheduledRun, calendar_deadline,
+};
