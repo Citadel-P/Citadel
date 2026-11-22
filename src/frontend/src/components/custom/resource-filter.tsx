@@ -1,7 +1,7 @@
 import { ComponentProps, ComponentType, ReactNode } from 'react';
 import { Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Command, CommandEmpty, CommandInput, CommandList } from '@/components/ui/command';
+import { Command, CommandEmpty, CommandInput, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
@@ -77,5 +77,65 @@ export function ResourceFilterDropdown({
         {footer}
       </PopoverContent>
     </Popover>
+  );
+}
+
+export function ResourceMultiFilter({
+  label,
+  icon: Icon,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  options: { value: string; label: string; icon?: ReactNode }[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      {selected.map((value) => {
+        const option = options.find((option) => option.value === value);
+        const name = option?.label ?? value;
+        return (
+          <ResourceFilterChip
+            key={value}
+            label={`Remove ${name} ${label.toLowerCase()} filter`}
+            icon={option?.icon ?? <Icon className="size-3.5" />}
+            onClick={() => onChange(selected.filter((item) => item !== value))}>
+            {name}
+          </ResourceFilterChip>
+        );
+      })}
+      <ResourceFilterDropdown
+        label={`${label} Filter`}
+        icon={Icon}
+        searchPlaceholder={`Search ${label.toLowerCase()}s…`}
+        emptyMessage={`No matching ${label.toLowerCase()}s.`}
+        footer={
+          selected.length > 0 && (
+            <div className="border-t p-1">
+              <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => onChange([])}>
+                Clear {label.toLowerCase()} filters
+              </Button>
+            </div>
+          )
+        }>
+        <CommandGroup>
+          {options
+            .filter((option) => !selected.includes(option.value))
+            .map((option) => (
+              <CommandItem
+                key={option.value}
+                value={option.label}
+                onSelect={() => onChange([...selected, option.value])}>
+                {option.icon ?? <Icon className="size-3.5" />}
+                {option.label}
+              </CommandItem>
+            ))}
+        </CommandGroup>
+      </ResourceFilterDropdown>
+    </div>
   );
 }

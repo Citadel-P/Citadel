@@ -63,6 +63,7 @@ pub async fn spawn_all(
         license_transition_monitor,
         license_realtime_hub,
     } = services;
+    let license_changes = license_realtime_hub.changes();
     let mut supervisor = TaskSupervisor::new(cancellation.clone()).with_jobs(state.jobs.clone());
     supervisor.spawn(
         "agent-updates",
@@ -76,16 +77,6 @@ pub async fn spawn_all(
             workers::updates::run_installation(service, receiver, cancellation.child_token()),
         );
     }
-    supervisor.spawn(
-        "update-checker",
-        citadel_primitives::JobCategory::Updates,
-        citadel_server::workers::updates::run(
-            state.updates.clone(),
-            state.instance.clone(),
-            state.identity.setup_changes(),
-            cancellation.child_token(),
-        ),
-    );
     supervisor.spawn_scoped(
         "service-account-last-used",
         citadel_primitives::JobCategory::Core,
@@ -107,6 +98,10 @@ pub async fn spawn_all(
         &mut supervisor,
         cancellation,
         workers::WorkerDependencies {
+            license_changes,
+            instance: state.instance.clone(),
+            checker: state.updates.clone(),
+            agent_updates: state.agent_updates.clone(),
             admission: state.admission.clone(),
             image_updates: platform_state.image_updates.clone(),
             targets: runtime_targets.clone(),

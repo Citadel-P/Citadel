@@ -2169,6 +2169,24 @@
         ],
         "type": "object"
       },
+      "BackupPolicyCapabilitiesView": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResourceCapabilitiesView"
+          },
+          {
+            "properties": {
+              "canRestore": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "canRestore"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "BackupPolicyInput": {
         "properties": {
           "alertOnFailure": {
@@ -2306,7 +2324,7 @@
           "capabilities": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/ResourceCapabilitiesView"
+                "$ref": "#/components/schemas/BackupPolicyCapabilitiesView"
               },
               {
                 "type": "null"
@@ -23116,6 +23134,167 @@
         },
         "required": [
           "replicas"
+        ],
+        "type": "object"
+      },
+      "SchedulePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "SchedulePurposeCount": {
+        "properties": {
+          "attention": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "purpose",
+          "count",
+          "attention"
+        ],
+        "type": "object"
+      },
+      "ScheduleRunView": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "queuedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "queuedAt",
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "ScheduleView": {
+        "properties": {
+          "activeRunStatus": {
+            "description": "Current scheduled script or backup run, while active.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dockerImageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "intervalSeconds": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "latestRun": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleRunView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "needsAttention": {
+            "type": "boolean"
+          },
+          "nextAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ownerId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resourceStatus": {
+            "description": "Status of the owning resource. Instance-wide schedules have no resource indicator.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "systemManaged": {
+            "type": "boolean"
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "needsAttention",
+          "purpose",
+          "ownerId",
+          "name",
+          "enabled",
+          "systemManaged"
         ],
         "type": "object"
       },
@@ -52474,6 +52653,263 @@
           }
         ],
         "summary": "Restart Core to apply saved configuration (administrator)",
+        "tags": [
+          "Instance"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false
+      }
+    },
+    "/api/v1/instance/schedules": {
+      "get": {
+        "operationId": "getInstanceSchedules",
+        "parameters": [
+          {
+            "description": "Resource group, for example script, instance or stack. Omit to include all groups.",
+            "in": "query",
+            "name": "resource",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Case-insensitive substring of the resource name.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "One-based page number.",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "attentionOnly",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchedulePage"
+                }
+              }
+            },
+            "description": "One page of schedule definitions"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List resource schedules (administrator)",
+        "tags": [
+          "Instance"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false
+      }
+    },
+    "/api/v1/instance/schedules/groups": {
+      "get": {
+        "operationId": "getInstanceScheduleGroups",
+        "parameters": [
+          {
+            "description": "Case-insensitive substring of the resource name.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SchedulePurposeCount"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Matching schedule counts"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List schedule counts by purpose (administrator)",
         "tags": [
           "Instance"
         ],

@@ -150,3 +150,31 @@ fn tagged_configuration_schema_uses_the_serialized_field_names() {
         );
     }
 }
+
+#[test]
+fn policy_restore_capability_requires_execute_and_restore() {
+    use super::views::BackupPolicyCapabilitiesView;
+    use citadel_identity::PermissionGrant;
+    use citadel_primitives::{
+        PermissionLevel, ResourceType, SpecificPermission, SpecificPermissions,
+    };
+
+    let restore = SpecificPermission::Restore.into();
+    for (level, specifics, allowed) in [
+        (PermissionLevel::Read, restore, false),
+        (PermissionLevel::Execute, SpecificPermissions::EMPTY, false),
+        (PermissionLevel::Execute, restore, true),
+    ] {
+        let view = BackupPolicyCapabilitiesView::for_actor(
+            Some(PermissionGrant {
+                resource_type: ResourceType::BackupPolicy,
+                level,
+                specifics,
+            }),
+            false,
+        );
+        assert_eq!(view.can_restore, allowed);
+    }
+    assert!(!BackupPolicyCapabilitiesView::for_actor(None, false).can_restore);
+    assert!(BackupPolicyCapabilitiesView::for_actor(None, true).can_restore);
+}

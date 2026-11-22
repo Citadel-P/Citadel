@@ -1,4 +1,4 @@
-use super::runtime::{CheckSchedule, remaining_delay, run_enabled};
+use super::scheduler_fixture::{CheckSchedule, run_enabled};
 use citadel_updates::{
     CheckState, Release, ReleaseChannel, ReleaseCheckRepository, ReleaseNotice, ReleaseSource,
 };
@@ -110,18 +110,17 @@ fn fixture() -> (
     (service, source, store, changes)
 }
 
-#[test]
-fn check_frequency_uses_the_last_attempt_including_failed_checks() {
+#[tokio::test]
+async fn check_frequency_uses_the_last_attempt_including_failed_checks() {
+    let (service, _, store, _) = fixture();
     let now = chrono::Utc::now();
+    store.state.lock().unwrap().last_attempt = Some(now);
     for hours in [6, 12, 24] {
-        assert_eq!(remaining_delay(None, hours, now), Duration::ZERO);
         assert_eq!(
-            remaining_delay(Some(now - chrono::Duration::hours(1)), hours, now),
-            Duration::from_secs((hours as u64 - 1) * 3600),
-        );
-        assert_eq!(
-            remaining_delay(Some(now - chrono::Duration::hours(25)), hours, now),
-            Duration::ZERO,
+            super::runtime::deadline(&service, true, hours)
+                .await
+                .unwrap(),
+            Some(now + chrono::Duration::hours(i64::from(hours)))
         );
     }
 }
@@ -424,7 +423,7 @@ async fn first_run_setup_wakes_instance_policy_without_waiting_for_polling() {
     ));
     let (setup, setup_changes) = tokio::sync::watch::channel(());
     let cancellation = CancellationToken::new();
-    let task = tokio::spawn(super::runtime::run(
+    let task = tokio::spawn(super::scheduler_fixture::first_run(
         service,
         instance,
         setup_changes,

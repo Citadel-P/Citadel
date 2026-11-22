@@ -41,6 +41,10 @@ pub struct WorkerSettings {
 }
 
 pub struct WorkerDependencies {
+    pub license_changes: tokio::sync::watch::Receiver<()>,
+    pub instance: Arc<citadel_instance::InstanceService>,
+    pub checker: citadel_updates::ReleaseCheckService,
+    pub agent_updates: citadel_updates::AgentUpdateService,
     pub admission: citadel_runtime::admission::AdmissionGate,
     pub image_updates: Arc<citadel_platforms::image_updates::ImageUpdateService>,
     pub targets: Arc<PlatformRuntimeRegistry>,
@@ -88,12 +92,14 @@ pub async fn register(
         "citadel_backup_coverage",
         "citadel_resource_copies",
         "citadel_stack_drift",
+        "citadel_schedules",
     ] {
         target_listener.listen(channel).await?;
     }
     let notifications = crate::workers::notifications::DatabaseNotificationHub::new();
     let coverage_listener = citadel_adapters::persistence::postgres::backups::coverage::changes::PostgresCoverageChanges::from_notifications(&dependencies.pool, notifications.scoped(ScopedTopic::Coverage));
     let copy_listener = citadel_adapters::persistence::postgres::resource_copies::changes::PostgresCopyChanges::from_notifications(notifications.scoped(ScopedTopic::Copies));
+    let schedule_listener = notifications.scoped(ScopedTopic::Schedules);
     let drift_listener = notifications.scoped(ScopedTopic::StackDrift);
     supervisor.spawn_scoped(
         "backup-coverage-realtime",
@@ -143,6 +149,10 @@ pub async fn register(
             .run(Box::new(target_listener), cancellation.child_token()),
     );
     let WorkerDependencies {
+        license_changes,
+        instance,
+        checker,
+        agent_updates,
         admission,
         image_updates,
         targets,
@@ -165,10 +175,33 @@ pub async fn register(
         alerts,
         alert_deliveries,
     } = dependencies;
+    let handlers = crate::workers::schedules::Handlers {
+        reader: Arc::new(
+            citadel_adapters::persistence::postgres::instance::PostgresSchedules(pool.clone()),
+        ),
+        admission: admission.clone(),
+        git: git.clone(),
+        images: image_updates,
+        deployments: deployments.clone(),
+        stacks: stacks.clone(),
+        services: swarm_services.clone(),
+        scripts: scripts.clone(),
+        backups: backups.clone(),
+        backups_enabled: settings.backup_workers.enabled,
+        agents: agent_updates,
+        checker,
+        instance,
+        stack_gate: Default::default(),
+    };
     supervisor.spawn(
-        "inventory-image-updates",
-        citadel_primitives::JobCategory::Image,
-        crate::workers::image_updates::run(cancellation.child_token(), image_updates),
+        "resource-scheduler",
+        citadel_primitives::JobCategory::Core,
+        crate::workers::schedules::run(
+            handlers,
+            schedule_listener,
+            license_changes,
+            cancellation.child_token(),
+        ),
     );
     supervisor.spawn_scoped(
         "alert-configuration-cache",
@@ -259,7 +292,7 @@ pub async fn register(
             drift_listener,
         ),
     );
-    let git_completed = git.subscribe_completion();
+
     supervisor.spawn(
         "git-repository-sync",
         citadel_primitives::JobCategory::GitRepository,
@@ -284,15 +317,6 @@ pub async fn register(
         "scripts-cleanup",
         citadel_primitives::JobCategory::Script,
         crate::workers::scripts::script_cleanup(cancellation.child_token(), Arc::clone(&scripts)),
-    );
-    supervisor.spawn(
-        "scripts-scheduler",
-        citadel_primitives::JobCategory::Script,
-        crate::workers::scripts::script_scheduler(
-            admission.clone(),
-            cancellation.child_token(),
-            scripts,
-        ),
     );
     supervisor.spawn(
         "platform-threshold-alerts",
@@ -390,31 +414,12 @@ pub async fn register(
         ),
     );
     supervisor.spawn(
-        "backup-policy-scheduler",
-        citadel_primitives::JobCategory::Backup,
-        crate::workers::backups::policy_scheduler(
-            admission.clone(),
-            cancellation.child_token(),
-            backups,
-            settings.backup_workers.clone(),
-        ),
-    );
-    supervisor.spawn(
         "deployment-apply-reconciliation",
         citadel_primitives::JobCategory::Deployment,
         crate::workers::deployments::deployment_apply_reconciliation(
             cancellation.child_token(),
             Arc::clone(&deployments),
             notifications.subscribe(RuntimeSignal::DeploymentRecovery),
-        ),
-    );
-    supervisor.spawn(
-        "deployment-image-updates",
-        citadel_primitives::JobCategory::Deployment,
-        crate::workers::deployments::image_updates(
-            admission.clone(),
-            cancellation.child_token(),
-            deployments,
         ),
     );
     supervisor.spawn(
@@ -433,15 +438,6 @@ pub async fn register(
             cancellation.child_token(),
             Arc::clone(&swarm_services),
             notifications.subscribe(RuntimeSignal::SwarmServiceOperations),
-        ),
-    );
-    supervisor.spawn(
-        "swarm-service-image-updates",
-        citadel_primitives::JobCategory::SwarmService,
-        crate::workers::swarm_services::swarm_service_image_updates(
-            admission.clone(),
-            cancellation.child_token(),
-            swarm_services,
         ),
     );
     supervisor.spawn(
@@ -470,16 +466,6 @@ pub async fn register(
             cancellation.child_token(),
             stacks.clone(),
             notifications.subscribe(RuntimeSignal::StackWebhooks),
-        ),
-    );
-    supervisor.spawn(
-        "stack-updates",
-        citadel_primitives::JobCategory::Stack,
-        crate::workers::stacks::stack_updates(
-            admission.clone(),
-            cancellation.child_token(),
-            stacks.clone(),
-            git_completed,
         ),
     );
     supervisor.spawn(

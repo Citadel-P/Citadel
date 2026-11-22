@@ -39,6 +39,7 @@ pub enum RuntimeNotification {
     ConnectionResync,
     ContainerCreated(ContainerCreated),
     StackDrift(Uuid),
+    Schedule(String),
     BackupCoverage(Uuid),
     ResourceCopy(Uuid),
     Resync,

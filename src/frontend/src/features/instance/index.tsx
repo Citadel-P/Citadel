@@ -3,6 +3,7 @@ import type { TabbedResourceComponents } from '@/pages/types';
 import { BackToTop } from '@/components/custom/back-to-top';
 import { InstanceRestartButton } from './restart';
 import { InstanceJobs } from './jobs';
+import { InstanceSchedules } from './schedules';
 import { InstanceActivities } from './activities';
 import { InstanceSettingsForm } from './settings';
 
@@ -21,6 +22,7 @@ export const InstanceComponents: TabbedResourceComponents = {
   Tabs: [
     { label: 'Config', slug: 'config', Content: InstanceSettingsForm, Header: { Extra: InstanceRestartButton } },
     { label: 'Jobs', slug: 'jobs', Content: InstanceJobs },
+    { label: 'Schedules', slug: 'schedules', Content: InstanceSchedules },
     { label: 'Activities', slug: 'activities', Content: InstanceActivities },
   ],
 };

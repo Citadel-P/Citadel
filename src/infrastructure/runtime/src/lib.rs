@@ -25,4 +25,5 @@ pub mod database_health;
 
 pub mod admission;
 
+pub mod delayed_queue;
 pub mod jobs;

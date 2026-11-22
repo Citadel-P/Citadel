@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 #[derive(Clone)]
 pub(crate) struct DatabaseNotificationHub {
     pub(super) signals: Arc<[watch::Sender<()>; RuntimeSignal::ALL.len()]>,
-    pub(super) changes: [broadcast::Sender<RuntimeNotification>; 3],
+    pub(super) changes: [broadcast::Sender<RuntimeNotification>; 4],
     copy_work: watch::Sender<()>,
     pub connections: ConnectionEventHub,
 }
@@ -73,6 +73,9 @@ impl DatabaseNotificationHub {
                 }
                 Ok(event @ RuntimeNotification::BackupCoverage(_)) => {
                     let _ = self.changes[ScopedTopic::Coverage as usize].send(event);
+                }
+                Ok(event @ RuntimeNotification::Schedule(_)) => {
+                    let _ = self.changes[ScopedTopic::Schedules as usize].send(event);
                 }
                 Ok(event @ RuntimeNotification::StackDrift(_)) => {
                     let _ = self.changes[ScopedTopic::StackDrift as usize].send(event);

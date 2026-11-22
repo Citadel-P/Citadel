@@ -196,3 +196,21 @@ The page uses realtime updates without browser polling. Disconnections retain th
 last known state; reconnect restores synchronization. **Copy diagnostics** copies
 selected status, timing, counter and session fields with generic safe error text;
 it excludes credentials, arguments and raw resource payloads.
+
+## Resource schedules
+
+Open **Instance → Schedules** to see when Citadel next plans to run a script,
+back up a resource, check for updates or synchronize a repository. Expand a resource type to see its schedules. Search by
+resource name or filter by resource type. Each expanded resource type shows up to 25 schedules per page. Select a name to open its settings. Calendar schedules use
+the saved time zone. System-managed checks use Citadel’s built-in cadence.
+
+The dot beside a resource name shows its status. For example, an enabled script can have a disabled schedule. **Schedule state** describes the schedule itself.
+
+A **Blocked** badge on a resource group counts enabled schedules with a confirmed blocker across all its pages.
+Use **Needs attention** to see those schedules and the reason each is blocked. **Next run unknown** means Citadel
+has no eligible deadline to display. For scripts and backup policies, **View run** opens the latest retained
+scheduled run, including its outcome and logs.
+
+The next scheduled time is when work becomes eligible. A busy resource or an
+execution limit can delay its start. While a scheduled script or backup is active, its row shows the run phase.
+A group can also show a batch check in progress across resources. Check the resource’s run or update history for the result.

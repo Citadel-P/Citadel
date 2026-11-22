@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { SearchField } from '@/components/custom/search-field';
 import { CircleDot, Layers } from 'lucide-react';
-import { JobFilter, jobResourceOption, jobStateOption } from './filters';
+import { ResourceMultiFilter } from '@/components/custom/resource-filter';
+import { instanceResourceOption } from '../resource-options';
+import { jobStateOption } from './filters';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
@@ -49,14 +51,14 @@ export function InstanceJobs() {
         className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border bg-card p-3 shadow-xs">
         <SearchField placeholder="Search jobs…" className="mb-0 w-full sm:w-72" onSearch={setFilter} />
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto">
-          <JobFilter
+          <ResourceMultiFilter
             label="Resource"
             icon={Layers}
             selected={resources}
             onChange={setResources}
-            options={groups.map((group) => jobResourceOption(group.name))}
+            options={groups.map((group) => instanceResourceOption(group.name))}
           />
-          <JobFilter
+          <ResourceMultiFilter
             label="State"
             icon={CircleDot}
             selected={states}

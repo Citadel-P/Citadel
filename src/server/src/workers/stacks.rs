@@ -16,45 +16,6 @@ const DRIFT_MONITOR_BATCH: i64 = 100;
 const DRIFT_EVENT_COALESCE_WINDOW: Duration = Duration::from_millis(50);
 const DRIFT_EVENT_MAX_PENDING: usize = 256;
 
-pub(crate) async fn stack_updates(
-    admission: citadel_runtime::admission::AdmissionGate,
-    cancellation: CancellationToken,
-    stacks: Arc<StackService>,
-    mut completed: tokio::sync::watch::Receiver<()>,
-) -> Result<(), std::convert::Infallible> {
-    let mut ticker = super::schedule::interval("stack-updates", Duration::from_secs(5 * 60));
-    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let mut last_images = Some(tokio::time::Instant::now());
-    loop {
-        tokio::select! {
-            biased;
-            () = cancellation.cancelled() => return Ok(()),
-            result = completed.changed() => if result.is_err() { return Ok(()); },
-            _ = ticker.tick() => {},
-        }
-        let Some(_admission) = admission.enter("Stack updates", &cancellation).await else {
-            return Ok(());
-        };
-        // Coalesce completed syncs before scanning; changes during the scan
-        // remain pending. The timer only reconciles stored observations.
-        completed.borrow_and_update();
-        let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::StackUpdates.start();
-        let images = last_images.is_none_or(|last: tokio::time::Instant| {
-            last.elapsed() >= Duration::from_secs(2 * 60 * 60)
-        });
-        if images {
-            last_images = Some(tokio::time::Instant::now());
-        }
-        // Git checks consume newly synchronized refs; image scans run every two
-        // hours. Both query bounded keyset pages, without retaining an inventory.
-        if let Err(error) =
-            citadel_runtime::jobs::observe(stacks.run_update_checks(images, &cancellation)).await
-        {
-            tracing::warn!(%error,"Stack update monitoring failed");
-        }
-    }
-}
-
 pub(crate) async fn stack_webhooks(
     admission: citadel_runtime::admission::AdmissionGate,
     cancellation: CancellationToken,

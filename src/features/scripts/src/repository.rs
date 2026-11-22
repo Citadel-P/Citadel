@@ -96,15 +96,11 @@ pub trait ScriptRepository: Send + Sync {
         script_id: Uuid,
         run_id: Uuid,
     ) -> BoxFuture<'a, Result<ScriptRun, ScriptError>>;
-    fn list_scheduled<'a>(
-        &'a self,
-        after: Option<Uuid>,
-        limit: usize,
-    ) -> BoxFuture<'a, Result<Vec<ScheduledScript>, ScriptError>>;
     fn enqueue_scheduled<'a>(
         &'a self,
         script_id: Uuid,
         scheduled_minute: DateTime<Utc>,
+        max_timeout_seconds: i32,
     ) -> BoxFuture<'a, Result<Option<ScriptRun>, ScriptError>>;
     fn cancel<'a>(
         &'a self,

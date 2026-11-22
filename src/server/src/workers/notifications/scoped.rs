@@ -8,6 +8,7 @@ pub(crate) enum ScopedTopic {
     Copies,
     Coverage,
     StackDrift,
+    Schedules,
 }
 
 pub(super) struct ScopedNotifications(pub broadcast::Receiver<RuntimeNotification>);

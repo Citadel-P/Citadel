@@ -34,11 +34,3 @@ pub struct BackupVolumePreview {
     pub docker_node_id: Option<String>,
     pub node_hostname: Option<String>,
 }
-
-/// Narrow scheduling candidate; enqueue rechecks and captures the current policy.
-#[derive(Debug, Clone)]
-pub struct ScheduledBackupPolicy {
-    pub id: Uuid,
-    pub cron: Option<String>,
-    pub time_zone: Option<String>,
-}

@@ -1,11 +1,15 @@
 //! Noncritical recurring work starts after one period plus a stable subsecond offset.
 use std::time::Duration;
 
-pub(crate) fn interval(name: &str, period: Duration) -> ObservedInterval {
+pub(crate) fn startup_offset(name: &str) -> Duration {
     let offset = name.bytes().fold(0_u64, |hash, byte| {
         hash.wrapping_mul(31).wrapping_add(u64::from(byte))
     }) % 997;
-    let first = tokio::time::Instant::now() + period + Duration::from_millis(offset);
+    Duration::from_millis(offset)
+}
+
+pub(crate) fn interval(name: &str, period: Duration) -> ObservedInterval {
+    let first = tokio::time::Instant::now() + period + startup_offset(name);
     let mut tick = tokio::time::interval_at(first, period);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let job = citadel_runtime::jobs::JobHandle::current();

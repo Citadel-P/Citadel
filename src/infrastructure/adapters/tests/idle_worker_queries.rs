@@ -39,7 +39,7 @@ async fn empty_workers_use_read_only_hints_without_recovery_transactions() {
     for _ in 0..3 {
         copies.recover_current().await.unwrap();
         assert!(copies.pending(None).await.unwrap().is_empty());
-        assert!(!agents.pending_work().await.unwrap().active);
+        assert!(!agents.pending_work().await.unwrap());
         assert!(builds.claim_next(before).await.unwrap().is_none());
         assert!(builds.next_retry_at().await.unwrap().is_none());
         assert!(backups.claim_backup(before).await.unwrap().is_none());
@@ -58,4 +58,34 @@ async fn empty_workers_use_read_only_hints_without_recovery_transactions() {
         full_state
     );
     pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires fresh disposable CITADEL_EXECUTION_DATABASE_URL with pg_stat_statements preloaded"]
+async fn concurrent_automation_admissions_share_only_reads_that_have_yet_to_start() {
+    use citadel_adapters::persistence::postgres::licensing::store::PostgresLicenseEntitlementService;
+    use citadel_scripts::ScriptEntitlements;
+    let url = std::env::var("CITADEL_EXECUTION_DATABASE_URL").unwrap();
+    citadel_database::MigrationRunner::migrate(&url)
+        .await
+        .unwrap();
+    let pool = sqlx::PgPool::connect(&url).await.unwrap();
+    sqlx::query("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let service = PostgresLicenseEntitlementService::new(pool.clone());
+    let calls = || {
+        sqlx::query_scalar::<_,i64>("SELECT coalesce(sum(calls),0)::bigint FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database()) AND query LIKE 'SELECT i.instanceid, i.createdat, l.id AS licenseid%'").fetch_one(&pool)
+    };
+    assert!(!service.automated_operations().await.unwrap());
+    let before = calls().await.unwrap();
+    for result in
+        futures_util::future::join_all((0..12).map(|_| service.automated_operations())).await
+    {
+        assert!(!result.unwrap());
+    }
+    assert_eq!(calls().await.unwrap() - before, 1);
+    assert!(!service.automated_operations().await.unwrap());
+    assert_eq!(calls().await.unwrap() - before, 2);
 }

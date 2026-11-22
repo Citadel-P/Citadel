@@ -147,8 +147,13 @@ impl PostgresBackupPersistence {
         scheduled_minute: DateTime<Utc>,
     ) -> BoxFuture<'_, Result<bool, BackupError>> {
         Box::pin(async move {
+            if scheduled_minute.timestamp().rem_euclid(60) != 0
+                || scheduled_minute.timestamp_subsec_nanos() != 0
+            {
+                return Ok(false);
+            }
             let mut tx = self.pool.begin().await.map_err(storage)?;
-            let Some(policy) = sqlx::query("SELECT p.name,p.source,p.backuprepositoryid,p.controlstate,p.lastscheduledrunat,p.runasactorid,r.type FROM backuppolicies p JOIN backuprepositories r ON r.id=p.backuprepositoryid WHERE p.id=$1 AND p.enabled=true AND p.archivedat IS NULL AND p.cron IS NOT NULL AND r.archivedat IS NULL FOR UPDATE OF p,r")
+            let Some(policy) = sqlx::query("SELECT p.cron,COALESCE(p.timezone,'UTC') AS zone,p.name,p.source,p.backuprepositoryid,p.controlstate,p.lastscheduledrunat,p.runasactorid,r.type FROM backuppolicies p JOIN backuprepositories r ON r.id=p.backuprepositoryid WHERE p.id=$1 AND p.enabled=true AND p.archivedat IS NULL AND p.cron IS NOT NULL AND r.archivedat IS NULL FOR UPDATE OF p,r")
                 .bind(policy_id)
                 .fetch_optional(&mut *tx)
                 .await
@@ -160,7 +165,12 @@ impl PostgresBackupPersistence {
             let state: String = policy.try_get("controlstate").map_err(storage)?;
             let last: Option<DateTime<Utc>> =
                 policy.try_get("lastscheduledrunat").map_err(storage)?;
-            if state != "Idle" || last.is_some_and(|value| value >= scheduled_minute) {
+            let cron: String = policy.try_get("cron").map_err(storage)?;
+            let zone: String = policy.try_get("zone").map_err(storage)?;
+            if !citadel_primitives::schedule::schedule_is_due(Some(&cron), &zone, scheduled_minute)
+                || state != "Idle"
+                || last.is_some_and(|value| value >= scheduled_minute)
+            {
                 tx.rollback().await.map_err(storage)?;
                 return Ok(false);
             }

@@ -192,20 +192,13 @@ impl ScriptRepository for PostgresScriptRepository {
         self.get_run_impl(script_id, run_id)
     }
 
-    fn list_scheduled<'a>(
-        &'a self,
-        after: Option<Uuid>,
-        limit: usize,
-    ) -> BoxFuture<'a, Result<Vec<citadel_scripts::ScheduledScript>, ScriptError>> {
-        self.list_scheduled_impl(after, limit)
-    }
-
     fn enqueue_scheduled<'a>(
         &'a self,
         script_id: Uuid,
         scheduled_minute: DateTime<Utc>,
+        max_timeout_seconds: i32,
     ) -> BoxFuture<'a, Result<Option<ScriptRun>, ScriptError>> {
-        self.enqueue_scheduled_impl(script_id, scheduled_minute)
+        self.enqueue_scheduled_impl(script_id, scheduled_minute, max_timeout_seconds)
     }
 
     fn cancel<'a>(

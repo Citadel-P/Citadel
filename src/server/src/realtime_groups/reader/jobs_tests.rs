@@ -145,3 +145,71 @@ async fn history_requires_administrator_before_storage_and_validates_ranges() {
         Err(InstanceError::Validation(_))
     ));
 }
+
+#[tokio::test]
+async fn schedule_catalog_and_subscription_require_a_human_administrator() {
+    let (service, _, mut principal) = fixture();
+    assert!(service.schedule_changes(&principal).is_ok());
+    assert!(matches!(
+        service.schedule_counts(&principal, "").await,
+        Err(InstanceError::Conflict(_))
+    ));
+    assert!(matches!(
+        service.schedules(&principal, None, "", 1, 25, false).await,
+        Err(InstanceError::Conflict(_))
+    ));
+    for kind in [
+        citadel_identity::AuthenticatedPrincipalType::User,
+        citadel_identity::AuthenticatedPrincipalType::ServiceAccount,
+    ] {
+        principal.principal_type = kind;
+        principal.roles = if matches!(kind, citadel_identity::AuthenticatedPrincipalType::User) {
+            vec![]
+        } else {
+            vec!["Admin".into()]
+        };
+        assert!(matches!(
+            service.schedules(&principal, None, "", 1, 25, false).await,
+            Err(InstanceError::Forbidden)
+        ));
+        assert!(matches!(
+            service.schedule_counts(&principal, "").await,
+            Err(InstanceError::Forbidden)
+        ));
+        assert!(matches!(
+            service.schedule_changes(&principal),
+            Err(InstanceError::Forbidden)
+        ));
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn schedule_stream_separates_catalog_reads_from_batch_activity() {
+    use citadel_instance::SchedulePurpose;
+    let (service, _, principal) = fixture();
+    let token = CancellationToken::new();
+    let mut events = super::schedules::stream(&service, &principal, &token).unwrap();
+    let initial = events.next().await.unwrap().unwrap();
+    assert_eq!(
+        initial.arguments[0],
+        serde_json::json!({"catalogChanged":true,"activeBatches":[]})
+    );
+    let batch = service.start_schedule_batch(SchedulePurpose::Image);
+    let active = events.next().await.unwrap().unwrap();
+    assert_eq!(
+        active.arguments[0],
+        serde_json::json!({"catalogChanged":false,"activeBatches":["Image"]})
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(30), events.next())
+            .await
+            .is_err()
+    );
+    drop(batch);
+    service.notify_schedules();
+    let idle = events.next().await.unwrap().unwrap();
+    assert_eq!(
+        idle.arguments[0],
+        serde_json::json!({"catalogChanged":true,"activeBatches":[]})
+    );
+}

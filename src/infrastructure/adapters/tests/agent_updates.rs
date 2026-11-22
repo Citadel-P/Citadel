@@ -1,8 +1,10 @@
 //! Real PostgreSQL claims and Activities; deliberately separate from runtime mocks.
 use chrono::{Duration, Timelike, Utc};
+use citadel_adapters::persistence::postgres::instance::PostgresSchedules;
 use citadel_adapters::persistence::postgres::updates::PostgresUpdateRepository;
 use citadel_database::MigrationRunner;
 use citadel_identity::{ADMIN_ROLE_ID, SYSTEM_ACTOR_ID};
+use citadel_instance::{SchedulePurpose, ScheduleReader};
 use citadel_primitives::ActorId;
 use citadel_updates::*;
 use sqlx::postgres::PgPoolOptions;
@@ -53,10 +55,15 @@ async fn claims_replay_progress_and_schedule_are_transactional() {
         .unwrap();
     sqlx::query("UPDATE instancesetupstates SET initializedat=now(),initialadministratoractorid=$1 WHERE id=1").bind(actor.actor_id.value()).execute(&pool).await.unwrap();
     let repo = PostgresUpdateRepository::new(pool.clone());
-    let work = repo.pending_work().await.unwrap();
-    assert!(!work.active && !work.schedule_enabled);
-    assert_eq!(work.time_zone, "UTC");
-    assert!(work.last_scheduled_minute.is_none());
+    let catalog = PostgresSchedules(pool.clone());
+    let definition = catalog
+        .one(SchedulePurpose::Install, Uuid::nil())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!repo.pending_work().await.unwrap() && !definition.enabled);
+    assert_eq!(definition.zone.as_deref(), Some("UTC"));
+    assert!(definition.anchor.is_none());
     let review = AgentUpdateReview {
         id: Uuid::now_v7(),
         actor_id: actor.actor_id,
@@ -101,10 +108,7 @@ async fn claims_replay_progress_and_schedule_are_transactional() {
     let stale = operation.clone();
     operation.targets[0].phase = AgentUpdatePhase::Updating;
     operation = repo.save_operation(&operation).await.unwrap();
-    assert_eq!(
-        repo.pending_work().await.unwrap().active,
-        !operation.finished
-    );
+    assert_eq!(repo.pending_work().await.unwrap(), !operation.finished);
     assert!(repo.save_operation(&stale).await.is_err());
     // A worker restart sees the same unresolved attempt, and cannot approve another.
     let restarted = PostgresUpdateRepository::new(pool.clone());
@@ -118,10 +122,7 @@ async fn claims_replay_progress_and_schedule_are_transactional() {
     operation.targets[0].phase = AgentUpdatePhase::Succeeded;
     operation.finished = true;
     operation = repo.save_operation(&operation).await.unwrap();
-    assert_eq!(
-        repo.pending_work().await.unwrap().active,
-        !operation.finished
-    );
+    assert_eq!(repo.pending_work().await.unwrap(), !operation.finished);
     assert_eq!(
         AgentUpdateRepository::operation(&repo, operation.id)
             .await
@@ -171,9 +172,13 @@ async fn claims_replay_progress_and_schedule_are_transactional() {
     );
     let reservations: Vec<_> = [a.unwrap(), b.unwrap()].into_iter().flatten().collect();
     assert_eq!(reservations.len(), 1);
-    let work = repo.pending_work().await.unwrap();
-    assert!(work.active && work.schedule_enabled);
-    assert_eq!(work.last_scheduled_minute, Some(minute));
+    let definition = catalog
+        .one(SchedulePurpose::Install, Uuid::nil())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(repo.pending_work().await.unwrap() && definition.enabled);
+    assert_eq!(definition.anchor, Some(minute));
     let mut run = reservations[0].clone();
     // Persist a frozen plan before crossing the minute boundary or restarting the worker.
     run.release = Some(review.release.clone());

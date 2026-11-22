@@ -88,7 +88,6 @@ pub struct BackupWorkerConfig {
     pub enabled: bool,
     pub tracking_slots: usize,
     pub poll_interval: Duration,
-    pub schedule_interval: Duration,
 }
 
 fn positive_usize(name: &'static str, default: usize) -> Result<usize, ConfigError> {
@@ -369,10 +368,6 @@ impl Config {
                 poll_interval: Duration::from_secs(positive_usize(
                     "CITADEL_BACKUPS_POLL_INTERVAL_SECONDS",
                     2,
-                )? as u64),
-                schedule_interval: Duration::from_secs(positive_usize(
-                    "CITADEL_BACKUPS_SCHEDULE_POLL_INTERVAL_SECONDS",
-                    30,
                 )? as u64),
             },
             database_source,
@@ -1154,10 +1149,6 @@ fn script_options(
         default_timeout_seconds: defaults.scripts_default_timeout_seconds as i32,
         max_timeout_seconds: defaults.scripts_maximum_timeout_seconds as i32,
         poll_interval: Duration::from_secs(parse_env("CITADEL_SCRIPTS_POLL_INTERVAL_SECONDS", 2)?),
-        schedule_poll_interval: Duration::from_secs(parse_env(
-            "CITADEL_SCRIPTS_SCHEDULE_POLL_INTERVAL_SECONDS",
-            30,
-        )?),
     };
     options.validate().map_err(|error| ConfigError::Invalid {
         name: "Scripts",

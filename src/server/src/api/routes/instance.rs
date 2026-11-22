@@ -42,6 +42,8 @@ fn settings_routes() -> utoipa_axum::router::OpenApiRouter<InstanceHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(get_installation_settings))
         .normalized_routes(utoipa_axum::routes!(get_database_connections))
+        .normalized_routes(utoipa_axum::routes!(get_schedules))
+        .normalized_routes(utoipa_axum::routes!(get_schedule_groups))
         .normalized_routes(utoipa_axum::routes!(get_jobs))
         .normalized_routes(utoipa_axum::routes!(get_job_history))
         .normalized_routes(utoipa_axum::routes!(patch_installation_settings))
@@ -270,6 +272,77 @@ async fn get_job_history(
         Ok(history) => no_store(
             Json(crate::api::resources::instance::job_history::JobHistoryView::from(history))
                 .into_response(),
+        ),
+        Err(error) => error_response(error, &headers),
+    }
+}
+
+use crate::api::resources::instance::schedules::{
+    ScheduleGroupQuery, SchedulePage, SchedulePurposeCount, ScheduleQuery,
+};
+#[utoipa::path(get, path = "/api/v1/instance/schedules", operation_id = "getInstanceSchedules", tag = "Instance",
+    params(ScheduleQuery), summary = "List resource schedules (administrator)",
+    responses((status = 200, description = "One page of schedule definitions", body = SchedulePage), crate::openapi::errors::AccessErrors),
+    security(("Bearer" = [])), extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false))))]
+async fn get_schedules(
+    State(state): State<InstanceHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    axum::extract::Query(query): axum::extract::Query<ScheduleQuery>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(Extension(principal)) = principal else {
+        return error_response(IdentityError::Unauthenticated, &headers);
+    };
+    let result = state
+        .instance
+        .schedules(
+            &principal,
+            query.resource.as_deref(),
+            query.search.as_deref().unwrap_or_default(),
+            query.page.unwrap_or(1),
+            query
+                .page_size
+                .unwrap_or(citadel_instance::SCHEDULE_PAGE_SIZE),
+            query.attention_only.unwrap_or(false),
+        )
+        .await;
+    match result {
+        Ok(rows) => no_store(Json(SchedulePage::from(rows)).into_response()),
+        Err(e) => error_response(e, &headers),
+    }
+}
+
+#[utoipa::path(get, path = "/api/v1/instance/schedules/groups", operation_id = "getInstanceScheduleGroups", tag = "Instance",
+    params(ScheduleGroupQuery), summary = "List schedule counts by purpose (administrator)",
+    responses((status = 200, description = "Matching schedule counts", body = Vec<SchedulePurposeCount>), crate::openapi::errors::AccessErrors),
+    security(("Bearer" = [])), extensions(("x-citadel-principal" = json!("human")), ("x-citadel-public" = json!(false))))]
+async fn get_schedule_groups(
+    State(state): State<InstanceHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    axum::extract::Query(query): axum::extract::Query<ScheduleGroupQuery>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(Extension(principal)) = principal else {
+        return error_response(IdentityError::Unauthenticated, &headers);
+    };
+    match state
+        .instance
+        .schedule_counts(&principal, query.search.as_deref().unwrap_or_default())
+        .await
+    {
+        Ok(counts) => no_store(
+            Json(
+                counts
+                    .into_iter()
+                    .map(|row| SchedulePurposeCount {
+                        resource: row.purpose.resource().into(),
+                        purpose: row.purpose.name().into(),
+                        count: row.total,
+                        attention: row.attention,
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .into_response(),
         ),
         Err(error) => error_response(error, &headers),
     }

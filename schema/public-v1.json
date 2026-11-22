@@ -1750,6 +1750,24 @@
         ],
         "type": "object"
       },
+      "BackupPolicyCapabilitiesView": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResourceCapabilitiesView"
+          },
+          {
+            "properties": {
+              "canRestore": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "canRestore"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "BackupPolicyInput": {
         "properties": {
           "alertOnFailure": {
@@ -1887,7 +1905,7 @@
           "capabilities": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/ResourceCapabilitiesView"
+                "$ref": "#/components/schemas/BackupPolicyCapabilitiesView"
               },
               {
                 "type": "null"

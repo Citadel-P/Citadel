@@ -237,13 +237,28 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
     [openSheet],
   );
 
+  const allowRestore = resource.capabilities?.canRestore === true;
+  const allowCancel = resource.capabilities?.canExecute === true;
   const columns = useMemo(
-    () => runColumns(handleOpenLogs, setRestoreRun, handleCancel, cancelRun.isPending, formatDateTime),
-    [cancelRun.isPending, formatDateTime, handleCancel, handleOpenLogs],
+    () =>
+      runColumns(
+        handleOpenLogs,
+        allowRestore ? setRestoreRun : undefined,
+        allowCancel ? handleCancel : undefined,
+        cancelRun.isPending,
+        formatDateTime,
+      ),
+    [allowRestore, allowCancel, cancelRun.isPending, formatDateTime, handleCancel, handleOpenLogs],
   );
   const restoreColumns = useMemo(
-    () => restoreRunColumns(handleOpenRestoreLogs, handleCancelRestore, cancelRestoreRun.isPending, formatDateTime),
-    [cancelRestoreRun.isPending, formatDateTime, handleCancelRestore, handleOpenRestoreLogs],
+    () =>
+      restoreRunColumns(
+        handleOpenRestoreLogs,
+        allowCancel ? handleCancelRestore : undefined,
+        cancelRestoreRun.isPending,
+        formatDateTime,
+      ),
+    [allowCancel, cancelRestoreRun.isPending, formatDateTime, handleCancelRestore, handleOpenRestoreLogs],
   );
 
   return (
@@ -258,7 +273,7 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
         <DataTable columns={restoreColumns} data={visibleRestoreRuns} isLoading={isRestoreLoading && !restoreRuns} />
       </div>
 
-      {restoreRun && (
+      {allowRestore && restoreRun && (
         <BackupRestoreDialog key={restoreRun.id} run={restoreRun} onClose={() => setRestoreRun(undefined)} />
       )}
     </div>
@@ -267,8 +282,8 @@ export function BackupPolicyRunsTab({ resource }: { resource: BackupPolicyView }
 
 const runColumns = (
   onSelectLog: (run: BackupRunView) => void,
-  onRestore: (run: BackupRunView) => void,
-  onCancel: (run: BackupRunView) => void,
+  onRestore: ((run: BackupRunView) => void) | undefined,
+  onCancel: ((run: BackupRunView) => void) | undefined,
   cancelPending: boolean,
   formatDateTime: DateTimeFormatter,
 ): ColumnDef<StockFeatures, BackupRunView>[] => [
@@ -324,12 +339,12 @@ const runColumns = (
           <Button type="button" size="icon-sm" variant="ghost" onClick={() => onSelectLog(run)} title="View logs">
             <FileText className="size-3.5" />
           </Button>
-          {restorable && (
+          {onRestore && restorable && (
             <Button type="button" size="icon-sm" variant="ghost" onClick={() => onRestore(run)} title="Restore backup">
               <RotateCcw className="size-3.5" />
             </Button>
           )}
-          {cancellable && (
+          {onCancel && cancellable && (
             <Button
               type="button"
               size="icon-sm"
@@ -348,7 +363,7 @@ const runColumns = (
 
 const restoreRunColumns = (
   onSelectLog: (run: BackupRestoreRunView) => void,
-  onCancel: (run: BackupRestoreRunView) => void,
+  onCancel: ((run: BackupRestoreRunView) => void) | undefined,
   cancelPending: boolean,
   formatDateTime: DateTimeFormatter,
 ): ColumnDef<StockFeatures, BackupRestoreRunView>[] => [
@@ -410,7 +425,7 @@ const restoreRunColumns = (
           <Button type="button" size="icon-sm" variant="ghost" onClick={() => onSelectLog(run)} title="View logs">
             <FileText className="size-3.5" />
           </Button>
-          {cancellable && (
+          {onCancel && cancellable && (
             <Button
               type="button"
               size="icon-sm"
@@ -459,10 +474,11 @@ export function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onCl
   const { open: openSheet } = useTaskSheet('BackupPolicy');
   const targetPlatformArgs = useMemo(() => ({ id: targetPlatformId }), [targetPlatformId]);
   const targetPlatform = useRead('getPlatfom', targetPlatformArgs, { enabled: Boolean(targetPlatformId) });
+  const canWriteTarget = targetPlatform.data?.data.capabilities?.canWrite === true;
   const isTargetSwarm = targetPlatform.data?.data.type === PlatformType.DockerSwarm;
   const targetNodesArgs = useMemo(() => ({ platformId: targetPlatformId }), [targetPlatformId]);
   const targetNodes = useRead('listSwarmNodes', targetNodesArgs, {
-    enabled: Boolean(targetPlatformId) && isTargetSwarm,
+    enabled: canWriteTarget && isTargetSwarm,
   });
   const nodes = targetNodes.data?.data.items ?? [];
   const selectedNode = nodes.find((node) => node.id === targetDockerNodeId);
@@ -472,12 +488,7 @@ export function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onCl
   const sourceItemSelected = Boolean(directSource) || successfulItems.length <= 1 || Boolean(sourceBackupRunItemId);
   const targetNodeSelected = !isTargetSwarm || Boolean(targetDockerNodeId);
   const canSubmit = Boolean(
-    targetPlatformId &&
-    targetPlatform.data?.data &&
-    targetName &&
-    sourceItemSelected &&
-    targetNodeSelected &&
-    overwriteConfirmed,
+    targetPlatformId && canWriteTarget && targetName && sourceItemSelected && targetNodeSelected && overwriteConfirmed,
   );
 
   const handleSubmit = () => {
@@ -546,7 +557,10 @@ export function BackupRestoreDialog({ run, onClose }: { run: BackupRunView; onCl
               placeholder="Select Platform"
             />
           </div>
-          {isTargetSwarm && (
+          {targetPlatform.data && !canWriteTarget && (
+            <p className="text-sm text-muted-foreground">Choose a target platform where you have Write access.</p>
+          )}
+          {isTargetSwarm && canWriteTarget && (
             <div className="flex flex-col gap-2">
               <Label htmlFor="backup-restore-target-node">Target Node</Label>
               <ResourceSelectorField

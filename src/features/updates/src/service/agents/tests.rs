@@ -1,6 +1,9 @@
 use super::*;
 use crate::*;
 use chrono::{DateTime, Utc};
+fn current_minute() -> DateTime<Utc> {
+    DateTime::from_timestamp(Utc::now().timestamp().div_euclid(60) * 60, 0).unwrap()
+}
 use citadel_primitives::ActorId;
 use futures_util::future::BoxFuture;
 use std::sync::{
@@ -447,21 +450,14 @@ impl AgentUpdateRuntime for Fixture {
     }
 }
 impl AgentUpdateRepository for Fixture {
-    fn pending_work(&self) -> BoxFuture<'_, Result<AgentUpdateWork, UpdateError>> {
+    fn pending_work(&self) -> BoxFuture<'_, Result<bool, UpdateError>> {
         Box::pin(async {
-            let last = *self.claimed.lock().unwrap();
             let state = self.state.lock().unwrap();
-            Ok(AgentUpdateWork {
-                active: state.operation.as_ref().is_some_and(|op| !op.finished)
-                    || state
-                        .run
-                        .as_ref()
-                        .is_some_and(|run| run.phase != UpdateSchedulePhase::Finished),
-                schedule_enabled: state.schedule.enabled,
-                cron: state.schedule.cron.clone(),
-                time_zone: state.schedule.time_zone.clone(),
-                last_scheduled_minute: last,
-            })
+            Ok(state.operation.as_ref().is_some_and(|op| !op.finished)
+                || state
+                    .run
+                    .as_ref()
+                    .is_some_and(|run| run.phase != UpdateSchedulePhase::Finished))
         })
     }
 
@@ -801,6 +797,7 @@ async fn community_manual_is_free_but_schedule_and_non_admin_starts_are_denied()
         Err(UpdateError::Forbidden)
     ));
     f.state.lock().unwrap().schedule = schedule.clone();
+    assert!(!service.accept_occurrence(current_minute()).await.unwrap());
     service.tick(&cancel).await.unwrap();
     assert!(f.state.lock().unwrap().operation.is_none());
     service
@@ -849,6 +846,7 @@ async fn schedule_can_include_current_agents_and_manual_selection_does_not_modif
     service.tick(&cancel).await.unwrap();
     assert_eq!(f.state.lock().unwrap().schedule, schedule);
     f.targets.lock().unwrap()[0].installed_version = Some("0.1.1".into());
+    assert!(service.accept_occurrence(current_minute()).await.unwrap());
     service.tick(&cancel).await.unwrap();
     service.tick(&cancel).await.unwrap();
     service.tick(&cancel).await.unwrap();
@@ -955,6 +953,7 @@ async fn team_expiry_allows_started_target_to_finish_but_prevents_the_next() {
         )
         .await
         .unwrap();
+    assert!(service.accept_occurrence(current_minute()).await.unwrap());
     service.tick(&cancel).await.unwrap();
     service.tick(&cancel).await.unwrap();
     assert_eq!(*f.installs.lock().unwrap(), ["C"]);
@@ -1132,6 +1131,7 @@ async fn schedule_edits_after_claim_do_not_rewrite_the_frozen_selection() {
     f.state.lock().unwrap().schedule = schedule.clone();
     f.pause_probe.store(true, Ordering::SeqCst);
     let service = f.service();
+    assert!(service.accept_occurrence(current_minute()).await.unwrap());
     let worker = tokio::spawn(async move { service.tick(&CancellationToken::new()).await });
     f.probe_started.notified().await;
     assert!(
@@ -1241,6 +1241,7 @@ async fn combined_schedule_resumes_after_verified_core_cleanup_without_replaying
             .execute(receiver.recv().await.unwrap(), &CancellationToken::new())
             .await
     });
+    assert!(service.accept_occurrence(current_minute()).await.unwrap());
     service.tick(&CancellationToken::new()).await.unwrap();
     worker.await.unwrap().unwrap();
     assert!(
@@ -1296,6 +1297,7 @@ async fn combined_schedule_resumes_after_verified_core_cleanup_without_replaying
 async fn blocked_core_transition_stops_combined_occurrence_before_mutation() {
     let (f, core, service, _, _receiver) = scheduled_core_fixture();
     core.state.lock().unwrap().incompatible_agent_protocol = true;
+    assert!(service.accept_occurrence(current_minute()).await.unwrap());
     assert!(service.tick(&CancellationToken::new()).await.is_err());
     assert!(core.state.lock().unwrap().operation.is_none());
     assert!(f.state.lock().unwrap().operation.is_none());
@@ -1314,6 +1316,7 @@ async fn core_failure_and_team_expiry_after_restart_prevent_the_agent_phase() {
                 .execute(receiver.recv().await.unwrap(), &CancellationToken::new())
                 .await
         });
+        assert!(service.accept_occurrence(current_minute()).await.unwrap());
         service.tick(&CancellationToken::new()).await.unwrap();
         worker.await.unwrap().unwrap();
         {
@@ -1344,6 +1347,7 @@ async fn current_core_proceeds_to_selected_agents_and_core_only_has_no_agent_exe
     let (f, core, _, _, _) = scheduled_core_fixture();
     let checker = ReleaseCheckService::new("0.1.2".into(), f.clone(), f.clone());
     let service = f.service().with_core(checker, Some(core.service().0));
+    assert!(service.accept_occurrence(current_minute()).await.unwrap());
     service.tick(&CancellationToken::new()).await.unwrap();
     service.tick(&CancellationToken::new()).await.unwrap();
     service.tick(&CancellationToken::new()).await.unwrap();
@@ -1357,6 +1361,7 @@ async fn current_core_proceeds_to_selected_agents_and_core_only_has_no_agent_exe
             .execute(receiver.recv().await.unwrap(), &CancellationToken::new())
             .await
     });
+    assert!(service.accept_occurrence(current_minute()).await.unwrap());
     service.tick(&CancellationToken::new()).await.unwrap();
     worker.await.unwrap().unwrap();
     {
@@ -1386,6 +1391,7 @@ async fn agent_failure_after_core_success_keeps_core_and_stops_remaining_agents(
             .execute(receiver.recv().await.unwrap(), &CancellationToken::new())
             .await
     });
+    assert!(service.accept_occurrence(current_minute()).await.unwrap());
     service.tick(&CancellationToken::new()).await.unwrap();
     worker.await.unwrap().unwrap();
     {
@@ -1635,6 +1641,9 @@ async fn worker_runs_due_schedules_and_skips_consumed_minutes() {
         .await
         .unwrap();
     assert!(wake.has_changed().unwrap());
+    let minute = current_minute();
+    assert!(service.accept_occurrence(minute).await.unwrap());
+    assert!(!service.accept_occurrence(minute).await.unwrap());
     for _ in 0..6 {
         service.poll(&cancel).await.unwrap();
     }

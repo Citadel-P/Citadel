@@ -6,3 +6,5 @@ mod repository;
 mod restart;
 mod settings;
 pub use repository::PostgresInstanceRepository;
+mod schedules;
+pub use schedules::PostgresSchedules;

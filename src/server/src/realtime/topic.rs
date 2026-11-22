@@ -5,6 +5,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Topic {
     InstanceJobs,
+    InstanceSchedules,
     Platforms,
     Deployments,
     Stacks,
@@ -70,6 +71,7 @@ impl Topic {
         let parts: Vec<_> = name.split(':').collect();
         Some(match parts.as_slice() {
             ["instance-jobs"] => Self::InstanceJobs,
+            ["instance-schedules"] => Self::InstanceSchedules,
             ["platforms"] => Self::Platforms,
             ["deployments"] => Self::Deployments,
             ["stacks"] => Self::Stacks,
@@ -139,6 +141,7 @@ impl Topic {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::InstanceJobs => "instance-jobs",
+            Self::InstanceSchedules => "instance-schedules",
             Self::Platforms => "platforms",
             Self::Deployments => "deployments",
             Self::Stacks => "stacks",

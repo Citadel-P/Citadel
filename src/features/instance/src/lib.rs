@@ -33,3 +33,10 @@ pub use service::InstanceService;
 
 #[cfg(test)]
 mod tests;
+
+mod schedules;
+pub use schedules::{
+    SCHEDULE_PAGE_SIZE, ScheduleActivity, ScheduleBatchGuard, ScheduleCatalogPolicy, ScheduleCount,
+    ScheduleDefinition, ScheduleMode, SchedulePolicyBlocker, SchedulePurpose, ScheduleReader,
+    ScheduledRun, calendar_deadline,
+};

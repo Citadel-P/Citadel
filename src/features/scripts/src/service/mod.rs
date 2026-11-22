@@ -11,7 +11,6 @@ pub(crate) mod source;
 
 use crate::runs::progress;
 use crate::service::source::script_source;
-use citadel_primitives::schedule::schedule_is_due;
 
 use std::collections::HashMap;
 
@@ -20,8 +19,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-
-use chrono::Timelike;
 
 use citadel_alerts::{AlertEventSink, AlertObservation};
 

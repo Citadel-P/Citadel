@@ -1757,6 +1757,10 @@ export interface BackupPolicyActivitySnapshot {
   webhookEnabled: boolean;
 }
 
+export type BackupPolicyCapabilitiesView = ResourceCapabilitiesView & {
+  canRestore: boolean;
+};
+
 export interface BackupPolicyInput {
   alertOnFailure: boolean;
   /** @format uuid */
@@ -1792,7 +1796,7 @@ export interface BackupPolicyView {
   archivedAt: string | null;
   /** @format uuid */
   backupRepositoryId: string;
-  capabilities: ResourceCapabilitiesView | null;
+  capabilities: BackupPolicyCapabilitiesView | null;
   controlState: ResourceControlState;
   /** @format date-time */
   createdAt: string;
@@ -7192,6 +7196,52 @@ export interface RuntimeSwarmPeer {
 export interface ScaleSwarmServiceInput {
   /** @format int32 */
   replicas: number;
+}
+
+export interface SchedulePage {
+  items: ScheduleView[];
+}
+
+export interface SchedulePurposeCount {
+  /** @format int64 */
+  attention: number;
+  /** @format int64 */
+  count: number;
+  purpose: string;
+  resource: string;
+}
+
+export interface ScheduleRunView {
+  /** @format uuid */
+  id: string;
+  /** @format date-time */
+  queuedAt: string;
+  status: string;
+}
+
+export interface ScheduleView {
+  /** Current scheduled script or backup run, while active. */
+  activeRunStatus?: string | null;
+  cron?: string | null;
+  dockerImageId?: string | null;
+  enabled: boolean;
+  /** @format int64 */
+  intervalSeconds?: number | null;
+  latestRun?: ScheduleRunView | null;
+  name: string;
+  needsAttention: boolean;
+  /** @format date-time */
+  nextAt?: string | null;
+  /** @format uuid */
+  ownerId: string;
+  /** @format uuid */
+  platformId?: string | null;
+  purpose: string;
+  reason?: string | null;
+  /** Status of the owning resource. Instance-wide schedules have no resource indicator. */
+  resourceStatus?: string | null;
+  systemManaged: boolean;
+  timeZone?: string | null;
 }
 
 export interface ScriptActivitySnapshot {
@@ -14805,6 +14855,84 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name GetInstanceSchedules
+     * @summary List resource schedules (administrator)
+     * @request GET:/api/v1/instance/schedules
+     * @secure
+     * @response `200` `SchedulePage` One page of schedule definitions
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstanceSchedules: (
+      query?: {
+        /** Resource group, for example script, instance or stack. Omit to include all groups. */
+        resource?: string | null;
+        /** Case-insensitive substring of the resource name. */
+        search?: string | null;
+        /**
+         * One-based page number.
+         * @format int32
+         * @min 0
+         */
+        page?: number | null;
+        /**
+         * @format int32
+         * @min 0
+         */
+        pageSize?: number | null;
+        attentionOnly?: boolean | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<SchedulePage, ProblemDetails>({
+        path: `/api/v1/instance/schedules`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name GetInstanceScheduleGroups
+     * @summary List schedule counts by purpose (administrator)
+     * @request GET:/api/v1/instance/schedules/groups
+     * @secure
+     * @response `200` `(SchedulePurposeCount)[]` Matching schedule counts
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getInstanceScheduleGroups: (
+      query?: {
+        /** Case-insensitive substring of the resource name. */
+        search?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<SchedulePurposeCount[], ProblemDetails>({
+        path: `/api/v1/instance/schedules/groups`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
         ...params,
       }),
 

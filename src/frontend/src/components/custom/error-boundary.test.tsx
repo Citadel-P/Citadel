@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react';
+import { lazy, Suspense } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router';
 import { renderCitadel } from '@/test/render-citadel';
 import { ErrorBoundary } from './error-boundary';
@@ -25,6 +26,21 @@ function Layout({ fail }: { fail: boolean }) {
 }
 
 describe('page error containment', () => {
+  it('offers a document reload when a lazy page import fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const UnavailablePage = lazy(async () => {
+      throw new TypeError('Failed to fetch dynamically imported module: /platforms/forms/index.tsx');
+    });
+    renderCitadel(
+      <ErrorBoundary>
+        <Suspense>
+          <UnavailablePage />
+        </Suspense>
+      </ErrorBoundary>,
+    );
+    expect(await screen.findByRole('button', { name: 'Reload app' })).toBeVisible();
+  });
+
   it('keeps navigation usable after a render crash and resets on route change', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { user } = renderCitadel(<Layout fail />, { route: '/broken' });

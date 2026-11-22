@@ -388,7 +388,7 @@ impl ApplicationGroupReader {
         // Leave time for mapping and delivering the authoritative rows even when
         // the base read has already used the optional hints' share of the deadline.
         let hint_deadline = tokio::time::Instant::now() + self.snapshot_timeout.mul_f32(0.8);
-        if matches!(g.topic(), Topic::InstanceJobs) {
+        if matches!(g.topic(), Topic::InstanceJobs | Topic::InstanceSchedules) {
             self.jobs_service(p)?;
             return Ok(GroupSnapshot::default());
         }
@@ -1598,6 +1598,10 @@ impl GroupReadPort for ApplicationGroupReader {
         cancel: &'a tokio_util::sync::CancellationToken,
     ) -> BoxFuture<'a, Result<Option<GroupStream>, RealtimeReadError>> {
         Box::pin(async move {
+            if matches!(g.topic(), Topic::InstanceSchedules) {
+                return super::schedules::stream(self.jobs_service(p)?.as_ref(), p, cancel)
+                    .map(Some);
+            }
             if matches!(g.topic(), Topic::InstanceJobs) {
                 return self.jobs_stream(p, cancel).map(Some);
             }
@@ -1611,12 +1615,16 @@ impl GroupReadPort for ApplicationGroupReader {
         args: &'a [Value],
     ) -> BoxFuture<'a, Result<Option<Group>, RealtimeReadError>> {
         Box::pin(async move {
-            if target == "StartInstanceJobs" {
+            if matches!(target, "StartInstanceJobs" | "StartInstanceSchedules") {
                 if !args.is_empty() {
                     return Err(RealtimeReadError::Authorization);
                 }
                 self.jobs_service(p)?;
-                return Ok(Group::parse("instance-jobs"));
+                return Ok(Group::parse(if target == "StartInstanceSchedules" {
+                    "instance-schedules"
+                } else {
+                    "instance-jobs"
+                }));
             }
             self.log_invocation(p, target, args).await
         })

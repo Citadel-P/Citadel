@@ -430,7 +430,7 @@ async fn get_policy(
     h: HeaderMap,
 ) -> HttpResult {
     let p = actor(p, &h)?;
-    auth(
+    let permission = auth(
         &s,
         &p,
         ResourceType::BackupPolicy,
@@ -444,14 +444,9 @@ async fn get_policy(
             .map_err(ApiError::internal),
         &h,
     )?;
-    let permission = api_result(
-        s.identity
-            .permission_for_resource(&p, ResourceType::BackupPolicy, id)
-            .await,
-        &h,
-    )?;
-    view.capabilities = Some(crate::api::resource_access::capabilities_from_permission(
-        permission,
+    view.capabilities = Some(BackupPolicyCapabilitiesView::for_actor(
+        Some(permission),
+        p.is_administrator(),
     ));
     Ok(no_store(Json(view).into_response()))
 }

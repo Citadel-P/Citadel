@@ -15,10 +15,11 @@ mod tests;
 mod validation;
 use chrono::{DateTime, Utc};
 use citadel_primitives::ActorId;
-use citadel_primitives::schedule::{CronSchedule, schedule_is_due};
+use citadel_primitives::schedule::CronSchedule;
+#[cfg(test)]
+use citadel_primitives::schedule::schedule_is_due;
 pub use error::BackupError;
 use futures_util::future::BoxFuture;
-pub use policies::read_models::ScheduledBackupPolicy;
 pub use policies::{BackupPolicy, BackupPolicyConfiguration};
 pub use repositories::{
     BackupRepository, BackupRepositoryConfiguration, BackupRepositoryCredentials,

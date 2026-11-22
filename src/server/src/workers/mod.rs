@@ -27,6 +27,7 @@ pub(crate) mod maintenance;
 pub(crate) mod notifications;
 pub(crate) mod recovery;
 pub(crate) mod schedule;
+pub(crate) mod schedules;
 pub(crate) mod unmanaged;
 
 pub(crate) mod pruning;

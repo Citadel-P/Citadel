@@ -14,6 +14,7 @@ import { useMutate, useRead } from '@/lib/hooks';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { Ban, Calendar, Clock, SquareTerminal, User, type LucideIcon } from 'lucide-react';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { ScriptRunRecovery } from './run-recovery';
 import { useScriptRuns } from '../hooks/useScriptRuns';
@@ -21,7 +22,10 @@ import { LogViewer } from '@/components/custom/log-viewer';
 
 export function ScriptRunsTab({ resource }: { resource: AuthorizedScript }) {
   const formatDateTime = useProfileDateTimeFormatter();
-  const [logRunId, setLogRunId] = useState<string | undefined>();
+  const [search] = useSearchParams();
+  const linkedId = search.get('runId');
+  const [selection, setSelection] = useState<{ source: string | null; id?: string }>();
+  const setLogRunId = useCallback((id?: string) => setSelection({ source: linkedId, id }), [linkedId]);
   const reconcile = useQueryReconciliation();
   const script = useReconcileScript();
   const {
@@ -34,7 +38,20 @@ export function ScriptRunsTab({ resource }: { resource: AuthorizedScript }) {
   const { data, isLoading } = useScriptRuns(resource.id);
 
   const runs = useMemo(() => data?.data.runs ?? [], [data?.data.runs]);
-  const selectedRun = useMemo(() => runs.find((run) => run.id === logRunId), [logRunId, runs]);
+  const linkedInList = runs.find((run) => run.id === linkedId);
+  const detail = useRead(
+    'getScriptRun',
+    { id: resource.id, runId: linkedId ?? '' },
+    { enabled: !!linkedId && !linkedInList && selection?.source !== linkedId, retry: false },
+  );
+  const linked = linkedInList ?? detail.data?.data;
+  const logRunId =
+    selection?.source === linkedId
+      ? selection.id
+      : linked && linked.id === linkedId && linked.scriptId === resource.id
+        ? linked.id
+        : undefined;
+  const selectedRun = runs.find((run) => run.id === logRunId) ?? (linked?.id === logRunId ? linked : undefined);
 
   const logs = useRead('getScriptRunLogs', { id: resource.id, runId: logRunId ?? '' }, { enabled: Boolean(logRunId) });
 
@@ -52,11 +69,14 @@ export function ScriptRunsTab({ resource }: { resource: AuthorizedScript }) {
 
   const columns = useMemo(
     () => runColumns(setLogRunId, handleCancel, cancelPending, formatDateTime),
-    [cancelPending, handleCancel, formatDateTime],
+    [cancelPending, handleCancel, formatDateTime, setLogRunId],
   );
 
   return (
     <div className="flex flex-col gap-4">
+      {linkedId && detail.isError && !linkedInList && (
+        <p className="text-sm text-muted-foreground">This scheduled run is unavailable.</p>
+      )}
       <DataTable columns={columns} data={runs} isLoading={isLoading} />
 
       <ScriptRunLogsSheet

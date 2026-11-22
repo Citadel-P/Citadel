@@ -2,6 +2,7 @@ import type { JobStatusView } from '@/api/generated/api.types';
 
 // Explanations describe the measured worker boundary, not business-operation success.
 const descriptions: Record<string, [string, string]> = {
+  'resource-scheduler': ['Schedule resource work', 'Tracks deadlines and asks each resource to accept work when it is due.'],
   'container-stats-writer': [
     'Save container measurements',
     'Saves batches of container measurements. Batch sizes vary; elapsed time includes database waits.',

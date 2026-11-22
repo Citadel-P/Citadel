@@ -421,35 +421,28 @@ mod tests {
     #[ignore = "requires CITADEL_STATISTICS_DATABASE_URL"]
     async fn other_retention_preserves_protected_runs_and_bounds_deletes() {
         let url = std::env::var("CITADEL_STATISTICS_DATABASE_URL").unwrap();
+        citadel_database::MigrationRunner::migrate(&url)
+            .await
+            .unwrap();
         let mut conn = PgConnection::connect(&url).await.unwrap();
         let mut tx = conn.begin().await.unwrap();
-        // Exercise the real migration against pre-existing owner tables. The schema
-        // and every migration object are rolled back with the fixture.
-        let schema = format!("retention_{}", uuid::Uuid::now_v7().simple());
-        tx.execute(sqlx::AssertSqlSafe(format!(
-            "CREATE SCHEMA {schema}; SET LOCAL search_path TO {schema}"
-        )))
-        .await
-        .unwrap();
+        // Exercise the installed reference trigger with session-local owners and assignments.
         tx.execute(
             "CREATE TEMP TABLE instancerestarts(activityid uuid) ON COMMIT DROP;
             CREATE TEMP TABLE scripts(currentrunid uuid) ON COMMIT DROP;
             CREATE TEMP TABLE buildprojects(currentrunid uuid) ON COMMIT DROP;
             CREATE TEMP TABLE buildexecutorreservations(runid uuid) ON COMMIT DROP;
             CREATE TEMP TABLE buildcompletionqueue(buildrunid uuid) ON COMMIT DROP;
-            CREATE TABLE deployments(id uuid DEFAULT gen_random_uuid(),spec jsonb);
-            CREATE TABLE stackreleases(id uuid DEFAULT gen_random_uuid(),spec jsonb);
-            CREATE TABLE buildruns(id uuid, completedat timestamptz, status text);
-            CREATE INDEX ix_buildruns_retention ON buildruns(completedat);",
+            CREATE TEMP TABLE buildspecassignments (LIKE public.buildspecassignments INCLUDING ALL) ON COMMIT DROP;
+            CREATE TEMP TABLE deployments(id uuid DEFAULT gen_random_uuid(),spec jsonb) ON COMMIT DROP;
+            CREATE TEMP TABLE stackreleases(LIKE deployments INCLUDING ALL) ON COMMIT DROP;
+            CREATE TRIGGER deployment_build_references AFTER INSERT OR UPDATE OF spec,id OR DELETE ON deployments
+                FOR EACH ROW EXECUTE FUNCTION record_build_spec_ids();
+            CREATE TRIGGER stack_release_build_references AFTER INSERT OR UPDATE OF spec,id OR DELETE ON stackreleases
+                FOR EACH ROW EXECUTE FUNCTION record_build_spec_ids();",
         )
         .await
         .unwrap();
-        tx.execute(include_str!(
-            "../../../../database/generated/0011_build_spec_references.sql"
-        ))
-        .await
-        .unwrap();
-        tx.execute("DROP TABLE buildruns").await.unwrap();
         for (table, time, query, limit) in [
             (
                 "containerhealthtransitions",

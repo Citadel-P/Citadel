@@ -140,7 +140,7 @@ impl StackService {
         Ok(())
     }
 
-    async fn run_update_check_pass(
+    pub async fn run_update_check_pass(
         &self,
         images: bool,
         cancellation: &CancellationToken,

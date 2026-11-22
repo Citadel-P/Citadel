@@ -933,15 +933,22 @@ type PaginationControlsProps = {
   totalPages: number;
   onPageChange: (page: number) => void;
   className?: string;
+  ariaLabel?: string;
 };
 
-export const PaginationControls = ({ currentPage, totalPages, onPageChange, className }: PaginationControlsProps) => {
+export const PaginationControls = ({
+  currentPage,
+  totalPages,
+  onPageChange,
+  className,
+  ariaLabel = 'pagination',
+}: PaginationControlsProps) => {
   const pageItems = useMemo(() => buildPageItems(currentPage, totalPages), [currentPage, totalPages]);
 
   if (totalPages <= 1) return null;
 
   return (
-    <Pagination className={className}>
+    <Pagination className={className} aria-label={ariaLabel}>
       <PaginationContent>
         <PaginationItem>
           <PaginationPrevious
@@ -1024,6 +1031,42 @@ export const FilterBar = ({ children }: { children: React.ReactNode }) => {
   return <div className={filterBarClassName}>{children}</div>;
 };
 
+export function TablePagination({
+  currentPage,
+  totalPages,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  showPageSize,
+  ariaLabel,
+}: Omit<PaginationControlsProps, 'className'> & {
+  pageSize: number;
+  onPageSizeChange: (value: string) => void;
+  showPageSize: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <PaginationControls
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+        className="justify-start"
+        ariaLabel={ariaLabel}
+      />
+      {showPageSize && (
+        <SelectField
+          value={String(pageSize)}
+          options={pageSizeOptions}
+          onChange={onPageSizeChange}
+          placeholder="Page Size"
+          allLabel="Page Size"
+          selectableLabel={false}
+        />
+      )}
+    </div>
+  );
+}
+
 type PagedDataTableProps<TData extends { id?: string | null }> = {
   columns: ColumnDef<StockFeatures, TData>[];
   data: TData[];
@@ -1077,24 +1120,14 @@ export function PagedDataTable<TData extends { id?: string | null }>({
         enableRowSelection={enableRowSelection}
       />
       {showPagination && (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <PaginationControls
-            currentPage={query.page}
-            totalPages={totalPages}
-            onPageChange={goToPage}
-            className="justify-start"
-          />
-          {totalPages > 1 && (
-            <SelectField
-              value={query.pageSize.toString()}
-              options={pageSizeOptions}
-              onChange={handlePageSizeChange}
-              placeholder="Page Size"
-              allLabel="Page Size"
-              selectableLabel={false}
-            />
-          )}
-        </div>
+        <TablePagination
+          currentPage={query.page}
+          totalPages={totalPages}
+          pageSize={query.pageSize}
+          onPageChange={goToPage}
+          onPageSizeChange={handlePageSizeChange}
+          showPageSize={totalPages > 1}
+        />
       )}
     </div>
   );

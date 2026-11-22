@@ -774,14 +774,20 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
     let mut seen = std::collections::BTreeSet::new();
     let mut after = None;
     loop {
-        let page = store.list_scheduled_policies(after, 64).await.unwrap();
+        use citadel_instance::{SchedulePurpose, ScheduleReader};
+        let kind = SchedulePurpose::Backup;
+        let page =
+            citadel_adapters::persistence::postgres::instance::PostgresSchedules(pool.clone())
+                .page(Some(kind), after.map(|id| (kind, id)), 64)
+                .await
+                .unwrap();
         assert!(page.len() <= 64);
         if page.is_empty() {
             break;
         }
         for candidate in page {
-            assert!(seen.insert(candidate.id));
-            after = Some(candidate.id);
+            assert!(seen.insert(candidate.owner));
+            after = Some(candidate.owner);
         }
     }
     assert!(copies.iter().all(|id| seen.contains(id)));
@@ -794,6 +800,25 @@ async fn backup_claims_are_repository_exclusive_and_late_results_do_not_overwrit
         .with_second(0)
         .unwrap()
         .with_nanosecond(0)
+        .unwrap();
+    // A deadline calculated before a cron edit must be fenced under the policy lock.
+    let different = format!("{} * * * *", (scheduled_minute.minute() + 1) % 60);
+    sqlx::query("UPDATE backuppolicies SET cron=$2 WHERE id=$1")
+        .bind(policies[0].id)
+        .bind(different)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        !store
+            .enqueue_scheduled_backup(policies[0].id, scheduled_minute)
+            .await
+            .unwrap()
+    );
+    sqlx::query("UPDATE backuppolicies SET cron='* * * * *' WHERE id=$1")
+        .bind(policies[0].id)
+        .execute(&pool)
+        .await
         .unwrap();
     let (left, right) = tokio::join!(
         store.enqueue_scheduled_backup(policies[0].id, scheduled_minute),
@@ -1269,7 +1294,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
         },
         edge::v1::{EdgeCommandKind as Kind, core_envelope},
         shared_models::v1::{PlatformInfoResponse, VolumeResponse},
-        volumes::v1::{CreateVolumeRequest, ListVolumesResponse},
+        volumes::v1::{CreateVolumeRequest, InspectVolumeRequest, inspect_volume_request},
     };
     use futures_util::future::BoxFuture;
     use prost::Message;
@@ -1358,7 +1383,7 @@ async fn edge_restore_uses_the_saved_snapshot_root(
             ];
             if root != "/unexpected" {
                 kinds.extend([
-                    Kind::VolumeList,
+                    Kind::VolumeInspect,
                     Kind::VolumeCreate,
                     Kind::PlatformGetInfo,
                     Kind::ContainerCreate,
@@ -1400,8 +1425,16 @@ async fn edge_restore_uses_the_saved_snapshot_root(
                             .encode_to_vec(),
                         );
                     }
-                    Kind::VolumeList => {
-                        session.output(id, ListVolumesResponse::default().encode_to_vec());
+                    Kind::VolumeInspect if volume.name.is_empty() => {
+                        let request =
+                            InspectVolumeRequest::decode(command.payload.as_slice()).unwrap();
+                        assert_eq!(request.name, "target");
+                        assert_eq!(
+                            request.observation,
+                            inspect_volume_request::Observation::Metadata as i32
+                        );
+                        session.fail(id, "not_found");
+                        continue;
                     }
                     Kind::VolumeCreate => {
                         let request =
