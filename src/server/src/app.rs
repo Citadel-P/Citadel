@@ -50,10 +50,11 @@ pub async fn serve(mut config: Config) -> Result<(), Box<dyn std::error::Error>>
         };
         if !recovered {
             logging::init_from_environment()?;
-            if let Some(error) = acceptance_failure {
-                tracing::warn!(%error, "Update target acceptance did not authorize admission");
-            }
-            tracing::error!(%error, "Core is in update maintenance; migrations, normal APIs and workers are stopped. Preserve update evidence and resolve recovery before restarting.");
+            tracing::error!(
+                admission_error = %error,
+                recovery_error = acceptance_failure.as_deref(),
+                "Core is in update maintenance. Readiness returns 503 until update recovery is verified. Preserve the checkpoint and update state."
+            );
             return serve_maintenance(&config, job_lease).await;
         }
         startup::while_owned(&mut job_lease, startup::check_updates(&config))

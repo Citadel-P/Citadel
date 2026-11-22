@@ -27,12 +27,22 @@ pub enum HostUpdateRequest {
     Check {
         state_directory: PathBuf,
     },
-    CheckDatabase(Box<citadel_updates::UpdatePlan>),
+    CheckReplacement(Box<citadel_updates::UpdatePlan>),
     Launch(Box<UpdateOperation>),
     Finalize(Box<FinalizeUpdateRequest>),
     Completed(Box<UpdateOperation>),
     FailedJournal(Box<UpdateOperation>),
     RecoverSource(Box<UpdateOperation>),
+}
+
+impl HostUpdateRequest {
+    pub(super) fn cleanup_operation(&self) -> Option<&UpdateOperation> {
+        match self {
+            Self::Finalize(request) => Some(&request.intent.operation),
+            Self::Completed(operation) => Some(operation),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -43,10 +53,13 @@ pub enum HostUpdateRequest {
     deny_unknown_fields
 )]
 pub enum HostUpdateResponse {
+    ReviewBlocked {
+        reason: String,
+    },
     RegistrationPending,
     Registered(Box<super::super::RegisteredComposeInstallation>),
     Checked(Box<CheckedUpdateInstallation>),
-    DatabaseChecked {
+    ReplacementChecked {
         plan_id: uuid::Uuid,
         blocker: Option<String>,
     },
@@ -85,8 +98,8 @@ pub async fn execute_host_update(
                     .await?,
             )))
         }
-        HostUpdateRequest::CheckDatabase(plan) => {
-            let blocker = match super::super::handoff::check_database_eligibility(
+        HostUpdateRequest::CheckReplacement(plan) => {
+            let blocker = match super::super::handoff::check_replacement_eligibility(
                 &plan,
                 process,
                 cancellation,
@@ -98,7 +111,7 @@ pub async fn execute_host_update(
                 Err(UpdateError::Conflict(message)) => Some(message),
                 Err(error) => return Err(error),
             };
-            Ok(HostUpdateResponse::DatabaseChecked {
+            Ok(HostUpdateResponse::ReplacementChecked {
                 plan_id: plan.id,
                 blocker,
             })
@@ -119,9 +132,19 @@ pub async fn execute_host_update(
         HostUpdateRequest::Startup { state_directory } => Ok(HostUpdateResponse::Registered(
             Box::new(super::super::check_startup_registration(&state_directory)?),
         )),
-        HostUpdateRequest::Check { state_directory } => Ok(HostUpdateResponse::Checked(Box::new(
-            check_registered_compose_installation(&state_directory, process, cancellation).await?,
-        ))),
+        HostUpdateRequest::Check { state_directory } => {
+            match check_registered_compose_installation(&state_directory, process, cancellation)
+                .await
+            {
+                Ok(checked) => Ok(HostUpdateResponse::Checked(Box::new(checked))),
+                // Preflight conflicts contain operator-facing validation messages.
+                // Docker failures and process output stay behind the host boundary.
+                Err(UpdateError::Conflict(reason)) => {
+                    Ok(HostUpdateResponse::ReviewBlocked { reason })
+                }
+                Err(error) => Err(error),
+            }
+        }
         HostUpdateRequest::Launch(operation) => {
             let state = JournalDirectory::open(operation.plan.checkpoint_directory.clone().into())?;
             Ok(HostUpdateResponse::Launched(Box::new(

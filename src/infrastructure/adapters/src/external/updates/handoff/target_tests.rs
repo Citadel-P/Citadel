@@ -536,6 +536,19 @@ fn completion(journal: &UpdateJournal) -> super::completion::TargetUpdateComplet
     }
 }
 
+pub(in crate::external::updates) async fn finalize_request() -> super::FinalizeUpdateRequest {
+    let (runner, helper) = TargetRunner::new().await;
+    let journal = helper
+        .observe_replacement(&runner, &CancellationToken::new())
+        .await
+        .unwrap();
+    super::FinalizeUpdateRequest {
+        intent: helper.intent.clone(),
+        completion: completion(&journal),
+        receipt_recovery: false,
+    }
+}
+
 #[tokio::test]
 async fn completion_mailbox_requires_exact_target_receipt_and_does_not_release_maintenance() {
     use super::command::{HelperAction, HelperRequest};

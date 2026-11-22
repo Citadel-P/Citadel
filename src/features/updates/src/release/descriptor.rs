@@ -28,20 +28,28 @@ struct Migration {
     sha256: String,
 }
 
-fn migrations(catalog: &str, digest: &str) -> Result<Vec<Migration>, UpdateError> {
+fn migrations(catalog: &str, digest: &str, release: &str) -> Result<Vec<Migration>, UpdateError> {
     #[derive(Deserialize)]
     struct Catalog {
         migrations: Vec<Migration>,
     }
-    let invalid = || UpdateError::Unavailable("Invalid or inconsistent migration catalog.".into());
-    if catalog.len() > 128 * 1024
-        || Sha256::digest(catalog.as_bytes())
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect::<String>()
-            != digest
-    {
+    let invalid = || {
+        UpdateError::Unavailable(format!(
+            "The {release} release contains an invalid migration catalog."
+        ))
+    };
+    if catalog.len() > 128 * 1024 {
         return Err(invalid());
+    }
+    if Sha256::digest(catalog.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
+        != digest
+    {
+        return Err(UpdateError::Unavailable(format!(
+            "The {release} migration catalog checksum differs from the recorded checksum. Verify the {release} Core image."
+        )));
     }
     let catalog: Catalog = serde_json::from_str(catalog).map_err(|_| invalid())?;
     if catalog.migrations.is_empty()
@@ -117,7 +125,11 @@ impl UpgradeDescriptor {
                 "The verified image has an unsupported or inconsistent upgrade descriptor.".into(),
             ));
         }
-        migrations(&self.migration_catalog, &self.target_catalog_sha256)?;
+        migrations(
+            &self.migration_catalog,
+            &self.target_catalog_sha256,
+            "target",
+        )?;
         Ok(())
     }
 
@@ -142,8 +154,9 @@ impl UpgradeDescriptor {
                 "This release does not support the selected installation transition.".into(),
             ));
         }
-        let source_migrations = migrations(source_catalog, &source.catalog_sha256)?;
-        let target_migrations = migrations(&self.migration_catalog, &target.catalog_sha256)?;
+        let source_migrations = migrations(source_catalog, &source.catalog_sha256, "source")?;
+        let target_migrations =
+            migrations(&self.migration_catalog, &target.catalog_sha256, "target")?;
         if !target_migrations.starts_with(&source_migrations) {
             return Err(UpdateError::Unavailable(
                 "The release does not preserve the installed database migration history.".into(),

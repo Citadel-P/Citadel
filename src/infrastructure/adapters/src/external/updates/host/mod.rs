@@ -1,5 +1,6 @@
 //! Short-lived host namespace access for the installed Core.
 mod command;
+mod executor_image;
 mod installation;
 mod runtime;
 

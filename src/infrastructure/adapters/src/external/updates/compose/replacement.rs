@@ -57,7 +57,12 @@ impl InstallerComposeInputs {
             let target_hash = fingerprint_inputs(&self.project, &captured);
             let mut target = self.resolve_snapshot(&captured, process, cancellation).await?;
             let checked = self.validate_resolved(&target, target_hash.clone())?;
-            if checked.core_image != target_image || source["services"]["server"]["image"] == target_image {
+            if checked.core_image != target_image {
+                return Err(UpdateError::Conflict(
+                    "Changing CITADEL_IMAGE in the installer .env did not select the reviewed Core image. Check services.server.image in the registered Compose files.".into(),
+                ));
+            }
+            if source["services"]["server"]["image"] == target_image {
                 return Err(unsupported());
             }
             target["services"]["server"]["image"] = source["services"]["server"]["image"].clone();

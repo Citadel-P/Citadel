@@ -18,6 +18,16 @@ use std::{
 };
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+pub(super) fn target_catalog() -> String {
+    let mut catalog: Value =
+        serde_json::from_str(citadel_database::MIGRATION_MANIFEST_JSON).unwrap();
+    catalog["migrations"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id": "fixture-next", "sha256": "9".repeat(64)}));
+    catalog.to_string()
+}
+
 pub(super) const HELPER: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 
 pub(super) fn execution(state: &JournalDirectory, id: Uuid) -> Value {
@@ -67,6 +77,13 @@ impl Runner {
                 target: CoreIdentity {
                     version: "0.1.2".into(),
                     image: format!("ghcr.io/citadel-p/citadel@sha256:{}", "c".repeat(64)),
+                    catalog_sha256: {
+                        use sha2::{Digest, Sha256};
+                        Sha256::digest(target_catalog())
+                            .iter()
+                            .map(|b| format!("{b:02x}"))
+                            .collect()
+                    },
                     ..source.clone()
                 },
                 helper_image: source.image,

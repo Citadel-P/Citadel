@@ -26,7 +26,7 @@ pub(in crate::service) struct State {
     denied: bool,
     drift: bool,
     database_drift: bool,
-    database_blocked: bool,
+    replacement_blocked: bool,
     pub(in crate::service) agent_drift: bool,
     pub(in crate::service) incompatible_agent_protocol: bool,
     fail_ack: bool,
@@ -239,18 +239,27 @@ impl UpdateRepository for Fixture {
     }
 }
 impl UpdateInstallationRuntime for Fixture {
-    fn validate_database<'a>(
+    fn validate_replacement<'a>(
         &'a self,
-        _: &'a UpdatePlan,
+        plan: &'a UpdatePlan,
         _: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), UpdateError>> {
         Box::pin(async move {
             let mut state = self.state.lock().unwrap();
-            state.events.push("database-check");
-            if state.database_blocked {
-                Err(UpdateError::Conflict(
-                    "PostgreSQL replication slots must be removed before an in-app update.".into(),
-                ))
+            let (event, reason) = if plan.database.is_some() {
+                (
+                    "database-check",
+                    "PostgreSQL replication slots must be removed before an in-app update.",
+                )
+            } else {
+                (
+                    "core-check",
+                    "Changing CITADEL_IMAGE did not select the reviewed Core image.",
+                )
+            };
+            state.events.push(event);
+            if state.replacement_blocked {
+                Err(UpdateError::Conflict(reason.into()))
             } else {
                 Ok(())
             }
@@ -542,9 +551,17 @@ async fn approval_survives_dropped_response_and_retry_never_relaunches() {
     let events = &fixture.state.lock().unwrap().events;
     assert_eq!(events.iter().filter(|event| **event == "launch").count(), 1);
     assert_eq!(
-        &events[..8],
+        &events[..9],
         &[
-            "source", "claim", "notify", "launch", "ack", "import", "notify", "close"
+            "source",
+            "core-check",
+            "claim",
+            "notify",
+            "launch",
+            "ack",
+            "import",
+            "notify",
+            "close"
         ]
     );
 }
@@ -682,7 +699,10 @@ async fn review_verifies_the_transition_and_saves_only_a_short_lived_plan() {
     );
     let state = fixture.state.lock().unwrap();
     assert!(state.operation.is_none());
-    assert_eq!(state.events, ["source", "verify", "inspect", "review"]);
+    assert_eq!(
+        state.events,
+        ["source", "verify", "inspect", "core-check", "review"]
+    );
 }
 
 #[tokio::test]
@@ -787,18 +807,38 @@ async fn database_review_reuses_the_claim_and_rechecks_engine_drift_before_launc
 }
 
 #[tokio::test]
-async fn database_eligibility_blocks_review_and_approval_before_ownership() {
-    for blocked_at_review in [true, false] {
+async fn replacement_eligibility_blocks_review_and_approval_before_ownership() {
+    for (database, blocked_at_review) in
+        [(true, true), (true, false), (false, true), (false, false)]
+    {
         let mut fixture = Fixture::new();
-        fixture.plan.target = fixture.plan.source.clone();
-        fixture.plan.database = Some(DatabaseUpdatePlan {
-            source_version: 180001,
-            target_version: 180006,
-            target_image: format!("postgres@sha256:{}", "e".repeat(64)),
-        });
-        fixture.state.lock().unwrap().database_blocked = blocked_at_review;
+        if database {
+            fixture.plan.target = fixture.plan.source.clone();
+            fixture.plan.database = Some(DatabaseUpdatePlan {
+                source_version: 180001,
+                target_version: 180006,
+                target_image: format!("postgres@sha256:{}", "e".repeat(64)),
+            });
+        }
+        let reason = if database {
+            "replication slots"
+        } else {
+            "CITADEL_IMAGE"
+        };
+        let event = if database {
+            "database-check"
+        } else {
+            "core-check"
+        };
+        fixture.state.lock().unwrap().replacement_blocked = blocked_at_review;
         let (service, mut queue) = fixture.service();
-        let review = service.review_database(actor());
+        let review = async {
+            if database {
+                service.review_database(actor()).await
+            } else {
+                service.review(actor(), &fixture.plan.target.version).await
+            }
+        };
         tokio::pin!(review);
         let command = tokio::select! { command = queue.recv() => command.unwrap(), _ = &mut review => panic!() };
         service
@@ -806,17 +846,11 @@ async fn database_eligibility_blocks_review_and_approval_before_ownership() {
             .await
             .unwrap();
         if blocked_at_review {
-            assert!(
-                review
-                    .await
-                    .unwrap_err()
-                    .to_string()
-                    .contains("replication slots")
-            );
+            assert!(review.await.unwrap_err().to_string().contains(reason));
             assert!(!fixture.state.lock().unwrap().events.contains(&"review"));
         } else {
             review.await.unwrap();
-            fixture.state.lock().unwrap().database_blocked = true;
+            fixture.state.lock().unwrap().replacement_blocked = true;
             let approval = service.approve(actor(), fixture.plan.id, Uuid::now_v7());
             tokio::pin!(approval);
             let command = tokio::select! { command = queue.recv() => command.unwrap(), _ = &mut approval => panic!() };
@@ -824,13 +858,7 @@ async fn database_eligibility_blocks_review_and_approval_before_ownership() {
                 .execute(command, &CancellationToken::new())
                 .await
                 .unwrap();
-            assert!(
-                approval
-                    .await
-                    .unwrap_err()
-                    .to_string()
-                    .contains("replication slots")
-            );
+            assert!(approval.await.unwrap_err().to_string().contains(reason));
             assert_eq!(
                 fixture
                     .state
@@ -838,7 +866,7 @@ async fn database_eligibility_blocks_review_and_approval_before_ownership() {
                     .unwrap()
                     .events
                     .iter()
-                    .filter(|e| **e == "database-check")
+                    .filter(|e| **e == event)
                     .count(),
                 2
             );

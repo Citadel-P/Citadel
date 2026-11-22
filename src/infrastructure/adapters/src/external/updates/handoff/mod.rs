@@ -19,6 +19,7 @@ pub(super) use source_recovery::recover_source;
 mod target;
 mod target_runtime;
 mod verification;
+pub(super) use verification::release_image;
 
 pub use command::{MAX_HANDOFF_REQUEST, execute_helper_handoff};
 pub use completion::TargetUpdateCompletion;
@@ -42,10 +43,12 @@ mod replacement_tests;
 
 #[cfg(test)]
 mod target_tests;
+#[cfg(test)]
+pub(super) use target_tests::finalize_request;
 
 mod database;
 mod database_eligibility;
-pub(super) use database_eligibility::check_database_eligibility;
+pub(super) use database_eligibility::check_replacement_eligibility;
 
 #[cfg(test)]
 mod database_tests;

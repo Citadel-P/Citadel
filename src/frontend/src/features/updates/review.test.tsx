@@ -153,3 +153,17 @@ it('reviews a database-only upgrade through the existing confirmation dialog', a
   expect(review).toHaveBeenCalledExactlyOnceWith({ version: '18.6', database: true });
   expect(within(dialog).getByRole('button', { name: 'Update and restart' })).toBeEnabled();
 });
+
+it('shows the installation blocker returned by review before offering approval', async () => {
+  const detail = 'Changing CITADEL_IMAGE did not select the reviewed Core image.';
+  server.use(
+    http.post('http://localhost/api/v1/updates/review', () =>
+      HttpResponse.json({ type: 'conflict', title: 'Conflict', status: 409, detail }, { status: 409 }),
+    ),
+  );
+  const { user } = renderCitadel(<ReviewUpdates status={status} />);
+  await user.click(screen.getByRole('button', { name: 'Review and update' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(await within(dialog).findByText(detail)).toBeVisible();
+  expect(within(dialog).queryByRole('button', { name: 'Update and restart' })).toBeNull();
+});

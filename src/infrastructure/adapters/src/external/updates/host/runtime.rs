@@ -4,7 +4,7 @@ use super::super::{
 };
 use super::{HostUpdateRequest, HostUpdateResponse};
 use citadel_execution::ProcessRunner;
-use citadel_updates::{UpdateError, is_sha256, official_image_digest};
+use citadel_updates::{UpdateError, is_sha256};
 use std::{
     os::unix::fs::PermissionsExt,
     path::PathBuf,
@@ -28,8 +28,7 @@ impl HostUpdateClient {
         }
     }
 
-    /// The installed image executes this bounded command. Host paths come from
-    /// server configuration and the current container's Compose labels, never HTTP input.
+    /// Host paths come from server configuration and the running container's Compose labels.
     pub async fn exchange(
         &self,
         request: HostUpdateRequest,
@@ -53,7 +52,7 @@ impl HostUpdateClient {
             | HostUpdateRequest::RegisterAutomatic(setup) => setup.state_directory.as_path(),
             HostUpdateRequest::Startup { state_directory }
             | HostUpdateRequest::Check { state_directory } => state_directory.as_path(),
-            HostUpdateRequest::CheckDatabase(plan) => {
+            HostUpdateRequest::CheckReplacement(plan) => {
                 std::path::Path::new(&plan.checkpoint_directory)
             }
             HostUpdateRequest::Launch(operation)
@@ -105,26 +104,7 @@ impl HostUpdateClient {
             .as_str()
             .filter(|id| id.strip_prefix("sha256:").is_some_and(is_sha256))
             .ok_or_else(failed)?;
-        let raw = docker.json(&["image", "inspect", image_id]).await?;
-        let image = single(&raw)?;
-        let digest = image["RepoDigests"]
-            .as_array()
-            .and_then(|digests| {
-                digests
-                    .iter()
-                    .filter_map(|v| v.as_str())
-                    .find(|s| official_image_digest(s))
-            })
-            .ok_or_else(failed)?
-            .to_owned();
-        let architecture = image["Architecture"]
-            .as_str()
-            .filter(|s| matches!(*s, "amd64" | "arm64"))
-            .ok_or_else(failed)?
-            .to_owned();
-        if image["Os"] != "linux" {
-            return Err(failed());
-        }
+        let image = super::executor_image::resolve(&docker, &request, image_id).await?;
         let nonce = Uuid::now_v7().to_string();
         let name = format!("citadel-update-host-{nonce}");
         let label = format!("com.citadel.update-host={nonce}");
@@ -170,7 +150,7 @@ impl HostUpdateClient {
                 ),
             ]);
         }
-        args.extend([image_id.to_owned(), "update-host".into()]);
+        args.extend([image.executor_id.clone(), "update-host".into()]);
         let cleanup_token = CancellationToken::new();
         let cleanup = LocalDocker {
             process: self.process.as_ref(),
@@ -202,7 +182,7 @@ impl HostUpdateClient {
             )?;
             if actual["Id"] != executor
                 || actual["Name"] != format!("/{name}")
-                || actual["Image"] != image_id
+                || actual["Image"] != image.executor_id
                 || actual["Config"]["Labels"]["com.citadel.update-host"] != nonce
                 || actual["Path"] != "/app/citadel-server"
                 || actual["Args"] != serde_json::json!(["update-host"])
@@ -226,7 +206,12 @@ impl HostUpdateClient {
                     serde_json::to_vec(&request).map_err(|_| failed())?,
                     Duration::from_secs(180),
                 )
-                .await?;
+                .await.map_err(|error| match request.cleanup_operation() {
+                    Some(operation) if !matches!(error, UpdateError::Cancelled) => UpdateError::Unavailable(format!(
+                        "Update {} committed its target receipt, but host cleanup could not be verified. Maintenance remains active. Preserve the checkpoint, update state and updater helper for recovery.", operation.id
+                    )),
+                    _ => error,
+                })?;
             let raw = docker.json(&["container", "inspect", executor]).await?;
             let actual = single(&raw)?;
             if actual["State"]["Running"] != false
@@ -245,6 +230,6 @@ impl HostUpdateClient {
         cleanup
             .run(&["container", "rm", "--force", executor])
             .await?;
-        result.map(|response| (response, digest, architecture))
+        result.map(|response| (response, image.core_digest, image.architecture))
     }
 }

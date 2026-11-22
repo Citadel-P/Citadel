@@ -51,7 +51,7 @@ export function CoreReviewDetails({ review }: { review: UpdateReviewView }) {
         </p>
       )}
       <p className="text-xs leading-relaxed text-muted-foreground">
-        If verification fails, Citadel remains in maintenance and requires manual recovery.
+        If the update stops before replacement, Citadel verifies the original installation before reopening the portal.
       </p>
     </>
   );
@@ -83,6 +83,7 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
   const operation = status.operation ?? (id ? result.data?.data : undefined);
   // A committed outcome still owns maintenance until host cleanup is verified.
   const finishing = status.operation?.phase === 'Succeeded';
+  const releasedFailure = !status.operation && operation?.phase === 'Failed';
   const completed = !status.operation && operation?.phase === 'Succeeded';
   useEffect(() => {
     try {
@@ -158,8 +159,8 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
     toast.error(operation.component === 'Database' ? 'PostgreSQL update failed' : 'Citadel update failed', {
       id: `instance-update-${status.instanceId}-${operation.id}`,
       description: status.operation
-        ? `The update to ${operation.version} needs manual recovery. Check Activities for details.`
-        : 'The update was not installed. Citadel is running the original version. Check Activities for details.',
+        ? `The update to ${operation.version} needs manual recovery. Check the Core log and preserve the checkpoint and update state.`
+        : 'Maintenance has been released for this attempt. Check Activities for details.',
     });
     try {
       store.set(pendingInstanceUpdateAtom, {
@@ -182,11 +183,13 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
       type={failed ? 'warning' : 'info'}
       className="my-0"
       title={
-        finishing
-          ? 'Finishing update'
-          : operation.component === 'Database' && operation.phase === 'ReplacingCore'
-            ? 'Upgrading PostgreSQL'
-            : (labels[operation.phase] ?? 'Update in progress')
+        releasedFailure
+          ? 'Update failed — maintenance released'
+          : finishing
+            ? 'Finishing update'
+            : operation.component === 'Database' && operation.phase === 'ReplacingCore'
+              ? 'Upgrading PostgreSQL'
+              : (labels[operation.phase] ?? 'Update in progress')
       }
       date={operation.updatedAt}
       action={
@@ -211,6 +214,7 @@ export function UpdateProgress({ status }: { status: UpdateStatusView }) {
           </Button>
         ) : undefined
       }>
+      {releasedFailure && <p>See Activities for the recorded outcome.</p>}
       {disconnected
         ? 'Waiting for Citadel to reconnect. Progress will resume when the server returns.'
         : finishing

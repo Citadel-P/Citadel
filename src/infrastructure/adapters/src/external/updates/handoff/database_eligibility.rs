@@ -1,4 +1,4 @@
-//! Read-only database eligibility, shared by review and detached execution.
+//! Read-only replacement eligibility and PostgreSQL source checks.
 use super::super::{InstallerComposeInputs, RegisteredComposeInstallation, docker::LocalDocker};
 use super::{evidence::conflict, verification};
 use citadel_execution::ProcessRunner;
@@ -7,31 +7,42 @@ use serde_json::Value;
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
-pub(in crate::external::updates) async fn check_database_eligibility(
+pub(in crate::external::updates) async fn check_replacement_eligibility(
     plan: &UpdatePlan,
     process: &dyn ProcessRunner,
     cancellation: &CancellationToken,
 ) -> Result<(), UpdateError> {
-    let checked = super::super::check_registered_compose_installation(
-        std::path::Path::new(&plan.checkpoint_directory),
-        process,
-        cancellation,
-    )
-    .await?;
-    let reg = &checked.registration;
+    let path = std::path::Path::new(&plan.checkpoint_directory);
+    let reg = if plan.database.is_some() {
+        super::super::check_registered_compose_installation(path, process, cancellation)
+            .await?
+            .registration
+    } else {
+        // source() already checked the live Core and database. Only the
+        // registered inputs and their resolved target are needed here.
+        super::super::check_startup_registration(path)?
+    };
     if reg.id != plan.registration_id
         || reg.instance_id != plan.instance_id
         || reg.configuration_sha256 != plan.configuration_sha256
     {
         return Err(conflict());
     }
-    let database = plan.database.as_ref().ok_or_else(conflict)?;
     let inputs = InstallerComposeInputs {
         directory: reg.directory.clone(),
         project: reg.project.clone(),
         compose_files: reg.compose_files.clone(),
     };
     // Resolve both configurations without publishing or pulling an image.
+    let Some(database) = &plan.database else {
+        let replacement = inputs
+            .check_replacement(&plan.target.image, process, cancellation)
+            .await?;
+        if replacement.source_configuration_sha256 != plan.configuration_sha256 {
+            return Err(conflict());
+        }
+        return Ok(());
+    };
     inputs
         .prepare_database_replacement(database, process, cancellation)
         .await?;
@@ -42,7 +53,7 @@ pub(in crate::external::updates) async fn check_database_eligibility(
         home: home.path(),
         deadline: Instant::now() + Duration::from_secs(60),
     };
-    check_database_source(&docker, reg, database).await?;
+    check_database_source(&docker, &reg, database).await?;
     Ok(())
 }
 

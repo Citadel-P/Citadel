@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, CloudDownload, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import type { AgentReviewView, AgentUpdatesView, UpdateReviewView, UpdateStatusView } from '@/api/generated/api.types';
+import { requestErrorMessage } from '@/lib/request-error';
 import { useMutate } from '@/lib/hooks';
 import { randomUuid } from '@/lib/utils';
 import { pendingInstanceUpdateAtom } from '@/lib/instance-update-state';
@@ -245,13 +246,14 @@ export function ReviewUpdates({
               )}
               {prepareFailed && (
                 <AlertMessage type="error" title="Review could not be prepared">
-                  Check the current status and try again.
+                  {requestErrorMessage(component === 'Agents' ? prepareAgents.error : prepareCore.error)}
                 </AlertMessage>
               )}
               {approveFailed && (
                 <div role="alert">
                   <AlertMessage type="error" title="Approval could not be confirmed">
-                    Try again. Retrying uses the same request and will not start a second update.
+                    {requestErrorMessage(component === 'Agents' ? approveAgents.error : approveCore.error)} Retrying
+                    uses the same approval request.
                   </AlertMessage>
                 </div>
               )}
