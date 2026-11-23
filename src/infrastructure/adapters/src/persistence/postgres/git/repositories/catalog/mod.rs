@@ -47,19 +47,19 @@ impl GitRepositoryPersistence for PostgresGitRepositoryPersistence {
         &'a self,
         actor_id: ActorId,
         administrator: bool,
-        tag_ids: &'a [Uuid],
+        tag_names: &'a [String],
         owner: Option<Uuid>,
     ) -> BoxFuture<'a, Result<Vec<GitRepository>, GitRepositoryError>> {
         Box::pin(async move {
-            let query = queries::authorized_list(tag_ids, owner.is_some());
+            let query = queries::authorized_list(tag_names, owner.is_some());
             let mut query = sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor_id.value())
                 .bind(ResourceType::GitRepository as i32)
                 .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .bind(TaggableResourceType::GitRepository.as_database_str());
-            if !tag_ids.is_empty() {
-                query = query.bind(tag_ids);
+            if !tag_names.is_empty() {
+                query = query.bind(tag_names);
             }
             if let Some(owner) = owner {
                 query = query.bind(owner);

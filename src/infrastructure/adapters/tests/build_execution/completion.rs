@@ -118,8 +118,12 @@ impl BuildRepository for Store {
     ) -> BoxFuture<'a, Result<Vec<BuildProject>, BuildError>> {
         self.inner.list(actor, administrator, tags)
     }
-    fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildProject, BuildError>> {
-        self.inner.get(id)
+    fn get_matching_project<'a>(
+        &'a self,
+        id: Uuid,
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<BuildProject, BuildError>> {
+        self.inner.get_matching_project(id, tags)
     }
     fn update<'a>(
         &'a self,

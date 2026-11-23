@@ -90,7 +90,7 @@ pub(super) async fn get_agent_setup(
         (status = 200, description = "Success", body = PlatformsResponse, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
-    params(("tags" = Option<Vec<String>>, Query)),
+    params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]

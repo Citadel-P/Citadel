@@ -73,3 +73,30 @@ impl TryFrom<citadel_registries::RegistryDetails> for RegistryView {
         })
     }
 }
+
+pub(crate) async fn authorized_registries(
+    identity: &citadel_identity::IdentityService,
+    principal: &citadel_identity::ActorPrincipal,
+    registries: Vec<citadel_registries::RegistryDetails>,
+) -> Result<Vec<AuthorizedRegistryView>, crate::api::error::ApiError> {
+    let ids = registries
+        .iter()
+        .map(|resource| resource.id)
+        .collect::<Vec<_>>();
+    let permissions = identity
+        .permissions_for_resources(principal, citadel_primitives::ResourceType::Registry, &ids)
+        .await?;
+    registries
+        .into_iter()
+        .map(|registry| {
+            Ok(AuthorizedRegistryView {
+                is_default: registry.id == Uuid::from_u128(0x100),
+                capabilities: crate::api::resource_access::capabilities_from_permission(
+                    permissions.get(&registry.id).copied().flatten(),
+                ),
+                registry: RegistryView::try_from(registry)
+                    .map_err(crate::api::error::ApiError::internal)?,
+            })
+        })
+        .collect()
+}

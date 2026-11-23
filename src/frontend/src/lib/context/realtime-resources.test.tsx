@@ -1,3 +1,4 @@
+import { collectionGroup, collectionEventKey } from '@/lib/collection-scope';
 import { act, screen, waitFor } from '@testing-library/react';
 import type { AuthorizedProject } from '@/api/generated/api.types';
 import { http, HttpResponse } from 'msw';
@@ -20,6 +21,7 @@ import { useActivitiesGroup } from '@/features/activities/hooks/useActivitiesGro
 import { Route, Routes } from 'react-router';
 import { ComponentProps, useCallback, useState } from 'react';
 import { Platforms } from '@/features/platforms/platforms';
+import { useQueryReconciliation } from '@/hooks/useQueryReconciliation';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { GROUP_CAPACITY_ERROR, type RealtimeConnection } from '@/lib/realtime-connection';
 
@@ -436,3 +438,103 @@ it.each(['list', 'detail'] as const)(
     rendered.unmount();
   },
 );
+
+it.each([false, true])(
+  'repairs a capacity-limited platform filter (first recovery fails: %s)',
+  async (failRecovery) => {
+    const fake = new FakeRealtimeConnection();
+    const scope = collectionGroup('platforms', ['prod']);
+    let name = 'Initial';
+    let failed = false;
+    const read = vi.fn(() => {
+      if (failRecovery && !failed && read.mock.calls.length === 3) {
+        failed = true;
+        return new HttpResponse(null, { status: 500 });
+      }
+      return HttpResponse.json({ platforms: [{ id: 'p', name }], capabilities: {} });
+    });
+    server.use(
+      http.get('*/api/v1/platforms', read),
+      http.get('*/api/v1/tags/_filter', () => HttpResponse.json({ prod: 'prod' })),
+    );
+    function Page() {
+      const { platformsMessage, groupName, refetch, error } = usePlatformsGroup();
+      return (
+        <>
+          {error && <span>Read failed</span>}
+          <output>{platformsMessage?.[0]?.name}</output>
+          <button onClick={() => void refetch()}>Read list</button>
+          <Platforms items={[]} actions={{}} isLoading={false} isFiltered groupName={groupName} />
+        </>
+      );
+    }
+    const { user } = renderCitadel(<Page />, {
+      route: '/?tags=prod',
+      groups: { connectionFactory: () => fake, startConnection: (c) => c.start() },
+    });
+    expect(await screen.findByText('Initial')).toBeVisible();
+    await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', scope));
+    act(() => {
+      fake.emit(collectionEventKey(scope, 'CollectionSnapshotStarted'));
+      fake.emit(collectionEventKey(scope, 'PlatformUpdated'), { id: 'p', name: 'Live' });
+    });
+    name = 'Fallback';
+    await user.click(screen.getByText('Read list'));
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Live')).toBeVisible();
+    act(() => fake.emit('RealtimeGroupCapacity', scope));
+    if (failRecovery) {
+      expect(await screen.findByText('Read failed')).toBeVisible();
+      expect(screen.getByText('Live')).toBeVisible();
+      await user.click(screen.getByText('Read list'));
+    }
+    expect(await screen.findByText('Fallback')).toBeVisible();
+    expect(read).toHaveBeenCalledTimes(failRecovery ? 4 : 3);
+    await user.click(screen.getByRole('button', { name: 'Retry live updates' }));
+    expect(fake.invoke.mock.calls.filter(([method, key]) => method === 'JoinGroup' && key === scope)).toHaveLength(2);
+  },
+);
+
+it('reconciles each cached mutation result according to its own live collection scope', async () => {
+  const fake = new FakeRealtimeConnection();
+  const scope = collectionGroup('scripts', ['prod']);
+  const listeners = () => {};
+  function Page() {
+    const { isConnected } = useRealtimeGroup({ groupName: scope, setupEventListeners: listeners });
+    const reconcile = useQueryReconciliation();
+    return (
+      <button disabled={!isConnected} onClick={() => void reconcile('scripts', 'listScripts')}>
+        Reconcile
+      </button>
+    );
+  }
+  const { user, queryClient } = renderCitadel(<Page />, {
+    groups: { connectionFactory: () => fake, startConnection: (c) => c.start() },
+  });
+  const prod = ['listScripts', { query: { tags: ['prod'] } }];
+  const stage = ['listScripts', { query: { tags: ['stage'] } }];
+  const all = ['listScripts', {}];
+  for (const key of [prod, stage, all]) queryClient.setQueryData(key, []);
+  const button = screen.getByRole('button', { name: 'Reconcile' });
+  await waitFor(() => expect(button).toBeEnabled());
+  await user.click(button);
+  await waitFor(() => expect(queryClient.getQueryState(all)?.isInvalidated).toBe(true));
+  expect(queryClient.getQueryState(stage)?.isInvalidated).toBe(true);
+  expect(queryClient.getQueryState(prod)?.isInvalidated).toBe(false);
+});
+
+it('refreshes an open tag usage count from the viewer’s authorized list on a committed change', async () => {
+  const fake = new FakeRealtimeConnection();
+  let count = 2;
+  server.use(http.get('*/api/v1/tags', () => HttpResponse.json({ tags: [{ id: 'tag', usageCount: count }] })));
+  function Catalogue() {
+    const { data } = useRead('listTags');
+    return <output>{data?.data.tags[0]?.usageCount} resources</output>;
+  }
+  renderCitadel(<Catalogue />, { groups: { connectionFactory: () => fake, startConnection: (c) => c.start() } });
+  expect(await screen.findByText('2 resources')).toBeVisible();
+  await waitFor(() => expect(fake.listenerCount('TagCatalogChanged')).toBe(1));
+  count = 1;
+  act(() => fake.emit('TagCatalogChanged'));
+  expect(await screen.findByText('1 resources')).toBeVisible();
+});

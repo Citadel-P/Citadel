@@ -256,6 +256,13 @@ pub(crate) async fn reconcile(
                     .execute(&mut **tx)
                     .await
                     .map_err(storage)?;
+                crate::persistence::postgres::tags::links::remove_for_deleted_resource(
+                    tx,
+                    citadel_tags::TaggableResourceType::SwarmService,
+                    id,
+                )
+                .await
+                .map_err(storage)?;
             }
             Outcome::Complete => {
                 let live = live.unwrap();

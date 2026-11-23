@@ -113,6 +113,9 @@ mod volume_content;
 #[path = "platforms_http/volume_coverage.rs"]
 mod volume_coverage;
 
+#[path = "support/tag_filters.rs"]
+mod tag_filters;
+
 struct Fixture {
     docker: DockerClient,
     edge: citadel_adapters::connectors::edge::EdgeRegistry,
@@ -177,7 +180,10 @@ async fn read_routes_enforce_authorization_and_return_persisted_inventory() {
     let authorized = json_body(
         send(
             &fixture,
-            &format!("/api/v1/platforms?tags={}", fixture.tag_id),
+            &format!(
+                "/api/v1/platforms?tags=platform-http-{}",
+                fixture.tag_id.simple()
+            ),
             Some(reader.clone()),
         )
         .await,
@@ -776,7 +782,7 @@ async fn seed_reader_access(pool: &PgPool, platform_id: Uuid, actor_id: Uuid, ta
         .bind(tag_id)
         .bind(actor_id)
         .bind(format!("platform-http-{marker}"))
-        .bind(format!("PLATFORM-HTTP-{marker}"))
+        .bind(format!("platform-http-{marker}"))
         .execute(pool)
         .await
         .unwrap();

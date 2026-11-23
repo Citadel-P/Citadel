@@ -15,12 +15,20 @@ pub struct Group {
     // Preserve the client's spelling for idempotent joins/leaves, including
     // accepted alternate UUID spellings. Never canonicalize a subscription key.
     pub name: String,
+    pub(super) tags: Vec<String>,
+    pub(super) include_disabled: bool,
+    pub(super) platform_filter: Option<Uuid>,
+    pub(crate) subscription_id: Option<Uuid>,
     topic: crate::realtime::topic::Topic,
 }
 impl Group {
     pub fn parse(name: &str) -> Option<Self> {
         Some(Self {
             name: name.into(),
+            tags: Vec::new(),
+            include_disabled: false,
+            platform_filter: None,
+            subscription_id: None,
             topic: crate::realtime::topic::Topic::parse(name)?,
         })
     }
@@ -67,6 +75,33 @@ impl Group {
     }
 
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if event.resource_type == "Tag" {
+            let kind = match self.topic() {
+                Topic::Platforms => "Platform",
+                Topic::Deployments | Topic::Deployment(_) => "Deployment",
+                Topic::Stacks | Topic::Stack(_) => "Stack",
+                Topic::SwarmServices(_) | Topic::ManagedSwarmServices | Topic::SwarmService(_) => {
+                    "SwarmService"
+                }
+                Topic::Registries => "Registry",
+                Topic::GitRepositories | Topic::GitRepo(_) => "GitRepository",
+                Topic::Scripts | Topic::Script(_) => "Script",
+                Topic::BuildProjects | Topic::BuildProject(_) => "Build",
+                Topic::BuildAgentPools | Topic::BuildAgentPool(_) => "BuildAgentPool",
+                Topic::BackupPolicies | Topic::BackupPolicy(_) => "BackupPolicy",
+                _ => return false,
+            };
+            return event.payload["resourceTypes"]
+                .as_array()
+                .is_some_and(|types| types.iter().any(|row| row == kind));
+        }
+        if self
+            .platform_filter
+            .zip(event.platform_id)
+            .is_some_and(|(scope, changed)| scope != changed)
+        {
+            return false;
+        }
         if matches!(self.topic(), Topic::InstanceJobs | Topic::InstanceSchedules) {
             return false;
         }
@@ -131,6 +166,13 @@ impl Group {
                         || event.payload["deploymentIds"]
                             .as_array()
                             .is_some_and(|v| !v.is_empty())
+                }
+                Topic::ManagedSwarmServices => {
+                    event.resource_type == "License"
+                        || event.payload["resync"] == true
+                        || event.payload["serviceIds"]
+                            .as_array()
+                            .is_some_and(|ids| !ids.is_empty())
                 }
                 Topic::Stacks => {
                     (event.resource_type == "License" || event.payload["resync"] == true)
@@ -263,6 +305,14 @@ impl Group {
                         && self.id() == Some(platform));
             }
             return match self.topic() {
+                Topic::ManagedSwarmServices => {
+                    matches!(event.resource_type, "SwarmService")
+                        || matches!(
+                            event.payload["dockerResourceType"].as_str(),
+                            Some("swarm" | "platformInventory" | "service" | "task" | "container")
+                        )
+                        || event.event_kind == "connectionChanged"
+                }
                 Topic::Platforms
                 | Topic::ContainerInfo(..)
                 | Topic::StackInfo(..)
@@ -296,7 +346,7 @@ impl Group {
                 event.resource_type == "ResourceTags"
                     || (event.resource_type == "Stack" && event.affects_resource(self.id()))
             }
-            Topic::SwarmService(..) | Topic::SwarmServices(..) => {
+            Topic::ManagedSwarmServices | Topic::SwarmService(..) | Topic::SwarmServices(..) => {
                 event.resource_type == "SwarmService"
             }
             Topic::GitRepo(id) if let Some(owner) = event.changed_owner("GitRepository") => {
@@ -312,6 +362,7 @@ impl Group {
                         _ => true,
                     }
             }
+            Topic::Registries => event.resource_type == "Registry",
             Topic::GitRepo(..) | Topic::GitRepositories => event.resource_type == "GitRepository",
             Topic::Script(..) | Topic::Scripts | Topic::ScriptRuns(..) => {
                 event.resource_type == "Script" && event.affects_resource(self.id())
@@ -363,6 +414,8 @@ pub struct ClientEvent {
     kind: &'static str,
     pub target: &'static str,
     pub arguments: Vec<Value>,
+    #[serde(rename = "subscriptionId", skip_serializing_if = "Option::is_none")]
+    subscription_id: Option<Uuid>,
 }
 impl ClientEvent {
     pub fn new(target: &'static str, arguments: Vec<Value>) -> Self {
@@ -371,6 +424,7 @@ impl ClientEvent {
             kind: "event",
             target,
             arguments,
+            subscription_id: None,
         }
     }
 }
@@ -483,12 +537,43 @@ impl GroupSubscription {
             tombstones: BTreeMap::new(),
         }
     }
+    pub(crate) fn expects_event(
+        &self,
+        event: &PublishedRuntimeEvent,
+        lease: &crate::realtime::AuthorizationLease,
+    ) -> bool {
+        if self.group.subscription_id.is_some()
+            && matches!(self.group.topic(), Topic::Platforms)
+            && event.payload["dockerResourceType"] == "containerStats"
+        {
+            return event.platform_id.is_some_and(|id| {
+                self.known
+                    .get("PlatformUpdated")
+                    .is_some_and(|known| known.contains(&id.to_string()))
+            });
+        }
+        self.group.affected_with_lease(event, lease)
+    }
     pub fn apply(
         &mut self,
         snapshot: GroupSnapshot,
         limit: usize,
     ) -> Result<Vec<ClientEvent>, RealtimeReadError> {
         let mut events = snapshot.events;
+        if self.group.subscription_id.is_some() && matches!(self.group.topic(), Topic::Platforms) {
+            events.retain(|event| {
+                event.target != "PlatformStatsUpdated"
+                    || event
+                        .arguments
+                        .first()
+                        .and_then(|row| row["platformId"].as_str())
+                        .is_some_and(|id| {
+                            self.known
+                                .get("PlatformUpdated")
+                                .is_some_and(|known| known.contains(id))
+                        })
+            });
+        }
         for batch in snapshot.rows {
             if batch.rows.len() > limit {
                 return Err(RealtimeReadError::SnapshotCapacity);
@@ -614,6 +699,13 @@ impl GroupSubscription {
                 })
                 .collect();
             let initial = !self.known.contains_key(batch.target);
+            if initial
+                && self.group.subscription_id.is_some()
+                && matches!(batch.style, RowStyle::Platforms | RowStyle::Update)
+            {
+                // An empty snapshot is authoritative too. Send rows separately to retain the frame size bound.
+                events.push(ClientEvent::new("CollectionSnapshotStarted", vec![]));
+            }
             let previous = self.known.entry(batch.target).or_default();
             for removed in previous.difference(&ids) {
                 match batch.style {
@@ -667,6 +759,13 @@ impl GroupSubscription {
                     .or_else(|| row["name"].as_str())
                     .unwrap_or_default();
                 let args = match batch.style {
+                    RowStyle::Update
+                        if self.group.subscription_id.is_some()
+                            && !initial
+                            && !previous.contains(id) =>
+                    {
+                        vec![row, json!("create")]
+                    }
                     RowStyle::Platforms => vec![row],
                     RowStyle::Activity => {
                         if previous.contains(id) {
@@ -699,6 +798,11 @@ impl GroupSubscription {
                 events.push(ClientEvent::new(batch.target, args));
             }
             *previous = ids;
+        }
+        if let Some(subscription) = self.group.subscription_id {
+            for event in &mut events {
+                event.subscription_id = Some(subscription);
+            }
         }
         Ok(events)
     }

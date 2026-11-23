@@ -41,10 +41,17 @@ impl GroupConnection {
         let request = super::protocol::parse_invocation(text)?;
         let invocation = request.id;
         subscription.recheck(service).await?;
-        let name = request
-            .arguments
+        let argument = request.arguments.as_deref().and_then(|args| match args {
+            [arg] => Some(arg),
+            _ => None,
+        });
+        let join = argument
+            .filter(|_| request.target.as_deref() == Some("JoinGroup"))
+            .and_then(Group::from_argument);
+        let name = join
             .as_ref()
-            .and_then(|args| (args.len() == 1).then(|| args[0].as_str()).flatten());
+            .map(|group| group.name.as_str())
+            .or_else(|| argument.and_then(|arg| arg.as_str()));
         let mut updates = vec![];
         let error = match (request.target.as_deref(), name) {
             (Some("LeaveGroup"), Some(name)) => {
@@ -58,12 +65,20 @@ impl GroupConnection {
             (Some("JoinGroup"), Some(name)) => {
                 if !groups.contains_key(name) && groups.len() >= MAX_GROUPS {
                     Some("Realtime group limit exceeded")
-                } else if let Some(group) = Group::parse(name) {
+                } else if let Some(group) = join.as_ref() {
+                    if groups
+                        .get(name)
+                        .is_some_and(|existing| existing.group != *group)
+                    {
+                        return Err(RealtimeError::InvalidMessage(
+                            "Subscription identity already in use".into(),
+                        ));
+                    }
                     match tokio::time::timeout(
                         service.inner.subscribe_timeout,
                         reader.read_with_lease(
                             &subscription.principal,
-                            &group,
+                            group,
                             None,
                             &subscription.lease,
                         ),
@@ -71,7 +86,7 @@ impl GroupConnection {
                     .await
                     {
                         Ok(result) => {
-                            let mut joined = GroupSubscription::new(group);
+                            let mut joined = GroupSubscription::new(group.clone());
                             match result.and_then(|snapshot| {
                                 joined.apply(snapshot, service.inner.snapshot_limit)
                             }) {

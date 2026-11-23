@@ -60,6 +60,7 @@ pub fn router(state: TagsHttpState) -> Router {
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<TagsHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list_tags))
+        .normalized_routes(utoipa_axum::routes!(resolve_tag_filter))
         .normalized_routes(utoipa_axum::routes!(create_tag))
         .normalized_routes(utoipa_axum::routes!(patch_tag))
         .normalized_routes(utoipa_axum::routes!(delete_tag))
@@ -83,6 +84,44 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<TagsHttp
         .normalized_routes(utoipa_axum::routes!(replace_registry_tags))
         .normalized_routes(utoipa_axum::routes!(get_git_repository_tags))
         .normalized_routes(utoipa_axum::routes!(replace_git_repository_tags))
+}
+
+#[utoipa::path(
+    get, path = "/api/v1/tags/_filter", operation_id = "resolveTagFilter", tag = "Tags",
+    summary = "Get comparison keys for tag filter names",
+    params(("tags" = Vec<String>, Query, description = "Repeated literal tag names")),
+    responses((status = 200, description = "Supplied tag names mapped to their case-insensitive keys", body = std::collections::BTreeMap<String, String>), crate::openapi::errors::AccessErrors),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn resolve_tag_filter(
+    State(state): State<TagsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+    headers: HeaderMap,
+) -> HttpResult {
+    api_result(require_actor(principal), &headers)?;
+    let names = api_result(
+        crate::api::request_validation::parse_tag_filters(query.as_deref()),
+        &headers,
+    )?;
+    let keys = api_result(
+        state
+            .tags
+            .comparison_keys(&names)
+            .await
+            .map_err(metadata_error),
+        &headers,
+    )?;
+    Ok(no_store(
+        Json(
+            names
+                .into_iter()
+                .zip(keys)
+                .collect::<std::collections::BTreeMap<_, _>>(),
+        )
+        .into_response(),
+    ))
 }
 
 #[utoipa::path(
@@ -192,7 +231,9 @@ async fn create_tag(
             .map_err(metadata_error),
         &headers,
     )?;
-    publish_resource_change(&state.realtime, "Tag", "tagChanged");
+    if let Some(hub) = &state.realtime {
+        hub.publish_tag_change(&[]);
+    }
     Ok(no_store(
         Json(crate::api::resources::tags::views::TagView::from(tag)).into_response(),
     ))
@@ -237,15 +278,17 @@ async fn patch_tag(
         &headers,
     )
     .await?;
-    let tag = api_result(
+    let (tag, affected) = api_result(
         state
             .tags
-            .update_tag(id, &input)
+            .update_tag(principal.actor_id, principal.is_administrator(), id, &input)
             .await
             .map_err(metadata_error),
         &headers,
     )?;
-    publish_resource_change(&state.realtime, "Tag", "tagChanged");
+    if let Some(hub) = &state.realtime {
+        hub.publish_tag_change(&affected);
+    }
     Ok(no_store(
         Json(crate::api::resources::tags::views::TagView::from(tag)).into_response(),
     ))
@@ -286,16 +329,18 @@ async fn delete_tag(
         &headers,
     )
     .await?;
-    api_result(
+    let affected = api_result(
         state.tags.delete_tag(id).await.map_err(metadata_error),
         &headers,
     )?;
-    publish_resource_change(&state.realtime, "Tag", "tagChanged");
+    if let Some(hub) = &state.realtime {
+        hub.publish_tag_change(&affected);
+    }
     Ok(no_store(axum::http::StatusCode::NO_CONTENT.into_response()))
 }
 
 macro_rules! resource_tag_handlers {
-    ($(#[$get_attr:meta])* $get:ident, $(#[$replace_attr:meta])* $replace:ident, $tag_type:expr, $resource_type:expr) => {
+    ($(#[$get_attr:meta])* $get:ident, $(#[$replace_attr:meta])* $replace:ident, $tag_type:expr) => {
         $(#[$get_attr])*
         async fn $get(
             State(state): State<TagsHttpState>,
@@ -303,7 +348,7 @@ macro_rules! resource_tag_handlers {
             path: Result<Path<Uuid>, PathRejection>,
             headers: HeaderMap,
         ) -> HttpResult {
-            resource_tags(state, principal, path, headers, $tag_type, $resource_type).await
+            resource_tags(state, principal, path, headers, $tag_type).await
         }
 
         $(#[$replace_attr])*
@@ -322,7 +367,6 @@ macro_rules! resource_tag_handlers {
                 headers,
                 input,
                 $tag_type,
-                $resource_type,
             )
             .await
         }
@@ -361,8 +405,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_platform_tags,
-    TaggableResourceType::Platform,
-    ResourceType::Platform
+    TaggableResourceType::Platform
 );
 
 resource_tag_handlers!(
@@ -397,8 +440,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_registry_tags,
-    TaggableResourceType::Registry,
-    ResourceType::Registry
+    TaggableResourceType::Registry
 );
 
 resource_tag_handlers!(
@@ -433,8 +475,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_git_repository_tags,
-    TaggableResourceType::GitRepository,
-    ResourceType::GitRepository
+    TaggableResourceType::GitRepository
 );
 
 resource_tag_handlers!(
@@ -469,8 +510,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_action_tags,
-    TaggableResourceType::Script,
-    ResourceType::Script
+    TaggableResourceType::Script
 );
 
 resource_tag_handlers!(
@@ -505,8 +545,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_build_tags,
-    TaggableResourceType::Build,
-    ResourceType::Build
+    TaggableResourceType::Build
 );
 
 resource_tag_handlers!(
@@ -541,8 +580,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_pool_tags,
-    TaggableResourceType::BuildAgentPool,
-    ResourceType::BuildAgentPool
+    TaggableResourceType::BuildAgentPool
 );
 
 resource_tag_handlers!(
@@ -577,8 +615,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_policy_tags,
-    TaggableResourceType::BackupPolicy,
-    ResourceType::BackupPolicy
+    TaggableResourceType::BackupPolicy
 );
 
 resource_tag_handlers!(
@@ -613,8 +650,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_deployment_tags,
-    TaggableResourceType::Deployment,
-    ResourceType::Deployment
+    TaggableResourceType::Deployment
 );
 
 resource_tag_handlers!(
@@ -649,8 +685,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_stack_tags,
-    TaggableResourceType::Stack,
-    ResourceType::Stack
+    TaggableResourceType::Stack
 );
 
 resource_tag_handlers!(
@@ -685,8 +720,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_service_tags,
-    TaggableResourceType::SwarmService,
-    ResourceType::SwarmService
+    TaggableResourceType::SwarmService
 );
 
 async fn resource_tags(
@@ -695,7 +729,6 @@ async fn resource_tags(
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
     tag_type: TaggableResourceType,
-    resource_type: ResourceType,
 ) -> HttpResult {
     let principal = api_result(require_actor(principal), &headers)?;
     let Path(id) = api_result(
@@ -705,7 +738,7 @@ async fn resource_tags(
     authorize_resource(
         &state.identity,
         &principal,
-        resource_type,
+        tag_type.permission_type(),
         id,
         PermissionLevel::Read,
         None,
@@ -735,7 +768,6 @@ async fn replace_resource_tags(
     headers: HeaderMap,
     input: ReplaceResourceTagsInput,
     tag_type: TaggableResourceType,
-    resource_type: ResourceType,
 ) -> HttpResult {
     let principal = api_result(require_actor(principal), &headers)?;
     let Path(id) = api_result(
@@ -745,7 +777,7 @@ async fn replace_resource_tags(
     authorize_resource(
         &state.identity,
         &principal,
-        resource_type,
+        tag_type.permission_type(),
         id,
         PermissionLevel::Write,
         None,
@@ -775,22 +807,4 @@ async fn replace_resource_tags(
 
 fn invalid_path(message: String) -> crate::api::error::ApiError {
     crate::api::error::ApiError::Validation(message)
-}
-
-pub(crate) fn parse_filters(
-    query: Option<&str>,
-) -> Result<Vec<String>, crate::api::error::ApiError> {
-    let mut tags = Vec::new();
-    for (key, value) in url::form_urlencoded::parse(query.unwrap_or_default().as_bytes()) {
-        if key != "tags" {
-            continue;
-        }
-        if tags.len() >= 100 || value.len() > 128 || value.trim().is_empty() {
-            return Err(crate::api::error::ApiError::Validation(
-                "Tag filters must contain at most 100 non-empty tag names or IDs.".into(),
-            ));
-        }
-        tags.push(value.into_owned());
-    }
-    Ok(tags)
 }

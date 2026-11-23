@@ -30,23 +30,21 @@ impl RegistryRepository for PostgresRegistryRepository {
         filter: RegistryListFilter<'a>,
     ) -> BoxFuture<'a, Result<Vec<RegistryDetails>, RegistryError>> {
         Box::pin(async move {
-            let (predicate, ids) = match filter {
+            let predicate = match filter {
                 RegistryListFilter::Ids([]) => return Ok(Vec::new()),
-                RegistryListFilter::Ids(ids) => {
-                    ("AND resource.id=ANY($6::uuid[])".to_owned(), Some(ids))
-                }
+                RegistryListFilter::Ids(_) => "AND resource.id=ANY($6::uuid[])".to_owned(),
                 RegistryListFilter::Catalog {
                     include_disabled,
-                    tag_ids,
+                    tag_names,
                 } => {
                     let mut predicate = String::new();
                     if !include_disabled {
                         predicate.push_str("AND resource.status <> 'Disabled'");
                     }
-                    if !tag_ids.is_empty() {
+                    if !tag_names.is_empty() {
                         predicate.push_str(ALL_REQUESTED_TAGS);
                     }
-                    (predicate, (!tag_ids.is_empty()).then_some(tag_ids))
+                    predicate
                 }
             };
             let query = authorized_catalog_query("registries", "", &predicate);
@@ -56,9 +54,13 @@ impl RegistryRepository for PostgresRegistryRepository {
                 .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .bind(TaggableResourceType::Registry.as_database_str());
-            if let Some(ids) = ids {
-                query = query.bind(ids);
-            }
+            query = match filter {
+                RegistryListFilter::Ids(ids) => query.bind(ids),
+                RegistryListFilter::Catalog { tag_names, .. } if !tag_names.is_empty() => {
+                    query.bind(tag_names)
+                }
+                _ => query,
+            };
             query
                 .fetch_all(&self.pool)
                 .await

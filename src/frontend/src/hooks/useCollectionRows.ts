@@ -1,16 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 
 type Row = { id: string };
 const markerLimit = 256;
 type Collection<T> = {
   rows?: T[];
   deleted: ReadonlySet<string>;
+  liveSnapshot?: boolean;
+  generation?: number;
+  recovering?: boolean;
   saturated?: boolean;
   refreshAttempt?: number;
 };
 
 // An ordinary query result can overlap a live deletion or come from a filter's cache.
 export function collectionSnapshot<T extends Row>(previous: Collection<T>, snapshot?: T[]): Collection<T> {
+  if (previous.liveSnapshot || previous.recovering) return previous;
   if (!snapshot) return { ...previous, rows: undefined };
   const known = previous.saturated ? new Set(previous.rows?.map((row) => row.id)) : undefined;
   const rows =
@@ -29,6 +33,7 @@ export function collectionEvent<T extends Row>(
 ): Collection<T> {
   let deleted = previous.deleted;
   if (action === 'delete') {
+    if (previous.liveSnapshot) return { ...previous, rows: previous.rows?.filter((item) => item.id !== row.id) };
     const saturated = previous.saturated || deleted.size >= markerLimit;
     return {
       ...previous,
@@ -55,18 +60,35 @@ export function collectionEvent<T extends Row>(
   return { ...previous, rows: updated, deleted };
 }
 
+const acceptsScopedRow = () => true;
+
 export function useCollectionRows<T extends Row>(
   snapshot: T[] | undefined,
   scope: string,
-  matches: (row: T) => boolean,
   reload: () => Promise<T[] | undefined>,
+  successfulRead?: number,
   merge?: (incoming: T, existing: T) => T,
 ) {
   const [state, setState] = useState<Collection<T>>({ rows: snapshot, deleted: new Set() });
-  const [baseline, setBaseline] = useState(snapshot);
-  if (baseline !== snapshot) {
-    setBaseline(snapshot);
-    setState((current) => collectionSnapshot(current, snapshot));
+  const [baseline, setBaseline] = useState({ scope, snapshot, successfulRead });
+  if (baseline.scope !== scope) {
+    setBaseline({ scope, snapshot, successfulRead });
+    setState({ rows: snapshot, deleted: new Set() });
+  } else if (baseline.snapshot !== snapshot || baseline.successfulRead !== successfulRead) {
+    setBaseline({ scope, snapshot, successfulRead });
+    setState((current) => {
+      // An explicit refresh or query invalidation can return the previously ignored
+      // array. Its successful completion is the evidence that it is fresh.
+      if (
+        current.recovering &&
+        !current.refreshAttempt &&
+        successfulRead !== undefined &&
+        successfulRead !== baseline.successfulRead
+      ) {
+        return collectionSnapshot({ ...current, recovering: false }, snapshot);
+      }
+      return baseline.snapshot !== snapshot ? collectionSnapshot(current, snapshot) : current;
+    });
   }
 
   // A scoped HTTP read started after these deletes can retire the markers. If a
@@ -78,30 +100,63 @@ export function useCollectionRows<T extends Row>(
     );
   }, []);
   const deletes = useRef(0);
-  const refresh = !!state.saturated || state.deleted.size >= markerLimit || !!state.refreshAttempt;
+  const refresh =
+    !!state.refreshAttempt || (!state.recovering && (!!state.saturated || state.deleted.size >= markerLimit));
+  const missingHttpBaseline = useEffectEvent(() => snapshot === undefined);
   useEffect(() => {
     if (!refresh) return;
     let active = true;
     const fence = deletes.current;
-    void reload().then((rows) => {
-      if (!active || !rows) return;
+    const reconcile = async () => {
+      // React Query can reuse a pending initial GET even for an explicit refetch.
+      // Wait it out before reading a baseline newer than the released subscription.
+      if (state.recovering && missingHttpBaseline()) {
+        await reload();
+        if (!active) return;
+      }
+      const rows = await reload();
+      if (!active) return;
+      if (!rows) {
+        setState((current) =>
+          current.generation === state.generation ? { ...current, refreshAttempt: undefined } : current,
+        );
+        return;
+      }
       setState((current) =>
-        fence === deletes.current
-          ? { ...current, rows, deleted: new Set(), saturated: false, refreshAttempt: undefined }
-          : { ...current, refreshAttempt: (current.refreshAttempt ?? 0) + 1 },
+        current.liveSnapshot || current.generation !== state.generation
+          ? current
+          : fence === deletes.current
+            ? { ...current, rows, deleted: new Set(), recovering: false, saturated: false, refreshAttempt: undefined }
+            : { ...current, refreshAttempt: (current.refreshAttempt ?? 0) + 1 },
       );
-    });
+    };
+    void reconcile();
     return () => {
       active = false;
     };
-  }, [refresh, reload, scope, state.refreshAttempt]);
+  }, [refresh, reload, scope, state.refreshAttempt, state.recovering, state.generation]);
 
   const onEvent = useCallback(
     (row: T, action: string) => {
       if (action === 'delete') deletes.current++;
-      setState((current) => collectionEvent(current, row, action, matches, merge));
+      setState((current) => collectionEvent(current, row, action, acceptsScopedRow, merge));
     },
-    [matches, merge],
+    [merge],
   );
-  return [state.rows, onEvent, onJoinedGroup] as const;
+  const onCollectionSnapshot = useCallback((active: boolean) => {
+    setState((current) =>
+      active
+        ? { rows: [], deleted: new Set(), liveSnapshot: true, generation: (current.generation ?? 0) + 1 }
+        : current.liveSnapshot
+          ? { ...current, liveSnapshot: false, recovering: true, refreshAttempt: (current.refreshAttempt ?? 0) + 1 }
+          : current,
+    );
+  }, []);
+  const transformRows = useCallback((transform: (rows: T[] | undefined) => T[] | undefined) => {
+    setState((current) => {
+      const rows = transform(current.rows);
+      return rows === current.rows ? current : { ...current, rows };
+    });
+  }, []);
+  return { rows: state.rows, onEvent, onJoinedGroup, onCollectionSnapshot, transformRows };
 }

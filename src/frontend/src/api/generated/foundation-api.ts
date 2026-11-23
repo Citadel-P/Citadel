@@ -364,6 +364,7 @@ export const foundationOperations = {
   resolveAlertEvents: { method: 'POST', path: '/api/v1/alertEvents/resolve' },
   resolveBuildRunCleanup: { method: 'POST', path: '/api/v1/buildRuns/{id}/recovery' },
   resolveScriptRunCleanup: { method: 'POST', path: '/api/v1/scripts/{id}/runs/{runId}/recovery' },
+  resolveTagFilter: { method: 'GET', path: '/api/v1/tags/_filter' },
   restartContainers: { method: 'PATCH', path: '/api/v1/containers/restart' },
   restartDeployments: { method: 'POST', path: '/api/v1/deployments/restart' },
   restartInstance: { method: 'POST', path: '/api/v1/instance/restart' },

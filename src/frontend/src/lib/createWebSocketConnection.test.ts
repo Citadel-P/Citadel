@@ -1,3 +1,4 @@
+import { collectionEventKey, collectionGroup } from './collection-scope';
 import { RealtimeConnectionState } from '@/lib/realtime-connection';
 import { FakeWebSocket } from '@/test/fakes/websocket';
 import { createWebSocketConnection } from './createWebSocketConnection';
@@ -143,5 +144,87 @@ it('backs off across short successful handshakes and resets after sustained conn
     socket.emit('open', new Event('open'));
     socket.message({ protocolVersion: 1, kind: 'subscribed' });
   }
+  await f.connection.stop();
+});
+
+it('isolates scoped events and discards late delivery after leaving and rejoining', async () => {
+  const f = fixture();
+  const socket = await connect(f);
+  const scopes = ['Prod', 'Stage'].map((tag) => collectionGroup('git-repositories', [tag]));
+  const handlers = scopes.map(() => vi.fn());
+  const unfiltered = vi.fn();
+  const event = 'GitRepositoryInfoUpdated';
+  f.connection.on(event, unfiltered);
+  const invoke = async (method: string, key: string) => {
+    const done = f.connection.invoke(method, key);
+    const frame = JSON.parse(socket.send.mock.calls.at(-1)![0]);
+    socket.message({ protocolVersion: 1, kind: 'completion', invocationId: frame.invocationId });
+    await done;
+    return frame.arguments[0];
+  };
+  const ids: string[] = [];
+  for (const [i, key] of scopes.entries()) {
+    f.connection.on(collectionEventKey(key, event), handlers[i]);
+    const arg = await invoke('JoinGroup', key);
+    expect(arg.tags).toEqual([i === 0 ? 'Prod' : 'Stage']);
+    ids.push(arg.subscriptionId);
+  }
+  const emit = (subscriptionId?: string) =>
+    socket.message({ protocolVersion: 1, kind: 'event', target: event, arguments: [{}], subscriptionId });
+  emit(ids[0]);
+  emit(ids[1]);
+  emit();
+  expect(await invoke('LeaveGroup', scopes[0])).toBe(ids[0]);
+  const next = await invoke('JoinGroup', scopes[0]);
+  emit(ids[0]);
+  emit(next.subscriptionId);
+  expect(handlers[0]).toHaveBeenCalledTimes(2);
+  expect(handlers[1]).toHaveBeenCalledOnce();
+  expect(unfiltered).toHaveBeenCalledOnce();
+  await f.connection.stop();
+});
+
+it('retires an ambiguous scoped join and leaves its server UUID before retrying', async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const socket = await connect(f);
+  const key = collectionGroup('scripts', ['prod']);
+  const event = 'ScriptSummaryUpdated';
+  const handler = vi.fn();
+  f.connection.on(collectionEventKey(key, event), handler);
+  const frames = () => socket.send.mock.calls.map(([data]) => JSON.parse(data));
+  const rejected = expect(f.connection.invoke('JoinGroup', key)).rejects.toThrow('timed out');
+  const first = frames().at(-1);
+  const old = first.arguments[0].subscriptionId;
+  await vi.advanceTimersByTimeAsync(15_000);
+  await rejected;
+  socket.message({ protocolVersion: 1, kind: 'completion', invocationId: first.invocationId });
+  await f.connection.invoke('LeaveGroup', key);
+  const cleanup = frames().at(-1);
+  expect(cleanup).toMatchObject({ target: 'LeaveGroup', arguments: [old] });
+  socket.message({ protocolVersion: 1, kind: 'completion', invocationId: cleanup.invocationId });
+  const retry = f.connection.invoke('JoinGroup', key);
+  const next = frames().at(-1);
+  const id = next.arguments[0].subscriptionId;
+  expect(id).not.toBe(old);
+  socket.message({ protocolVersion: 1, kind: 'completion', invocationId: next.invocationId });
+  await retry;
+  for (const subscriptionId of [old, id])
+    socket.message({ protocolVersion: 1, kind: 'event', target: event, subscriptionId, arguments: [subscriptionId] });
+  expect(handler.mock.calls).toEqual([[id]]);
+  await f.connection.stop();
+});
+
+it('closes the socket when cleanup of a timed-out join also times out', async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const socket = await connect(f);
+  const scope = collectionGroup('scripts', ['prod']);
+  const rejected = expect(f.connection.invoke('JoinGroup', scope)).rejects.toThrow('timed out');
+  await vi.advanceTimersByTimeAsync(15_000);
+  await rejected;
+  expect(socket.close).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(socket.close).toHaveBeenCalledOnce();
   await f.connection.stop();
 });

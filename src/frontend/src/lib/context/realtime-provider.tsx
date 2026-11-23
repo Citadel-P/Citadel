@@ -76,6 +76,9 @@ const liveBackedQueryKeys = new Set([
   'listGitRepositories',
   'listImages',
   'listPlatforms',
+  'listTags',
+  'listManagedSwarmServices',
+  'listRegistries',
   'listStacks',
 ]);
 
@@ -231,6 +234,10 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
         void queryClient.invalidateQueries({ queryKey: ['getInstanceUpdateOperation'] });
         void queryClient.invalidateQueries({ queryKey: ['getApplicationInfo'] });
         void queryClient.invalidateQueries({ queryKey: ['getProfileMfaStatus'] });
+      });
+
+      conn.on('TagCatalogChanged', () => {
+        void queryClient.invalidateQueries({ queryKey: ['listTags'] });
       });
 
       conn.on('LicenseStateChanged', () => {

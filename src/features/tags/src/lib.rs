@@ -14,4 +14,6 @@ pub use repository::TagRepository;
 mod error;
 pub use error::TagError;
 mod name_validation;
-use name_validation::validate_name;
+pub use name_validation::validate_tag_name;
+mod filter;
+pub use filter::tag_filter_names;

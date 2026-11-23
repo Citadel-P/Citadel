@@ -12,6 +12,9 @@ impl ApplicationGroupReader {
             self.jobs_service(p)?;
             return Ok(());
         }
+        if g.uses_row_authorization() {
+            return Ok(());
+        }
         use Topic::*;
         let actor = p.actor_id;
         let admin = p.is_administrator();
@@ -65,7 +68,7 @@ impl ApplicationGroupReader {
                 self.activity_kind(p, g, Some(lease)).await?;
                 return Ok(());
             }
-            AlertEvents => return Ok(()), // The snapshot's SQL filters by this authenticated actor.
+            AlertEvents | Registries | ManagedSwarmServices => return Ok(()), // The snapshot's SQL filters by this authenticated actor.
             ResourceCopy(id) => {
                 self.copy_eligibility
                     .as_ref()

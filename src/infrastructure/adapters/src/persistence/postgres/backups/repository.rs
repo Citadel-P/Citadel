@@ -119,13 +119,14 @@ impl BackupPersistence for PostgresBackupPersistence {
         self.create_policy_impl(actor, input)
     }
 
-    fn list_policies(
-        &self,
+    fn list_policies<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
         owner: Option<Uuid>,
-    ) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>> {
-        self.list_policies_impl(actor, administrator, owner)
+        tag_names: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<BackupPolicy>, BackupError>> {
+        self.list_policies_impl(actor, administrator, owner, tag_names)
     }
 
     fn get_policy(&self, id: Uuid) -> BoxFuture<'_, Result<BackupPolicy, BackupError>> {

@@ -1,5 +1,7 @@
 #[path = "stacks_http/contracts.rs"]
 mod contracts;
+#[path = "support/tag_filters.rs"]
+mod tag_filters;
 use axum::{
     Router,
     body::{Body, to_bytes},
@@ -501,6 +503,7 @@ async fn stack_endpoints_enforce_auth_and_persist_apply_release_and_delete() {
     let created = response_json(created_response).await;
     assert_eq!(status, StatusCode::OK, "{created}");
     let id = Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
+    tag_filters::verify(&app, &pool, citadel_tags::TaggableResourceType::Stack, id).await;
     for catalog in [false, true] {
         let url = if catalog {
             "/api/v1/stacks?catalog=true"

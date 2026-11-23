@@ -6,6 +6,7 @@ import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { createResourceCapabilities, createStack } from '@/test/factories/resources';
+import { collectionEventKey, collectionGroup } from '@/lib/collection-scope';
 import { useNavigate } from 'react-router';
 import { useStacksGroup } from './useStacksGroup';
 
@@ -116,6 +117,7 @@ describe('useStacksGroup', () => {
     const fake = new FakeRealtimeConnection();
     const platformId = '00000000-0000-0000-0000-000000000200';
     const nextPlatformId = '00000000-0000-0000-0000-000000000300';
+    const updateEvent = (id: string) => collectionEventKey(collectionGroup('stacks', [], id), 'StackCatalogUpdated');
     server.use(
       http.get('http://localhost/api/v1/stacks', ({ request }) => {
         const requestedPlatformId = new URL(request.url).searchParams.get('platformId');
@@ -142,7 +144,7 @@ describe('useStacksGroup', () => {
 
     expect(await screen.findByText('api')).toBeVisible();
     await waitFor(() => {
-      expect(fake.listenerCount('StackCatalogUpdated')).toBe(1);
+      expect(fake.listenerCount(updateEvent(platformId))).toBe(1);
     });
 
     act(() => {
@@ -161,12 +163,12 @@ describe('useStacksGroup', () => {
     await view.user.click(screen.getByRole('button', { name: 'change platform' }));
     expect(await screen.findByText('next-api')).toBeVisible();
     await waitFor(() => {
-      expect(fake.listenerCount('StackCatalogUpdated')).toBe(1);
+      expect(fake.listenerCount(updateEvent(nextPlatformId))).toBe(1);
     });
 
     act(() => {
       fake.emit(
-        'StackCatalogUpdated',
+        updateEvent(platformId),
         createStack({
           id: '00000000-0000-0000-0000-000000000004',
           name: 'stale-platform-event',
@@ -178,6 +180,6 @@ describe('useStacksGroup', () => {
     expect(screen.queryByText('stale-platform-event')).not.toBeInTheDocument();
 
     view.unmount();
-    expect(fake.listenerCount('StackCatalogUpdated')).toBe(0);
+    expect(fake.listenerCount(updateEvent(nextPlatformId))).toBe(0);
   });
 });

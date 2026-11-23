@@ -19,9 +19,10 @@ export const registryQueries = {
   config: (client: Api<unknown>, id?: string) => resourceReadOptions(client, 'getRegistryConfig', { id }),
 };
 
-export function useRegistryList(args: RegistryListArgs) {
+export function useRegistryList(args: RegistryListArgs, enabled = true) {
   const { apiClient } = useApiClientContext();
-  return useQuery(registryQueries.list(apiClient, args));
+  const options = registryQueries.list(apiClient, args);
+  return useQuery({ ...options, enabled: enabled && options.enabled });
 }
 
 export function useRegistryConfig(id?: string) {

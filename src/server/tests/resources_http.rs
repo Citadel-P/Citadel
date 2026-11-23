@@ -1,3 +1,5 @@
+#[path = "support/tag_filters.rs"]
+mod tag_filters;
 use axum::{
     Router,
     body::{Body, to_bytes},
@@ -46,6 +48,9 @@ use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use tower::ServiceExt;
 use uuid::Uuid;
+
+#[path = "resources_http/tag_visibility.rs"]
+mod tag_visibility;
 
 #[path = "resources_http/workload_tags.rs"]
 mod workload_tags;
@@ -373,6 +378,13 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         .await
         .unwrap();
     assert!(!schedule);
+    tag_filters::verify(
+        &app,
+        &pool,
+        citadel_tags::TaggableResourceType::Script,
+        script_uuid,
+    )
+    .await;
     for (index, expected) in [(0, 1), (1, 0)] {
         let response = request(
             &app,
@@ -949,7 +961,7 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         (
             ResourceType::Tag,
             Uuid::parse_str(tag_id).unwrap(),
-            PermissionLevel::Read,
+            PermissionLevel::Write,
         ),
         (
             ResourceType::Registry,
@@ -1093,32 +1105,16 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         listed_registries["registries"][0]["capabilities"]["canExecute"],
         true
     );
-    for (collection, id) in [
-        ("registries", registry_id),
-        ("gitRepositories", repository_id),
-    ] {
-        for (second_tag, expected) in [
-            (tag_id, true),
-            (action_tags[0]["id"].as_str().unwrap(), false),
-        ] {
-            let response = request(
-                &app,
-                Method::GET,
-                &format!("/api/v1/{collection}?tags={tag_id}&tags={second_tag}"),
-                Some(resource_actor.clone()),
-                None,
-            )
-            .await;
-            assert_eq!(response.status(), StatusCode::OK);
-            let body = response_json(response).await;
-            let rows = body[collection].as_array().unwrap();
-            assert_eq!(rows.len(), usize::from(expected), "{collection} filter");
-            if expected {
-                assert_eq!(rows[0]["id"], id);
-                assert_eq!(rows[0]["tags"][0]["id"], tag_id);
-            }
-        }
-    }
+    Box::pin(tag_visibility::verify(
+        &app,
+        &pool,
+        &resource_actor,
+        &administrator,
+        &tag,
+        action_tags[0]["name"].as_str().unwrap(),
+        (registry_id, repository_id),
+    ))
+    .await;
     let cold_queries = resource_permission_queries();
     let listed_git_accounts = response_json(
         request(

@@ -116,7 +116,10 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
         citadel_deployments::DeploymentStatus::Created
     );
     assert_eq!(created.tags.len(), 1);
-    for tag_filter in [created.tags[0].name.clone(), tag_id.to_string()] {
+    for (tag_filter, matches) in [
+        (created.tags[0].name.clone(), true),
+        (tag_id.to_string(), false),
+    ] {
         let tagged = store
             .list_authorized(
                 actor,
@@ -129,8 +132,13 @@ async fn deployment_crud_duplicate_acl_and_delete_are_transactional() {
             )
             .await
             .unwrap();
-        assert_eq!(tagged.len(), 1);
-        assert_eq!(tagged[0].id, created.id);
+        assert_eq!(
+            tagged.into_iter().map(|row| row.id).collect::<Vec<_>>(),
+            matches
+                .then_some(created.id)
+                .into_iter()
+                .collect::<Vec<_>>()
+        );
     }
     assert!(
         store

@@ -178,6 +178,14 @@ impl PlatformReadService {
             .await
     }
 
+    pub async fn get_matching_platform(
+        &self,
+        id: Uuid,
+        tags: &[String],
+    ) -> Result<Option<PlatformDetails>, AuthorizedReadError> {
+        self.store.get_matching_platform(id, tags).await
+    }
+
     pub async fn get_platform(
         &self,
         id: Uuid,

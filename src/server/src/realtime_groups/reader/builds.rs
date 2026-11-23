@@ -8,6 +8,7 @@ impl ApplicationGroupReader {
         &self,
         principal: &ActorPrincipal,
         project: Uuid,
+        tags: &[String],
         lease: Option<&AuthorizationLease>,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
         match self
@@ -25,7 +26,7 @@ impl ApplicationGroupReader {
             Err(error) => return Err(error),
         }
         let owner = project;
-        let project = match self.builds.get(project).await {
+        let project = match self.builds.get_matching_project(project, tags).await {
             Ok(project) => project,
             Err(BuildError::NotFound) => {
                 return rows(

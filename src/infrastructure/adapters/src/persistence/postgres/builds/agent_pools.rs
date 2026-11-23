@@ -129,8 +129,7 @@ impl PostgresBuildRepository {
                 &self.pool,
                 actor,
                 administrator,
-                ResourceType::BuildAgentPool,
-                "BuildAgentPool",
+                citadel_tags::TaggableResourceType::BuildAgentPool,
                 "buildagentpools resource WHERE resource.archivedat IS NULL",
                 tags,
             )

@@ -14,61 +14,94 @@ import { OverflowCountBadge } from '@/components/custom/common';
 import { KnownResourceName } from '@/api/types';
 
 const TAG_QUERY_KEY = 'tags';
-const normalizeTagName = (name: string) => name.trim().toLowerCase();
 
-export const useResourceTagFilter = () => {
+export const useResourceTagFilter = (active = true) => {
   const [searchParams, setSearchParams] = useSearchParams();
-
-  const selectedTagNames = useMemo(
-    () => searchParams.getAll(TAG_QUERY_KEY).filter((value) => value.trim().length > 0),
-    [searchParams],
+  const tokens = useMemo(
+    () =>
+      active
+        ? [...searchParams]
+            .filter(([key]) => key.toLowerCase() === TAG_QUERY_KEY)
+            .map(([, value]) => value.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, ''))
+            .sort()
+        : [],
+    [active, searchParams],
   );
+  const resolution = useRead(
+    'resolveTagFilter',
+    { query: { tags: tokens } },
+    {
+      enabled: tokens.length > 0,
+      staleTime: Infinity,
+      retry: false,
+    },
+  );
+  const keys = resolution.data?.data;
+  const selection = useMemo(() => {
+    const byKey = new Map<string, string>();
+    for (const token of tokens) {
+      const comparison = keys && Object.hasOwn(keys, token) ? keys[token] : token;
+      if (!byKey.has(comparison)) byKey.set(comparison, token);
+    }
+    return byKey;
+  }, [keys, tokens]);
+  const selectedTagNames = useMemo(() => {
+    if (!keys) return tokens;
+    const names = [...selection.keys()].sort();
+    // Folding a Unicode name can expand its encoded length. Preserve a valid
+    // literal for transmission when its comparison key cannot itself be sent.
+    const params = new URLSearchParams(names.map((name) => [TAG_QUERY_KEY, name]));
+    return names.some((name) => Array.from(name).length > 128) || params.toString().length > 4096
+      ? [...selection.values()]
+      : names;
+  }, [keys, selection, tokens]);
+  const filterReady = !tokens.length || !!keys || resolution.isError;
 
   const setSelectedTagNames = (tagNames: string[]) => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
-      next.delete(TAG_QUERY_KEY);
+      for (const key of [...next.keys()]) if (key.toLowerCase() === TAG_QUERY_KEY) next.delete(key);
+      next.delete('page');
+      next.delete('cursor');
       tagNames.forEach((tagName) => next.append(TAG_QUERY_KEY, tagName));
       return next;
     });
   };
 
-  return { selectedTagNames, setSelectedTagNames };
+  return { selectedTagNames, setSelectedTagNames, selection, filterReady };
 };
 
 export const ResourceTagFilter = () => {
   const [open, setOpen] = useState(false);
-  const { selectedTagNames, setSelectedTagNames } = useResourceTagFilter();
+  const { selection, setSelectedTagNames } = useResourceTagFilter();
   const { data, isLoading } = useRead('listTags');
   const tags = useMemo(() => data?.data.tags ?? [], [data?.data.tags]);
-  const selectedTags = useMemo(() => {
-    const selected = new Set(selectedTagNames.map(normalizeTagName));
-    return tags.filter((tag) => selected.has(normalizeTagName(tag.name)));
-  }, [selectedTagNames, tags]);
-
-  const availableTags = useMemo(() => {
-    const selected = new Set(selectedTagNames.map(normalizeTagName));
-    return tags.filter((tag) => !selected.has(normalizeTagName(tag.name)));
-  }, [selectedTagNames, tags]);
-
-  const selectTag = (tagName: string) => setSelectedTagNames([...selectedTagNames, tagName]);
-  const removeTag = (tagName: string) =>
-    setSelectedTagNames(selectedTagNames.filter((name) => normalizeTagName(name) !== normalizeTagName(tagName)));
-
-  if (!isLoading && tags.length === 0) return null;
+  const availableTags = useMemo(() => tags.filter((tag) => !selection.has(tag.normalizedName)), [selection, tags]);
+  const selectTag = (tagName: string) => setSelectedTagNames([...selection.values(), tagName]);
+  const removeTag = (key: string) =>
+    setSelectedTagNames([...selection].filter(([k]) => k !== key).map(([, name]) => name));
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      {selectedTags.map((tag) => (
-        <ResourceFilterChip
-          key={tag.id}
-          className="max-w-40"
-          style={{ backgroundColor: tag.color, color: getTagTextColor(tag.color) }}
-          label={`Remove ${tag.name} tag filter`}
-          onClick={() => removeTag(tag.name)}>
-          {tag.name}
-        </ResourceFilterChip>
-      ))}
+      {[...selection].map(([key, name]) => {
+        const tag = tags.find((item) => item.normalizedName === key);
+        const label = tag?.name ?? (name || 'Empty tag');
+        return (
+          <ResourceFilterChip
+            key={name}
+            className="max-w-40"
+            style={tag ? { backgroundColor: tag.color, color: getTagTextColor(tag.color) } : undefined}
+            label={`Remove ${label} tag filter`}
+            onClick={() => removeTag(key)}>
+            {label}
+          </ResourceFilterChip>
+        );
+      })}
+      {selection.size > 0 && (
+        <Button variant="ghost" size="sm" onClick={() => setSelectedTagNames([])}>
+          Clear filters
+        </Button>
+      )}
       <ResourceFilterDropdown
         label="Tag Filter"
         icon={Tag}

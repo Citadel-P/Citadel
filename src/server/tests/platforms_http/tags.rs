@@ -68,9 +68,16 @@ async fn platform_tags_survive_fresh_detail_list_and_realtime_reads() {
 
 #[tokio::test]
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
-async fn platform_tag_filters_accept_names_and_ids_and_require_all_selected_tags() {
+async fn platform_tag_filters_accept_names_and_require_all_selected_tags() {
     let fixture = fixture().await;
-    sqlx::query("UPDATE tags SET name='Prod & Europe', normalizedname='PROD & EUROPE' WHERE id=$1")
+    tag_filters::verify(
+        &fixture.app,
+        &fixture.pool,
+        citadel_tags::TaggableResourceType::Platform,
+        fixture.platform_id,
+    )
+    .await;
+    sqlx::query("UPDATE tags SET name='Prod & Europe', normalizedname='prod & europe' WHERE id=$1")
         .bind(fixture.tag_id)
         .execute(&fixture.pool)
         .await
@@ -85,8 +92,7 @@ async fn platform_tag_filters_accept_names_and_ids_and_require_all_selected_tags
     };
     for query in [
         "tags=Prod%20%26%20Europe".to_owned(),
-        "TaGs=prod+%26+europe&TAGS=PROD+%26+EUROPE&tags=%20".to_owned(),
-        format!("tags={}", fixture.tag_id),
+        "TaGs=prod+%26+europe&TAGS=PROD+%26+EUROPE".to_owned(),
     ] {
         let response = send(
             &fixture,
@@ -100,7 +106,11 @@ async fn platform_tag_filters_accept_names_and_ids_and_require_all_selected_tags
         assert_eq!(body["platforms"][0]["id"], json!(fixture.platform_id));
     }
 
-    for query in ["tags=missing", "tags=Prod+%26+Europe&tags=blue"] {
+    for query in [
+        "tags=missing",
+        "tags=Prod+%26+Europe&tags=blue",
+        &format!("tags={}", fixture.tag_id),
+    ] {
         let response = send(
             &fixture,
             &format!("/api/v1/platforms?{query}"),
@@ -116,7 +126,7 @@ async fn platform_tag_filters_accept_names_and_ids_and_require_all_selected_tags
         );
     }
     let second_tag = Uuid::now_v7();
-    sqlx::query("INSERT INTO tags(id,color,createdbyactorid,name,normalizedname) VALUES($1,'blue',$2,'blue','BLUE')")
+    sqlx::query("INSERT INTO tags(id,color,createdbyactorid,name,normalizedname) VALUES($1,'blue',$2,'blue','blue')")
         .bind(second_tag).bind(fixture.actor_id).execute(&fixture.pool).await.unwrap();
     sqlx::query("INSERT INTO resourcetags(resourcetype,resourceid,tagid,createdbyactorid) VALUES('Platform',$1,$2,$3)")
         .bind(fixture.platform_id).bind(second_tag).bind(fixture.actor_id).execute(&fixture.pool).await.unwrap();
@@ -124,6 +134,30 @@ async fn platform_tag_filters_accept_names_and_ids_and_require_all_selected_tags
     let matching = json_body(send(&fixture, uri, Some(reader.clone())).await).await;
     assert_eq!(matching["platforms"].as_array().unwrap().len(), 1);
 
+    // Bookmarks retain the name across deletion and re-creation; the new tag
+    // must be assigned before the original AND filter can match again.
+    sqlx::query("DELETE FROM tags WHERE id=$1")
+        .bind(second_tag)
+        .execute(&fixture.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        json_body(send(&fixture, uri, Some(reader.clone())).await).await["platforms"],
+        json!([])
+    );
+    let replacement = Uuid::now_v7();
+    sqlx::query("INSERT INTO tags(id,color,createdbyactorid,name,normalizedname) VALUES($1,'blue',$2,'BLUE','blue')")
+        .bind(replacement).bind(fixture.actor_id).execute(&fixture.pool).await.unwrap();
+    assert_eq!(
+        json_body(send(&fixture, uri, Some(reader.clone())).await).await["platforms"],
+        json!([])
+    );
+    sqlx::query("INSERT INTO resourcetags(resourcetype,resourceid,tagid,createdbyactorid) VALUES('Platform',$1,$2,$3)")
+        .bind(fixture.platform_id).bind(replacement).bind(fixture.actor_id).execute(&fixture.pool).await.unwrap();
+    assert_eq!(
+        json_body(send(&fixture, uri, Some(reader.clone())).await).await["platforms"][0]["id"],
+        json!(fixture.platform_id)
+    );
     let denied = ActorPrincipal {
         actor_id: ActorId::new(Uuid::now_v7()),
         ..reader

@@ -47,9 +47,22 @@ pub(super) async fn verify(pool: &sqlx::PgPool, admin: &ActorPrincipal, policy: 
     assert!(detail.tags.iter().any(|v| v.id == tag));
     assert_eq!(detail.latest_run.as_ref().unwrap().id, run);
     let list = store
-        .list_policies(admin.actor_id, true, None)
+        .list_policies(admin.actor_id, true, None, &[format!("contract-{tag}")])
         .await
         .unwrap();
+    assert_eq!(list.len(), 1);
+    assert!(
+        store
+            .list_policies(
+                admin.actor_id,
+                true,
+                None,
+                &[format!("contract-{tag}"), "missing".into()]
+            )
+            .await
+            .unwrap()
+            .is_empty()
+    );
     let listed = list.iter().find(|v| v.id == id).unwrap();
     assert_eq!(listed.latest_run.as_ref().unwrap().id, run);
     assert!(listed.tags.iter().any(|v| v.id == tag));

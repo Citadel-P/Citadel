@@ -1,11 +1,10 @@
+import { collectionGroup } from '@/lib/collection-scope';
 import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
-import { useCollectionRows } from '@/hooks/useCollectionRows';
+import { useCollectionSubscription } from '@/hooks/useCollectionSubscription';
 import { AuthorizedProject } from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
-import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
-import { RealtimeConnection } from '@/lib/realtime-connection';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { selectBuildProjectLatestRun } from '../build-run-state';
 
 const mergeRun = (incoming: AuthorizedProject, existing: AuthorizedProject) => ({
@@ -14,59 +13,27 @@ const mergeRun = (incoming: AuthorizedProject, existing: AuthorizedProject) => (
 });
 
 export const useBuildsGroup = () => {
-  const { selectedTagNames } = useResourceTagFilter();
+  const { selectedTagNames, filterReady } = useResourceTagFilter();
   const readArgs = useMemo(
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const groupName = 'build-projects';
+  const groupName = collectionGroup('build-projects', selectedTagNames);
   const structuralSharing = useCollectionStructuralSharing(groupName);
-  const { data, isLoading, error, refetch, isFetching } = useRead('listBuildProjects', readArgs, {
+  const query = useRead('listBuildProjects', readArgs, {
+    enabled: filterReady,
     structuralSharing,
   });
-  const capabilities = data?.data.capabilities;
-  const matchesActiveFilters = useCallback(
-    (project: AuthorizedProject) => {
-      if (selectedTagNames.length === 0) return true;
+  const { error, refetch, isFetching, isLoading } = query;
+  const capabilities = query.data?.data.capabilities;
 
-      const tagNames = new Set((project.tags ?? []).map((tag) => tag.name.trim().toLowerCase()));
-      return selectedTagNames.every((tagName) => tagNames.has(tagName.trim().toLowerCase()));
-    },
-    [selectedTagNames],
-  );
-
-  const reload = useCallback(async () => {
-    const result = await refetch();
-    return result.isSuccess ? result.data.data.projects : undefined;
-  }, [refetch]);
-  const [projects, handleBuildProjectInfoUpdated, onJoinedGroup] = useCollectionRows(
-    data?.data.projects,
-    JSON.stringify(readArgs ?? {}),
-    matchesActiveFilters,
-    reload,
-    mergeRun,
-  );
-
-  const setupEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.on('BuildProjectInfoUpdated', handleBuildProjectInfoUpdated);
-    },
-    [handleBuildProjectInfoUpdated],
-  );
-
-  const removeEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.off('BuildProjectInfoUpdated', handleBuildProjectInfoUpdated);
-    },
-    [handleBuildProjectInfoUpdated],
-  );
-
-  useRealtimeGroup({
+  const projects = useCollectionSubscription({
     groupName,
-    onJoinedGroup,
-    setupEventListeners,
-    removeEventListeners,
+    eventName: 'BuildProjectInfoUpdated',
+    enabled: filterReady,
+    field: 'projects',
+    query,
+    merge: mergeRun,
   });
-
   return { error, refetch, isFetching, projects: projects ?? [], isLoading, capabilities, selectedTagNames };
 };

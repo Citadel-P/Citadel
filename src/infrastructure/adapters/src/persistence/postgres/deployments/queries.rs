@@ -25,8 +25,7 @@ impl PostgresDeploymentRepository {
           JOIN tags filter_tag ON filter_tag.id = filter_link.tagid
           WHERE filter_link.resourcetype = 'Deployment'
             AND filter_link.resourceid = d.id
-            AND (lower(filter_tag.name) = lower(requested.name)
-                 OR filter_tag.id::text = requested.name)))"#;
+            AND filter_tag.normalizedname=lower(requested.name)))"#;
             const ORDER: &str = "d.createdat DESC, d.name, d.id";
             // Bound authorized keys before projecting activity, tags and runtime observations.
             let query = if filter.limit.is_some() {

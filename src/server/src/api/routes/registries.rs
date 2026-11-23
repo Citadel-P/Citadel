@@ -1,3 +1,4 @@
+use crate::api::mutation_notifications::affects_tag_usage;
 use crate::{
     api::{
         catalog_query::{
@@ -70,12 +71,14 @@ pub fn router(state: RegistriesHttpState) -> Router {
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<RegistriesHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list_registries))
-        .normalized_routes(utoipa_axum::routes!(create_registry))
-        .normalized_routes(utoipa_axum::routes!(delete_registries))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(create_registry)))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(delete_registries)))
         .normalized_routes(utoipa_axum::routes!(get_registry))
         .normalized_routes(utoipa_axum::routes!(get_registry_config))
         .normalized_routes(utoipa_axum::routes!(update_registry))
-        .normalized_routes(utoipa_axum::routes!(update_registry_metadata))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(
+            update_registry_metadata
+        )))
         .normalized_routes(utoipa_axum::routes!(rename_registry))
 }
 
@@ -89,7 +92,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Registri
         (status = 200, description = "Success", body = RegistriesResponse, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
-    params(("includeDisabled" = Option<bool>, Query, extensions(("x-citadel-default" = json!(false)))), ("tags" = Option<Vec<String>>, Query)),
+    params(("includeDisabled" = Option<bool>, Query, extensions(("x-citadel-default" = json!(false)))), ("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -117,40 +120,22 @@ async fn list_registries(
                 principal.is_administrator(),
                 citadel_registries::RegistryListFilter::Catalog {
                     include_disabled: filters.include_disabled,
-                    tag_ids: &filters.tags,
+                    tag_names: &filters.tags,
                 },
             )
             .await
             .map_err(metadata_error),
         &headers,
     )?;
-    // SQL has already selected the authorized IDs. Resolve their capability
-    // metadata with one batch of ACL misses, including denied entries.
-    let permission_ids = authorized_registries
-        .iter()
-        .map(|resource| resource.id)
-        .collect::<Vec<_>>();
-    let row_permissions = api_result(
-        state
-            .identity
-            .permissions_for_resources(&principal, ResourceType::Registry, &permission_ids)
-            .await,
+    let registries = api_result(
+        crate::api::resources::registries::views::authorized_registries(
+            &state.identity,
+            &principal,
+            authorized_registries,
+        )
+        .await,
         &headers,
     )?;
-    let mut registries = Vec::with_capacity(authorized_registries.len());
-    for registry in authorized_registries {
-        let row_capabilities = crate::api::resource_access::capabilities_from_permission(
-            row_permissions.get(&registry.id).copied().flatten(),
-        );
-        registries.push(AuthorizedRegistryView {
-            is_default: registry.id == Uuid::from_u128(0x100),
-            registry: api_result(
-                RegistryView::try_from(registry).map_err(ApiError::internal),
-                &headers,
-            )?,
-            capabilities: row_capabilities,
-        });
-    }
     Ok(no_store(
         Json(RegistriesResponse {
             registries,

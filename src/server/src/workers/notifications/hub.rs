@@ -67,12 +67,20 @@ impl DatabaseNotificationHub {
                 Ok(RuntimeNotification::Signal(signal)) => {
                     self.signals[signal as usize].send_modify(|_| {})
                 }
+                Ok(RuntimeNotification::TagUsageChanged) => {
+                    if let Some(hub) = &self.realtime {
+                        hub.publish_tag_usage_changed();
+                    }
+                }
                 Ok(RuntimeNotification::BackupRecovery) => {
                     self.refresh_catalog("BackupPolicy");
                     self.refresh_catalog("BackupRepository");
                 }
                 Ok(RuntimeNotification::GitRecovery) => self.refresh_catalog("GitRepository"),
                 Ok(RuntimeNotification::Resync) => {
+                    if let Some(hub) = &self.realtime {
+                        hub.publish_tag_usage_changed();
+                    }
                     for resource in ["BackupPolicy", "BackupRepository", "GitRepository"] {
                         self.refresh_catalog(resource);
                     }

@@ -125,7 +125,7 @@ impl PostgresSwarmServiceRepository {
   AND NOT EXISTS (SELECT 1 FROM unnest($4::text[]) requested(name) WHERE NOT EXISTS (
       SELECT 1 FROM resourcetags filter_link JOIN tags filter_tag ON filter_tag.id=filter_link.tagid
       WHERE filter_link.resourcetype='SwarmService' AND filter_link.resourceid=s.id
-        AND (lower(filter_tag.name)=lower(requested.name) OR filter_tag.id::text=requested.name)))"#;
+        AND filter_tag.normalizedname=lower(requested.name)))"#;
             const ORDER: &str = "s.createdat DESC, s.name, s.id";
             // Bound authorized keys before projecting activity, tags and runtime observations.
             let query = if filter.limit.is_some() {

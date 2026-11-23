@@ -16,19 +16,12 @@ pub(crate) struct WorkloadQuery {
 
 impl WorkloadQuery {
     pub(crate) fn parse(query: Option<&str>) -> Result<Self, ApiError> {
-        let mut filter = Self::default();
+        let mut filter = Self {
+            tags: super::parse_tag_filters(query)?,
+            platform_id: None,
+        };
         for (key, value) in url::form_urlencoded::parse(query.unwrap_or_default().as_bytes()) {
-            if key.eq_ignore_ascii_case("tags") {
-                if filter.tags.len() >= 100 {
-                    return Err(super::field_error(
-                        "$.tags".into(),
-                        "At most 100 tags may be filtered at once.".into(),
-                    ));
-                }
-                if !value.trim().is_empty() && !filter.tags.iter().any(|tag| tag == &value) {
-                    filter.tags.push(value.into_owned());
-                }
-            } else if key.eq_ignore_ascii_case("platformId") {
+            if key.eq_ignore_ascii_case("platformId") {
                 let id = Uuid::parse_str(&value).map_err(|_| {
                     super::field_error(
                         "$.platformId".into(),
@@ -60,19 +53,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn preserves_repeated_case_insensitive_filters_and_ignores_empty_tags() {
+    fn preserves_repeated_case_insensitive_filters_and_trims_names() {
         let id = Uuid::now_v7();
         let filter = WorkloadQuery::parse(Some(&format!(
-            "TaGs=prod&TAGS=blue&tags=prod&tags=%20&PlatformID={id}&unknown=ignored"
+            "TaGs=prod&TAGS=blue&tags=prod&tags=%20prod%20&PlatformID={id}&unknown=ignored"
         )))
         .unwrap();
-        assert_eq!(filter.tags, ["prod", "blue"]);
+        assert_eq!(filter.tags, ["blue", "prod"]);
         assert_eq!(filter.platform_id, Some(id));
     }
 
     #[test]
     fn rejects_invalid_or_duplicate_platforms_and_excess_tags() {
         let id = Uuid::now_v7();
+        assert!(WorkloadQuery::parse(Some("tags=%20")).is_err());
         assert!(WorkloadQuery::parse(Some("platformId=invalid")).is_err());
         assert!(WorkloadQuery::parse(Some(&format!("platformId={id}&PLATFORMID={id}"))).is_err());
         let tags = (0..100)

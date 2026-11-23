@@ -43,6 +43,10 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
     .await
     .unwrap();
 
+    let tag_id = Uuid::now_v7();
+    let tag_name = Uuid::now_v7().to_string();
+    sqlx::query("INSERT INTO tags(id,name,normalizedname,color,createdbyactorid) VALUES($1,$2,lower($2),'#112233',$3)")
+        .bind(tag_id).bind(&tag_name).bind(SYSTEM_ACTOR_ID).execute(&pool).await.unwrap();
     let created = store
         .create(
             actor,
@@ -54,12 +58,32 @@ async fn stack_crud_releases_rollback_import_and_delete_are_transactional() {
                 stack_source: StackSource::WebEditor,
                 spec: spec("nginx:alpine", None),
                 drift_policy: Some(StackDriftPolicy::default()),
-                tag_ids: Vec::new(),
+                tag_ids: vec![tag_id],
                 duplicate_source: None,
             },
         )
         .await
         .unwrap();
+    for (names, expected) in [
+        (vec![tag_name.to_uppercase(), tag_name.clone()], 1),
+        (vec![tag_name.clone(), format!("unknown-{suffix}")], 0),
+        (vec![tag_id.to_string()], 0),
+    ] {
+        let rows = store
+            .list_authorized(
+                actor,
+                true,
+                &StackFilter {
+                    platform_id: Some(platform_id),
+                    tags: names,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), expected);
+        assert!(rows.iter().all(|row| row.id == created.id));
+    }
     assert_eq!(created.status, StackReleaseStatus::Created);
     assert_eq!(created.platform_id, Some(platform_id));
     assert_eq!(

@@ -16,11 +16,26 @@ impl TaggableResourceType {
             Self::SwarmService => "SwarmService",
         }
     }
+    #[must_use]
+    pub const fn permission_type(self) -> citadel_primitives::ResourceType {
+        match self {
+            Self::Deployment => citadel_primitives::ResourceType::Deployment,
+            Self::Stack => citadel_primitives::ResourceType::Stack,
+            Self::Platform => citadel_primitives::ResourceType::Platform,
+            Self::GitRepository => citadel_primitives::ResourceType::GitRepository,
+            Self::Registry => citadel_primitives::ResourceType::Registry,
+            Self::Script => citadel_primitives::ResourceType::Script,
+            Self::BackupPolicy => citadel_primitives::ResourceType::BackupPolicy,
+            Self::Build => citadel_primitives::ResourceType::Build,
+            Self::BuildAgentPool => citadel_primitives::ResourceType::BuildAgentPool,
+            Self::SwarmService => citadel_primitives::ResourceType::SwarmService,
+        }
+    }
 }
 
 impl NewTag {
     pub fn validate(&mut self) -> Result<(), TagError> {
-        validate_name(&self.name, "Tag")?;
+        validate_tag_name(&self.name)?;
         self.name = self.name.trim().to_owned();
         self.color = normalize_color(&self.color)?;
         Ok(())

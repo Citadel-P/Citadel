@@ -221,7 +221,7 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 443);
+        assert_eq!(operations(&full), 444);
         assert!(
             public["paths"]
                 .get("/api/v1/installation/settings")
@@ -263,7 +263,7 @@ mod tests {
         assert_eq!(operation["operationId"], "getInstanceJobHistory");
         assert_eq!(operation["security"], json!([{"Bearer": []}]));
         assert_eq!(operation["x-citadel-principal"], "human");
-        assert_eq!(operations(&public), 316);
+        assert_eq!(operations(&public), 317);
         for (path, method, operation_id) in [
             ("/api/v1/updates", "get", "getInstanceUpdates"),
             ("/api/v1/updates/agents", "get", "getAgentUpdates"),

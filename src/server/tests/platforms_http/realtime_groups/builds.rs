@@ -129,3 +129,111 @@ async fn completion_updates_only_its_project_and_reconciles_retention() {
     server.await.unwrap();
     cleanup(f).await;
 }
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn filtered_owner_changes_read_and_emit_only_the_matching_platform_or_project() {
+    let f = fixture().await;
+    let tag: String = sqlx::query_scalar("SELECT name FROM tags WHERE id=$1")
+        .bind(f.tag_id)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    let other_platform = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) SELECT $1,$1::text,connectortype,0,0,0,$1::text,0,platformdescriptor,status,0 FROM platforms WHERE id=$2")
+        .bind(other_platform).bind(f.platform_id).execute(&f.pool).await.unwrap();
+    let repo = Uuid::now_v7();
+    sqlx::query("INSERT INTO gitrepositories(id,createdbyactorid,defaultbranch,name,status,syncmode,url) VALUES($1,$2,'main','filtered','Healthy','Manual','file:///unused')")
+        .bind(repo).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    let (matching_project, _) = project(&f, repo).await;
+    let (other_project, _) = project(&f, repo).await;
+    sqlx::query("INSERT INTO resourcetags(resourceid,resourcetype,tagid,createdbyactorid) VALUES($1,'Build',$2,$3)")
+        .bind(matching_project).bind(f.tag_id).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    let (hub, _, address, cancel, server) = serve(&f).await;
+    let mut socket = connect(&f, &f.administrator, address).await;
+    let count_queries = std::env::var_os("CITADEL_REQUIRE_QUERY_COUNTS").is_some();
+    if count_queries {
+        sqlx::query("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+            .execute(&f.pool)
+            .await
+            .unwrap();
+    }
+    for (group, kind, hit, miss, change) in [
+        (
+            "platforms",
+            "Platform",
+            f.platform_id,
+            other_platform,
+            "connectionChanged",
+        ),
+        (
+            "build-projects",
+            "Build",
+            matching_project,
+            other_project,
+            "ownerChanged",
+        ),
+    ] {
+        let subscription = Uuid::now_v7();
+        let args = json!([{"subscriptionId":subscription,"group":group,"tags":[&tag]}]);
+        assert!(invoke_args(&mut socket, "JoinGroup", args).await["error"].is_null());
+        assert_eq!(
+            receive(&mut socket).await["target"],
+            "CollectionSnapshotStarted"
+        );
+        assert_eq!(receive(&mut socket).await["arguments"][0]["id"], json!(hit));
+        let counters = || async {
+            sqlx::query_as::<_,(i64,i64)>("SELECT coalesce(sum(calls),0)::bigint,coalesce(sum(rows),0)::bigint FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database()) AND query LIKE $1")
+                .bind("%AND t.normalizedname=lower(requested.name)%").fetch_one(&f.pool).await.unwrap()
+        };
+        for (id, expected) in [(miss, 0), (hit, 1)] {
+            let before = if count_queries {
+                Some(counters().await)
+            } else {
+                None
+            };
+            hub.publish_resource_change(kind, id, change);
+            barrier(&hub);
+            let frames = read_until_barrier(&mut socket).await;
+            assert_eq!(frames.len(), expected, "{kind} {id}: {frames:?}");
+            if expected == 1 {
+                assert_eq!(frames[0]["arguments"][0]["id"], json!(hit));
+            }
+            if let Some((calls, rows)) = before {
+                let after = counters().await;
+                assert_eq!(
+                    (after.0 - calls, after.1 - rows),
+                    (1, expected as i64),
+                    "{kind} owner projection"
+                );
+            }
+        }
+        sqlx::query(
+            "DELETE FROM resourcetags WHERE resourceid=$1 AND resourcetype=$2 AND tagid=$3",
+        )
+        .bind(hit)
+        .bind(kind)
+        .bind(f.tag_id)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+        hub.publish_resource_change(kind, hit, change);
+        barrier(&hub);
+        let frames = read_until_barrier(&mut socket).await;
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0]["subscriptionId"], json!(subscription));
+        if kind == "Platform" {
+            assert_eq!(frames[0]["target"], "PlatformsDeleted");
+            assert_eq!(frames[0]["arguments"][0], json!(hit));
+        } else {
+            assert_eq!(frames[0]["arguments"], json!([{"id":hit},"delete"]));
+        }
+        assert!(
+            invoke(&mut socket, "LeaveGroup", &subscription.to_string()).await["error"].is_null()
+        );
+    }
+    socket.close(None).await.unwrap();
+    cancel.cancel();
+    server.await.unwrap();
+    cleanup(f).await;
+}

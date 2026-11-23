@@ -17,13 +17,29 @@ export const PlatformComponents: RegularResourceComponents<PlatformView> = {
     addButtonUrl: '/platforms/add',
   },
 
-  Content: ({ items, actions, isLoading, isFiltered }) => {
-    return <Platforms items={items} actions={actions} isLoading={isLoading} isFiltered={isFiltered} />;
+  Content: ({ items, actions, isLoading, isFiltered, realtimeGroup }) => {
+    return (
+      <Platforms
+        groupName={realtimeGroup}
+        items={items}
+        actions={actions}
+        isLoading={isLoading}
+        isFiltered={isFiltered}
+      />
+    );
   },
   DropdownActions: PlatformDropdownActions,
   useData: function (): ResourceDataHookResult<any> {
-    const { platformsMessage, capabilities, isLoading, error, refetch, isFetching } = usePlatformsGroup();
-    return { error, refetch, isFetching, items: platformsMessage ?? EMPTY_PLATFORMS, isLoading, capabilities };
+    const { platformsMessage, capabilities, isLoading, error, refetch, isFetching, groupName } = usePlatformsGroup();
+    return {
+      realtimeGroup: groupName,
+      error,
+      refetch,
+      isFetching,
+      items: platformsMessage ?? EMPTY_PLATFORMS,
+      isLoading,
+      capabilities,
+    };
   },
   filterItems: (items, search) => {
     if (!search.trim()) return items;

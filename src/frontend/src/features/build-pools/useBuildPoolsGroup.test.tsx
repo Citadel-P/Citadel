@@ -1,5 +1,6 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
+import { collectionGroup } from '@/lib/collection-scope';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
@@ -44,17 +45,25 @@ it('does not poll and recovers missed health updates on reconnect, preserving fi
     expect(new URL(request.url).searchParams.getAll('tags')).toEqual(['production']);
     return HttpResponse.json({ pools: [pool], capabilities: {} });
   });
-  server.use(http.get('*/api/v1/buildAgentPools', read));
+  server.use(
+    http.get('*/api/v1/tags/_filter', ({ request }) => {
+      expect(new URL(request.url).searchParams.getAll('tags')).toEqual(['PRODUCTION', 'Production']);
+      return HttpResponse.json({ PRODUCTION: 'production', Production: 'production' });
+    }),
+    http.get('*/api/v1/buildAgentPools', read),
+  );
   const connection = new FakeRealtimeConnection();
   renderCitadel(<Probe />, {
-    route: '/build-pools?tags=production',
+    route: '/build-pools?tags=%20Production%20&TaGs=PRODUCTION',
     groups: {
       connectionFactory: () => connection,
       startConnection: (hub) => hub.start(),
     },
   });
   expect(await screen.findByText('Edge builder: Ready')).toBeVisible();
-  await waitFor(() => expect(connection.invoke).toHaveBeenCalledWith('JoinGroup', 'build-agent-pools'));
+  await waitFor(() =>
+    expect(connection.invoke).toHaveBeenCalledWith('JoinGroup', collectionGroup('build-agent-pools', ['production'])),
+  );
 
   await act(() => vi.advanceTimersByTimeAsync(90_000));
   expect(read).toHaveBeenCalledOnce();

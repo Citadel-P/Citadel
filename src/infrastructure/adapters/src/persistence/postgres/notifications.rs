@@ -50,6 +50,7 @@ fn decode(channel: &str, payload: &str) -> Option<RuntimeNotification> {
                     ConnectionResync
                 }),
         ),
+        super::tags::links::USAGE_CHANGED_CHANNEL => Some(TagUsageChanged),
         "citadel_resource_recovery" => match payload {
             "backup" => Some(BackupRecovery),
             "git" => Some(GitRecovery),

@@ -453,7 +453,31 @@ impl ApplicationGroupReader {
             | Topic::DockerDaemon(..) => Platform,
             Topic::Deployment(..) | Topic::Deployments => Deployment,
             Topic::Stack(..) | Topic::Stacks | Topic::StackInfo(..) => Stack,
-            Topic::SwarmService(..) | Topic::SwarmServices(..) => SwarmService,
+            Topic::ManagedSwarmServices | Topic::SwarmService(..) | Topic::SwarmServices(..) => {
+                SwarmService
+            }
+            Topic::Registries => {
+                let resources = self
+                    .registries
+                    .list_registries(
+                        actor,
+                        admin,
+                        citadel_registries::RegistryListFilter::Catalog {
+                            include_disabled: g.include_disabled,
+                            tag_names: &g.tags,
+                        },
+                    )
+                    .await
+                    .map_err(failure)?;
+                let views = crate::api::resources::registries::views::authorized_registries(
+                    &self.identity,
+                    p,
+                    resources,
+                )
+                .await
+                .map_err(failure)?;
+                return rows("RegistryInfoUpdated", views, RowStyle::Update);
+            }
             Topic::GitRepo(..) | Topic::GitRepositories => GitRepository,
             Topic::Script(..) | Topic::Scripts | Topic::ScriptRuns(..) => Script,
             Topic::BackupRepository(..) | Topic::BackupRepositories => BackupRepository,
@@ -544,18 +568,20 @@ impl ApplicationGroupReader {
             Topic::ContainerInfo(..) => return self.container_info(p, g, e, lease).await,
             _ => id,
         };
-        self.permission_with_lease(
-            p,
-            kind,
-            permission_id,
-            matches!(
-                g.topic(),
-                Topic::BackupRestoreRun(..) | Topic::BackupRestoreRuns(..)
+        if !g.uses_row_authorization() {
+            self.permission_with_lease(
+                p,
+                kind,
+                permission_id,
+                matches!(
+                    g.topic(),
+                    Topic::BackupRestoreRun(..) | Topic::BackupRestoreRuns(..)
+                )
+                .then_some(SpecificPermission::Restore),
+                lease,
             )
-            .then_some(SpecificPermission::Restore),
-            lease,
-        )
-        .await?;
+            .await?;
+        }
         if e.is_none()
             && matches!(g.topic(), Topic::BackupRun(_) | Topic::BackupRestoreRun(_))
             && let (Some(lease), Some(owner)) = (lease, permission_id)
@@ -635,7 +661,12 @@ impl ApplicationGroupReader {
                     };
                     return event("PlatformStatsUpdated", payload);
                 }
-                if let Some(platform_id) = e.and_then(|e| e.platform_id) {
+                if let Some(platform_id) = e.and_then(|e| {
+                    e.platform_id.or_else(|| {
+                        (e.resource_type == "Platform" && !e.resource_id.is_nil())
+                            .then_some(e.resource_id)
+                    })
+                }) {
                     let allowed = match self
                         .permission_with_lease(p, Platform, Some(platform_id), None, lease)
                         .await
@@ -644,13 +675,18 @@ impl ApplicationGroupReader {
                         Err(RealtimeReadError::Authorization) => false,
                         Err(error) => return Err(error),
                     };
-                    let platform = if allowed {
+                    let platform = if !allowed {
+                        None
+                    } else if !g.tags.is_empty() {
+                        self.platforms
+                            .get_matching_platform(platform_id, &g.tags)
+                            .await
+                            .map_err(failure)?
+                    } else {
                         crate::realtime::shared_reads::platform(&self.platforms, platform_id, e)
                             .await
                             .map_err(failure)?
                             .into_owned()
-                    } else {
-                        None
                     };
                     return rows(
                         "PlatformUpdated",
@@ -664,7 +700,7 @@ impl ApplicationGroupReader {
                     self.platform_views(
                         p,
                         self.platforms
-                            .list_authorized(actor, admin, &[])
+                            .list_authorized(actor, admin, &g.tags)
                             .await
                             .map_err(failure)?,
                         lease,
@@ -950,7 +986,8 @@ impl ApplicationGroupReader {
                         actor,
                         admin,
                         &citadel_deployments::DeploymentFilter {
-                            platform_id: selection.platform,
+                            platform_id: g.platform_filter.or(selection.platform),
+                            tags: g.tags.clone(),
                             resource_ids: selection.owners,
                             container_ids: selection.references,
                             limit: Some(catalog_limit),
@@ -1014,7 +1051,8 @@ impl ApplicationGroupReader {
                         admin,
                         &citadel_stacks::StackFilter {
                             catalog: true,
-                            platform_id: selection.platform,
+                            platform_id: g.platform_filter.or(selection.platform),
+                            tags: g.tags.clone(),
                             resource_ids: selection.owners,
                             container_ids: selection.references,
                             limit: Some(catalog_limit),
@@ -1142,7 +1180,7 @@ impl ApplicationGroupReader {
                 .await;
                 rows("SwarmServiceInfoUpdated", vec![view], selection.style())
             }
-            Topic::SwarmServices(..) => {
+            Topic::SwarmServices(..) | Topic::ManagedSwarmServices => {
                 let selection = WorkloadSelection::new(e, "serviceIds");
                 let style = selection.style();
                 let resources = self
@@ -1151,7 +1189,8 @@ impl ApplicationGroupReader {
                         actor,
                         admin,
                         &citadel_swarm_services::SwarmServiceFilter {
-                            platform_id: id,
+                            platform_id: id.or(g.platform_filter).or(selection.platform),
+                            tags: g.tags.clone(),
                             resource_ids: selection.owners,
                             container_ids: selection.references,
                             limit: Some(catalog_limit),
@@ -1176,7 +1215,15 @@ impl ApplicationGroupReader {
                     Some(hint_deadline),
                 )
                 .await;
-                rows("SwarmServiceInfoUpdated", views, style)
+                rows(
+                    if matches!(g.topic(), Topic::ManagedSwarmServices) {
+                        "ManagedSwarmServiceUpdated"
+                    } else {
+                        "SwarmServiceInfoUpdated"
+                    },
+                    views,
+                    style,
+                )
             }
             Topic::GitRepositories => {
                 let owner = e.and_then(|event| event.changed_owner("GitRepository"));
@@ -1186,7 +1233,7 @@ impl ApplicationGroupReader {
                         &self.identity,
                         p,
                         self.git_repositories
-                            .list_git_repositories(actor, admin, &[], owner)
+                            .list_git_repositories(actor, admin, &g.tags, owner)
                             .await
                             .map_err(failure)?,
                     )
@@ -1237,7 +1284,7 @@ impl ApplicationGroupReader {
                     self.scripts.as_ref(),
                     p,
                     self.scripts
-                        .list(actor, admin, &[])
+                        .list(actor, admin, &g.tags)
                         .await
                         .map_err(failure)?,
                 )
@@ -1294,7 +1341,7 @@ impl ApplicationGroupReader {
                         &self.identity,
                         p,
                         self.backups
-                            .list_policies(actor, admin, owner)
+                            .list_policies(actor, admin, owner, &g.tags)
                             .await
                             .map_err(failure)?,
                     )
@@ -1368,14 +1415,17 @@ impl ApplicationGroupReader {
             Topic::BuildProjects
                 if let Some(project) = e.and_then(PublishedRuntimeEvent::changed_build_project) =>
             {
-                self.build_project_patch(p, project, lease).await
+                self.build_project_patch(p, project, &g.tags, lease).await
             }
             Topic::BuildProjects => rows(
                 "BuildProjectInfoUpdated",
                 crate::api::resources::builds::authorized::authorized_projects(
                     self.builds.as_ref(),
                     p,
-                    self.builds.list(actor, admin, &[]).await.map_err(failure)?,
+                    self.builds
+                        .list(actor, admin, &g.tags)
+                        .await
+                        .map_err(failure)?,
                 )
                 .await
                 .map_err(failure)?,
@@ -1402,7 +1452,7 @@ impl ApplicationGroupReader {
                     self.builds.as_ref(),
                     p,
                     self.builds
-                        .list_pools(actor, admin, &[])
+                        .list_pools(actor, admin, &g.tags)
                         .await
                         .map_err(failure)?,
                 )

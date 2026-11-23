@@ -57,7 +57,14 @@ async fn every_fixed_topic_obeys_commit_and_rollback() {
     let mut listener = super::super::listener(&pool, "citadel_notify_transaction_test")
         .await
         .unwrap();
-    let hub = DatabaseNotificationHub::new();
+    let usage_channel = citadel_adapters::persistence::postgres::tags::links::USAGE_CHANGED_CHANNEL;
+    listener.listen(usage_channel).await.unwrap();
+    let realtime = crate::realtime::RealtimeHub::new(
+        8,
+        std::sync::Arc::new(crate::metrics::Metrics::default()),
+    );
+    let mut catalogue = realtime.subscribe();
+    let hub = DatabaseNotificationHub::new().with_realtime(Some(realtime));
     let mut receivers = Vec::new();
     for signal in RuntimeSignal::ALL {
         listener.listen(signal.channel()).await.unwrap();
@@ -65,6 +72,28 @@ async fn every_fixed_topic_obeys_commit_and_rollback() {
     }
     let token = CancellationToken::new();
     let worker = tokio::spawn(hub.run(Box::new(listener), token.clone()));
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_notify($1, '')")
+        .bind(usage_channel)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.rollback().await.unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), catalogue.recv())
+            .await
+            .is_err()
+    );
+    sqlx::query("SELECT pg_notify($1, '')")
+        .bind(usage_channel)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let event = tokio::time::timeout(Duration::from_secs(3), catalogue.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(event.event_kind, "tagUsageChanged");
     for (signal, receiver) in RuntimeSignal::ALL.into_iter().zip(&mut receivers) {
         let mut tx = pool.begin().await.unwrap();
         sqlx::query("SELECT pg_notify($1, '')")

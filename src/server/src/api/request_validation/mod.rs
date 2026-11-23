@@ -2,7 +2,10 @@ use crate::api::error::ApiError;
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use std::error::Error;
 
+mod tag_filters;
 mod workload_query;
+
+pub(crate) use tag_filters::parse_tag_filters;
 
 pub(crate) use workload_query::WorkloadQuery;
 

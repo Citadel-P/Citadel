@@ -121,7 +121,15 @@ pub trait PlatformReader: Send + Sync {
     fn get_platform(
         &self,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<Option<PlatformDetails>, AuthorizedReadError>>;
+    ) -> BoxFuture<'_, Result<Option<PlatformDetails>, AuthorizedReadError>> {
+        self.get_matching_platform(id, &[])
+    }
+
+    fn get_matching_platform<'a>(
+        &'a self,
+        id: Uuid,
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Option<PlatformDetails>, AuthorizedReadError>>;
 
     fn swarm_summary(
         &self,

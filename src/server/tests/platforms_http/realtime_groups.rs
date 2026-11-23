@@ -1586,8 +1586,6 @@ async fn dotnet_group_permission_matrix_uses_current_database_permissions() {
     let groups = reader(&f);
     for name in [
         format!("containers:{}", f.platform_id),
-        "platforms".into(),
-        "deployments".into(),
         format!("activity:User:{}", principal.subject_id),
     ] {
         assert!(
@@ -1595,6 +1593,16 @@ async fn dotnet_group_permission_matrix_uses_current_database_permissions() {
                 .read(&principal, &Group::parse(&name).unwrap(), None)
                 .await
                 .is_err(),
+            "{name}"
+        );
+    }
+    for name in ["platforms", "deployments", "scripts"] {
+        let snapshot = groups
+            .read(&principal, &Group::parse(name).unwrap(), None)
+            .await
+            .unwrap();
+        assert!(
+            snapshot.rows.iter().all(|batch| batch.rows.is_empty()),
             "{name}"
         );
     }
@@ -1606,6 +1614,12 @@ async fn dotnet_group_permission_matrix_uses_current_database_permissions() {
         0,
     )
     .await;
+    let catalog = groups
+        .read(&principal, &Group::parse("platforms").unwrap(), None)
+        .await
+        .unwrap();
+    assert_eq!(catalog.rows[0].rows.len(), 1);
+    assert_eq!(catalog.rows[0].rows[0]["id"], json!(f.platform_id));
     let group = Group::parse(&format!("containers:{}", f.platform_id)).unwrap();
     let snapshot = groups.read(&principal, &group, None).await.unwrap();
     assert_eq!(snapshot.events[0].target, "ContainersInfoUpdated");
@@ -1689,6 +1703,7 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
             .unwrap();
     socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &f.administrator).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut socket).await["kind"], "subscribed");
+    tag_scopes::check_platform_scopes(&f, &mut socket, &hub).await;
     let group = format!("containers:{}", f.platform_id);
     assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
     let restricted = super::lookup::subject(&f).await;
@@ -1719,6 +1734,31 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
             .unwrap();
     second.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &restricted).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut second).await["kind"], "subscribed");
+    // Clearing a tag filter keeps the same resource-specific grant live.
+    let tag: String = sqlx::query_scalar("SELECT name FROM tags WHERE id=$1")
+        .bind(f.tag_id)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    let subscription = Uuid::now_v7();
+    let scope = json!([{"subscriptionId": subscription, "group": "platforms", "tags": [tag]}]);
+    assert!(invoke_args(&mut second, "JoinGroup", scope).await["error"].is_null());
+    assert_eq!(
+        receive(&mut second).await["target"],
+        "CollectionSnapshotStarted"
+    );
+    let tagged = receive(&mut second).await;
+    assert_eq!(tagged["subscriptionId"], json!(subscription));
+    assert_eq!(tagged["arguments"][0]["id"], json!(f.platform_id));
+    assert!(invoke(&mut second, "LeaveGroup", &subscription.to_string()).await["error"].is_null());
+    assert!(invoke(&mut second, "JoinGroup", "platforms").await["error"].is_null());
+    let unfiltered = receive(&mut second).await;
+    assert_eq!(unfiltered["target"], "PlatformUpdated");
+    assert_eq!(
+        unfiltered["arguments"][0]["id"],
+        tagged["arguments"][0]["id"]
+    );
+    assert!(invoke(&mut second, "LeaveGroup", "platforms").await["error"].is_null());
     assert!(invoke(&mut second, "JoinGroup", &group).await["error"].is_null());
     assert_eq!(
         receive(&mut second).await["target"],
@@ -2292,3 +2332,6 @@ async fn workload_capacity_is_reported_before_mapping_rows_beyond_the_bound() {
     ));
     cleanup(f).await;
 }
+
+#[path = "realtime_groups/tag_scopes.rs"]
+mod tag_scopes;

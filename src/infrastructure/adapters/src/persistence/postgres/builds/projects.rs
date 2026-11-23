@@ -133,8 +133,7 @@ impl PostgresBuildRepository {
                 &self.pool,
                 actor,
                 administrator,
-                ResourceType::Build,
-                "Build",
+                citadel_tags::TaggableResourceType::Build,
                 "buildprojects resource WHERE resource.archivedat IS NULL",
                 tags,
             )
@@ -155,16 +154,27 @@ impl PostgresBuildRepository {
     pub(super) fn get_impl<'a>(
         &'a self,
         id: Uuid,
+        tags: &'a [String],
     ) -> BoxFuture<'a, Result<BuildProject, BuildError>> {
         Box::pin(async move {
-            let value =
-                sqlx::query("SELECT * FROM buildprojects WHERE id=$1 AND archivedat IS NULL")
-                    .bind(id)
-                    .fetch_optional(&self.pool)
-                    .await
-                    .map_err(storage)?
-                    .ok_or(BuildError::NotFound)
-                    .and_then(map_project)?;
+            let predicate = if tags.is_empty() {
+                ""
+            } else {
+                crate::persistence::postgres::authorization::OWNER_TAG_FILTER
+            };
+            let sql = format!(
+                "SELECT * FROM buildprojects WHERE id=$1 AND archivedat IS NULL{predicate}"
+            );
+            let mut query = sqlx::query(sqlx::AssertSqlSafe(sql.as_str())).bind(id);
+            if !tags.is_empty() {
+                query = query.bind("Build").bind(tags);
+            }
+            let value = query
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(storage)?
+                .ok_or(BuildError::NotFound)
+                .and_then(map_project)?;
             enrich_projects(
                 &mut *self.pool.acquire().await.map_err(storage)?,
                 vec![value],

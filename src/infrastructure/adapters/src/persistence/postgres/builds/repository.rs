@@ -131,8 +131,12 @@ impl BuildRepository for PostgresBuildRepository {
         self.list_impl(actor, administrator, tags)
     }
 
-    fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildProject, BuildError>> {
-        self.get_impl(id)
+    fn get_matching_project<'a>(
+        &'a self,
+        id: Uuid,
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<BuildProject, BuildError>> {
+        self.get_impl(id, tags)
     }
 
     fn update<'a>(

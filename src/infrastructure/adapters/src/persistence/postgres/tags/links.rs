@@ -1,6 +1,21 @@
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
+pub const USAGE_CHANGED_CHANNEL: &str = "citadel_tag_usage";
+
+/// PostgreSQL delivers the hint at commit and coalesces identical hints within the transaction.
+pub(crate) async fn remove_for_deleted_resource(
+    tx: &mut Transaction<'_, Postgres>,
+    kind: citadel_tags::TaggableResourceType,
+    id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("WITH removed AS (DELETE FROM resourcetags WHERE resourcetype=$1 AND resourceid=$2 RETURNING 1)
+                 SELECT pg_notify($3, '') WHERE EXISTS (SELECT FROM removed)")
+        .bind(kind.as_database_str()).bind(id).bind(USAGE_CHANGED_CHANNEL)
+        .execute(&mut **tx).await?;
+    Ok(())
+}
+
 pub(crate) async fn insert(
     transaction: &mut Transaction<'_, Postgres>,
     resource_type: &str,

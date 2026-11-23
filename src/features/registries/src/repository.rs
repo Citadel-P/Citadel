@@ -17,7 +17,7 @@ pub enum RegistryMutationKind {
 pub enum RegistryListFilter<'a> {
     Catalog {
         include_disabled: bool,
-        tag_ids: &'a [Uuid],
+        tag_names: &'a [String],
     },
     Ids(&'a [Uuid]),
 }
@@ -25,7 +25,7 @@ pub enum RegistryListFilter<'a> {
 impl RegistryListFilter<'_> {
     pub const NON_DISABLED: Self = Self::Catalog {
         include_disabled: false,
-        tag_ids: &[],
+        tag_names: &[],
     };
 }
 

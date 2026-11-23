@@ -1,4 +1,5 @@
 //! Stacks HTTP routes, authorization and local request handling.
+use crate::api::mutation_notifications::affects_tag_usage;
 use crate::api::resource_access::collection_capabilities;
 use crate::{
     api::{
@@ -57,7 +58,7 @@ pub fn router(state: StacksHttpState) -> Router {
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<StacksHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list))
-        .normalized_routes(utoipa_axum::routes!(create))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(create)))
         .normalized_routes(utoipa_axum::routes!(delete))
         .normalized_routes(utoipa_axum::routes!(rename))
         .normalized_routes(utoipa_axum::routes!(apply))
@@ -74,7 +75,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<StacksHt
         .normalized_routes(utoipa_axum::routes!(duplicate_draft))
         .normalized_routes(utoipa_axum::routes!(releases))
         .normalized_routes(utoipa_axum::routes!(update))
-        .normalized_routes(utoipa_axum::routes!(update_metadata))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(update_metadata)))
         .normalized_routes(utoipa_axum::routes!(drift))
         .normalized_routes(utoipa_axum::routes!(update_drift_policy))
         .normalized_routes(utoipa_axum::routes!(reconcile))
@@ -1168,7 +1169,7 @@ async fn reconcile(
         (status = 200, description = "Success", body = StacksView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
-    params(("tags" = Option<Vec<String>>, Query), ("platformId" = Option<uuid::Uuid>, Query), ("catalog" = Option<bool>, Query, description = "Omit release configuration and include Git catalog metadata")),
+    params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names, case-insensitively. An unknown name matches no resources."), ("platformId" = Option<uuid::Uuid>, Query), ("catalog" = Option<bool>, Query, description = "Omit release configuration and include Git catalog metadata")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]

@@ -1,12 +1,13 @@
 #[test]
-fn platform_tags_accept_names_repeated_keys_and_ids() {
+fn platform_tags_accept_names_repeated_keys_and_uuid_shaped_names() {
     let id = uuid::Uuid::now_v7();
     assert_eq!(
-        super::parse_tag_filters(Some(&format!(
-            "TaGs=Prod%20%26%20Europe&tags=prod+%26+europe&tags=%20&tags={id}"
-        )))
-        .unwrap(),
-        vec!["Prod & Europe".to_owned(), id.to_string()]
+        super::parse_tag_filters(Some(&format!("TaGs=Prod%20%26%20Europe&tags={id}"))).unwrap(),
+        {
+            let mut names = vec!["Prod & Europe".to_owned(), id.to_string()];
+            names.sort();
+            names
+        }
     );
     assert!(super::parse_tag_filters(None).unwrap().is_empty());
     let query = (0..100)

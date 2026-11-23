@@ -1,4 +1,5 @@
 //! Deployments HTTP routes, authorization and local request handling.
+use crate::api::mutation_notifications::affects_tag_usage;
 use crate::api::resource_access::collection_capabilities;
 use crate::{
     api::{
@@ -54,18 +55,22 @@ pub fn router(state: DeploymentsHttpState) -> Router {
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<DeploymentsHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list_deployments))
-        .normalized_routes(utoipa_axum::routes!(create_deployment))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(create_deployment)))
         .normalized_routes(utoipa_axum::routes!(crate::api::routes::deployments::draft))
-        .normalized_routes(utoipa_axum::routes!(crate::api::routes::deployments::adopt))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(
+            crate::api::routes::deployments::adopt
+        )))
         .normalized_routes(utoipa_axum::routes!(apply_deployment))
-        .normalized_routes(utoipa_axum::routes!(delete_deployments))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(delete_deployments)))
         .normalized_routes(utoipa_axum::routes!(rename_deployment))
         .normalized_routes(utoipa_axum::routes!(get_deployment))
         .normalized_routes(utoipa_axum::routes!(check_deployment_updates))
         .normalized_routes(utoipa_axum::routes!(get_deployment_config))
         .normalized_routes(utoipa_axum::routes!(get_deployment_duplicate_draft))
         .normalized_routes(utoipa_axum::routes!(update_deployment))
-        .normalized_routes(utoipa_axum::routes!(update_deployment_metadata))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(
+            update_deployment_metadata
+        )))
 }
 
 #[utoipa::path(
@@ -188,7 +193,7 @@ fn progress_response(
         (status = 200, description = "Success", body = DeploymentsView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
-    params(("tags" = Option<Vec<String>>, Query), ("platformId" = Option<uuid::Uuid>, Query)),
+    params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names, case-insensitively. An unknown name matches no resources."), ("platformId" = Option<uuid::Uuid>, Query)),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -850,7 +855,7 @@ mod tests {
         let parsed =
             WorkloadQuery::parse(Some(&format!("tags=prod&tags=blue&platformId={platform}")))
                 .unwrap();
-        assert_eq!(parsed.tags, ["prod", "blue"]);
+        assert_eq!(parsed.tags, ["blue", "prod"]);
         assert_eq!(parsed.platform_id, Some(platform));
     }
 
