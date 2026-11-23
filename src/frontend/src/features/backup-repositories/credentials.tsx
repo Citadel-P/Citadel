@@ -35,7 +35,7 @@ export function RepositoryCredentials({
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const spec = repository.spec;
-  if (spec.$type !== 'S3Compatible') return null;
+  if (spec.$type !== 'S3Compatible' || !repository.capabilities?.canWrite) return null;
   const current: Credentials = {
     accessKey: spec.accessKeySecretId,
     secretKey: spec.secretKeySecretId,
@@ -44,7 +44,7 @@ export function RepositoryCredentials({
   const currentKey = JSON.stringify(current);
   const values = draft?.values ?? current;
   const { accessKey, secretKey, sessionToken } = values;
-  const permitted = repository.capabilities?.canWrite && repository.capabilities?.canExecute;
+  const permitted = repository.capabilities.canExecute;
   const changed = JSON.stringify(values) !== currentKey;
   const stale = changed && draft !== null && draft.base !== currentKey;
   const blocked = disabled || !permitted || mutation.isPending;
@@ -120,7 +120,7 @@ export function RepositoryCredentials({
                 value={accessKey}
                 onChange={(value) => select({ accessKey: value ?? '' })}
                 disabled={blocked || stale}
-                targetResourceId={repository.id}
+                repository={repository}
               />
             </div>
             <div role="group" aria-label="Secret key secret" className="min-w-0 space-y-2">
@@ -129,7 +129,7 @@ export function RepositoryCredentials({
                 value={secretKey}
                 onChange={(value) => select({ secretKey: value ?? '' })}
                 disabled={blocked || stale}
-                targetResourceId={repository.id}
+                repository={repository}
               />
             </div>
             <div role="group" aria-label="Session token secret" className="min-w-0 space-y-2 sm:col-span-2">
@@ -141,7 +141,7 @@ export function RepositoryCredentials({
                 onChange={(value) => select({ sessionToken: value })}
                 allowNone
                 disabled={blocked || stale}
-                targetResourceId={repository.id}
+                repository={repository}
               />
               <p className="text-xs text-muted-foreground">Only needed for temporary storage credentials.</p>
             </div>

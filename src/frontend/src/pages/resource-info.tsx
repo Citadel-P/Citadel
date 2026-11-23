@@ -21,7 +21,7 @@ export const ResourceInfoView = <T extends { id: string; name: string }>({
   if (error && !canShowCachedResource(error))
     return (
       <AppContent>
-        <ResourceReadError error={error} refetch={refetch} isFetching={isFetching} />
+        <ResourceReadError page error={error} refetch={refetch} isFetching={isFetching} />
       </AppContent>
     );
   const Header = Components.Header;
@@ -31,11 +31,13 @@ export const ResourceInfoView = <T extends { id: string; name: string }>({
     <div className="flex-col justify-between relative">
       <AppContent>
         <div className="flex flex-col gap-(--section-gap)">
-          {!!error && resource && <ResourceReadError error={error} refetch={refetch} isFetching={isFetching} stale />}
+          {!!error && resource && (
+            <ResourceReadError page error={error} refetch={refetch} isFetching={isFetching} stale />
+          )}
           {isLoading && !resource ? (
             <ResourceSkeleton variant="detail" embedded />
           ) : !resource ? (
-            <ResourceReadError error={error ?? { status: 404 }} refetch={refetch} isFetching={isFetching} />
+            <ResourceReadError page error={error ?? { status: 404 }} refetch={refetch} isFetching={isFetching} />
           ) : (
             resource && (
               <>

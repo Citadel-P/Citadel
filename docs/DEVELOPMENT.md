@@ -139,7 +139,11 @@ client/SDK generation. A running frontend task is not a substitute for verificat
 
 Use the Registry feature's queries, list, actions and form as a reference. Register
 screens through the resource factories, reuse FormShell/FormBuilder and shared
-selectors, and follow existing React Query/realtime invalidation.
+selectors, and follow existing React Query/realtime invalidation. Add forms use
+the resource type’s Write grant from the current profile. Docker and Swarm
+inventory forms use the selected platform’s Write grant. Declare an override at
+form registration only when the create endpoint uses a different permission type
+or requires an administrator.
 
 API calls use named argument objects; path/query/data parameters remain distinct.
 Transport tokens and abort signals are not cache-key data. Preserve required-input

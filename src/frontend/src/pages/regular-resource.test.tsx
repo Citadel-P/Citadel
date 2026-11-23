@@ -90,9 +90,14 @@ describe('Resource list filters', () => {
 });
 
 describe('resource read failures', () => {
-  it.each([403, 404, 503])('shows a retryable failure instead of an empty table for HTTP %s', async (status) => {
+  it.each([
+    [403, 'Access denied'],
+    [404, 'We couldn’t find the page'],
+    [500, 'Couldn’t load this page'],
+    [503, 'Unable to load this resource'],
+  ] as const)('shows a retryable failure instead of an empty table for HTTP %s', async (status, message) => {
     const refetch = vi.fn();
-    renderCitadel(
+    const { user } = renderCitadel(
       <View
         config={{
           ...components,
@@ -100,38 +105,63 @@ describe('resource read failures', () => {
         }}
       />,
     );
-    expect(screen.getByRole('alert')).toHaveTextContent('Unable to load this resource');
+    expect(screen.getByRole('alert')).toHaveTextContent(message);
+    if (status === 500) expect(screen.getByRole('img', { name: 'Error 500' })).toBeVisible();
+    if (status === 503) expect(screen.queryByRole('link', { name: 'Go to homepage' })).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Deployment overview' })).not.toBeInTheDocument();
-    await (
-      await import('@testing-library/user-event')
-    ).default
-      .setup()
-      .click(screen.getByRole('button', { name: 'Retry' }));
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(refetch).toHaveBeenCalledOnce();
   });
 
-  it('keeps cached rows visible during a failed refresh and recovers after retry', async () => {
-    const refetch = vi.fn();
-    const config = {
-      ...components,
-      useData: () => ({
-        items: rows,
-        capabilities: undefined,
-        isLoading: false,
-        error: new TypeError('Failed to fetch'),
-        refetch,
-      }),
-    };
-    const { user, rerender } = renderCitadel(<View config={config} />);
-    expect(screen.getByText('api-one')).toBeVisible();
-    expect(screen.getByRole('alert')).toHaveTextContent('It may be out of date');
-    await user.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(refetch).toHaveBeenCalledOnce();
-    rerender(<View />);
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.getByText('api-one')).toBeVisible();
+  const maintenance = { status: 503, error: { type: 'maintenance', detail: 'New work is temporarily unavailable.' } };
+
+  it('shows the maintenance detail when an update blocks the page', () => {
+    renderCitadel(
+      <View
+        config={{
+          ...components,
+          useData: () => ({
+            items: [],
+            capabilities: undefined,
+            isLoading: false,
+            error: maintenance,
+            refetch: vi.fn(),
+          }),
+        }}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Update maintenance' })).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent(maintenance.error.detail);
+    expect(screen.getByRole('link', { name: 'Go to homepage' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
   });
+
+  it.each([new TypeError('Failed to fetch'), { status: 500 }, maintenance])(
+    'keeps cached rows visible and retries after %j',
+    async (error) => {
+      const refetch = vi.fn();
+      const config = {
+        ...components,
+        useData: () => ({
+          items: rows,
+          capabilities: undefined,
+          isLoading: false,
+          error,
+          refetch,
+        }),
+      };
+      const { user, rerender } = renderCitadel(<View config={config} />);
+      expect(screen.getByText('api-one')).toBeVisible();
+      expect(screen.getByRole('alert')).toHaveTextContent('It may be out of date');
+      expect(screen.queryByRole('link', { name: 'Go to homepage' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(refetch).toHaveBeenCalledOnce();
+      rerender(<View />);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByText('api-one')).toBeVisible();
+    },
+  );
 });
 
 it('does not show cached inventory after access is revoked', () => {

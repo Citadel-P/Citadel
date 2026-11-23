@@ -110,21 +110,46 @@ it('disables saving when an edit is reverted and retains input after a conflict'
   expect(name).toHaveValue('Production backups duplicate');
 });
 
-it('explains read-only access and hides saving', async () => {
+it.each([BackupRepositoryStatus.Ready, BackupRepositoryStatus.Uninitialized])(
+  'opens a %s repository for a viewer without requesting secret definitions',
+  async (status) => {
+    const listSecrets = vi.fn(() => new HttpResponse(null, { status: 403 }));
+    server.use(http.get('*/api/v1/resourceBindings/secrets', listSecrets));
+    vi.mocked(useBackupRepositoriesGroup).mockReturnValue({
+      repositories: [{ ...repository, status, capabilities: { canRead: true, canWrite: false, canExecute: false } }],
+      isLoading: false,
+      capabilities: { canWrite: false },
+    } as ReturnType<typeof useBackupRepositoriesGroup>);
+    const { user } = renderCitadel(<BackupRepositoriesSection />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    await user.click(screen.getByRole('menuitem', { name: 'View' }));
+    const dialog = within(screen.getByRole('dialog'));
+    expect(dialog.getByText('You have read-only access to this repository.')).toBeVisible();
+    expect(dialog.getByRole('textbox', { name: 'Name' })).toBeDisabled();
+    expect(dialog.getAllByText('Configured')).toHaveLength(3);
+    expect(dialog.queryByText('Update S3 credentials')).not.toBeInTheDocument();
+    expect(dialog.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
+    await user.click(dialog.getByText('Maintenance', { exact: true }));
+    expect(dialog.getByRole('button', { name: /Validate/ })).toBeDisabled();
+    expect(listSecrets).not.toHaveBeenCalled();
+  },
+);
+
+it('hides previously loaded secret names if repository write access is lost', async () => {
+  const { user, rerender } = renderCitadel(<BackupRepositoriesSection />);
+  await user.click(screen.getByText('Production backups'));
+  const dialog = within(screen.getByRole('dialog'));
+  expect(await dialog.findByText('Restic password')).toBeVisible();
+
   vi.mocked(useBackupRepositoriesGroup).mockReturnValue({
-    repositories: [{ ...repository, capabilities: { ...repository.capabilities, canWrite: false } }],
+    repositories: [{ ...repository, capabilities: null }],
     isLoading: false,
     capabilities: { canWrite: false },
   } as ReturnType<typeof useBackupRepositoriesGroup>);
-  const { user } = renderCitadel(<BackupRepositoriesSection />);
-  await user.click(screen.getByText('Production backups'));
-  const dialog = within(screen.getByRole('dialog'));
-  expect(dialog.getByRole('status')).toHaveTextContent('Write permission is required');
-  expect(dialog.getByRole('textbox', { name: 'Name' })).toBeDisabled();
-  expect(dialog.queryByRole('textbox', { name: /Description/ })).not.toBeInTheDocument();
+  rerender(<BackupRepositoriesSection />);
+  expect(dialog.queryByText('Restic password')).not.toBeInTheDocument();
+  expect(dialog.getAllByText('Configured')).toHaveLength(3);
   expect(dialog.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
-  await user.click(dialog.getByText('Maintenance', { exact: true }));
-  expect(dialog.getByRole('button', { name: /Validate/ })).toBeDisabled();
 });
 
 it('omits unchanged normalized fields from patches', () => {

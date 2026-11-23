@@ -1,5 +1,8 @@
 import { Suspense } from 'react';
-import { render, screen } from '@testing-library/react';
+import { http, HttpResponse } from 'msw';
+import { renderCitadel } from '@/test/render-citadel';
+import { server } from '@/test/server';
+import { screen } from '@testing-library/react';
 import { ResourcePages, ResourceFormPages } from './index';
 
 const imports = vi.hoisted(() => ({ platforms: 0, stacks: 0, form: 0 }));
@@ -27,7 +30,12 @@ it('loads only the selected resource screen and defers its form until opened', a
   const Platforms = ResourcePages.Platform!;
   const Stacks = ResourcePages.Stack!;
   const Form = ResourceFormPages.Stack!;
-  const view = render(
+  server.use(
+    http.get('http://localhost/api/v1/profile', () =>
+      HttpResponse.json({ authorization: { writableResourceTypes: ['Stack'] } }),
+    ),
+  );
+  const view = renderCitadel(
     <Suspense fallback="Loading">
       <Platforms type="Platform" />
     </Suspense>,

@@ -7282,9 +7282,16 @@
           },
           "tags": {
             "$ref": "#/components/schemas/ResourceCapabilitiesView"
+          },
+          "writableResourceTypes": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceType"
+            },
+            "type": "array"
           }
         },
         "required": [
+          "writableResourceTypes",
           "isAdministrator",
           "alertRules",
           "bindings",

@@ -1,3 +1,4 @@
+import { isMaintenanceError, requestErrorMessage } from '@/lib/request-error';
 import { useApiClientContext } from '@/api/api-client-context';
 import { resourceQueryKey } from '@/api/dispatch';
 import { resourceReadOptions } from '@/api/read-options';
@@ -66,6 +67,8 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
 }
 
 function getSetupError(error: unknown): SetupError {
+  if (isMaintenanceError(error))
+    return { maintenance: true, title: 'Update maintenance', message: requestErrorMessage(error) };
   if (isHttpResponse(error)) {
     return {
       title: 'Citadel unavailable',

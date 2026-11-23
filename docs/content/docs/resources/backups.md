@@ -47,7 +47,8 @@ S3 credentials alone cannot decrypt the snapshots.
 
 ### Edit a repository
 
-Open a repository from **Backups** to edit its name.
+Open a repository from **Backups** to see its destination. With read-only access,
+secret fields show **Configured** or **None**.
 Editing requires **Write** permission on that repository. Names must be unique
 regardless of capitalization. **Save changes** becomes available when a value changes.
 

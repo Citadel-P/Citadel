@@ -16,7 +16,6 @@ import {
   BackupExecutionLocation,
   PlatformView,
   ResourceControlState,
-  ResourceType,
 } from '@/api/generated/api.types';
 import { IntegrationAddCard } from '@/components/custom/common';
 import { FieldInput, FieldSwitch, ItemSelector } from '@/components/custom/form-builder';
@@ -31,7 +30,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { useMutate, useRead } from '@/lib/hooks';
+import { useMutate } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import {
   CheckCircle2,
@@ -56,6 +55,7 @@ import {
   RepositoryTypeSelector,
   SecretSelector,
 } from '../backup-repositories/form/form';
+import { useBackupRepositorySecrets } from '../backup-repositories/hooks/useBackupRepositorySecrets';
 import { useBackupRepositoriesGroup } from '../backup-repositories/hooks/useBackupRepositoriesGroup';
 
 const EMPTY_REPOSITORIES: BackupRepositoryView[] = [];
@@ -154,7 +154,7 @@ function RepositoryDialog({
   const operating =
     updatingCredentials || !!pendingOperation || editing?.controlState === ResourceControlState.Processing;
   const selectedType = (input.spec?.$type ?? BackupRepositoryType.FileSystem) as BackupRepositoryType;
-  const formDisabled = editing ? !(editing.capabilities?.canWrite ?? true) : false;
+  const formDisabled = !!editing && editing.capabilities?.canWrite !== true;
   const ready = editing?.status === BackupRepositoryStatus.Ready;
   const specDisabled = formDisabled || ready;
   const patch = editing
@@ -220,17 +220,14 @@ function RepositoryDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {editing
-              ? 'Manage repository details, storage and maintenance.'
+              ? formDisabled
+                ? 'You have read-only access to this repository.'
+                : 'Manage repository details, storage and maintenance.'
               : 'Create an encrypted destination that backup policies can use.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
-          {formDisabled && (
-            <p role="status" className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-              You have read-only access to this repository. Write permission is required to make changes.
-            </p>
-          )}
           <section aria-label="Repository details" className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold">Details</h3>
@@ -271,7 +268,7 @@ function RepositoryDialog({
                 <SecretSelector
                   value={input.passwordSecretId}
                   disabled={!!editing || formDisabled}
-                  targetResourceId={editing?.id}
+                  repository={editing}
                   onChange={(passwordSecretId) =>
                     setInput((current) => ({
                       ...current,
@@ -422,7 +419,7 @@ function RepositoryDialog({
                       <SecretSelector
                         value={s3Spec.accessKeySecretId}
                         disabled={specDisabled}
-                        targetResourceId={editing?.id}
+                        repository={editing}
                         onChange={(accessKeySecretId) => setSpec({ accessKeySecretId: accessKeySecretId ?? '' })}
                       />
                     </div>
@@ -431,7 +428,7 @@ function RepositoryDialog({
                       <SecretSelector
                         value={s3Spec.secretKeySecretId}
                         disabled={specDisabled}
-                        targetResourceId={editing?.id}
+                        repository={editing}
                         onChange={(secretKeySecretId) => setSpec({ secretKeySecretId: secretKeySecretId ?? '' })}
                       />
                     </div>
@@ -443,7 +440,7 @@ function RepositoryDialog({
                       value={s3Spec.sessionTokenSecretId}
                       allowNone
                       disabled={specDisabled}
-                      targetResourceId={editing?.id}
+                      repository={editing}
                       onChange={(sessionTokenSecretId) => setSpec({ sessionTokenSecretId })}
                     />
                   </div>
@@ -544,14 +541,12 @@ function RepositoryDialog({
 }
 
 function ReadyRepositoryDetails({ repository }: { repository: BackupRepositoryView }) {
-  const { data, isLoading } = useRead('listSecretDefinitions', {
-    query: { targetResourceType: ResourceType.BackupRepository, targetResourceId: repository.id },
-  });
-  const secretName = (id?: string | null) =>
-    !id
-      ? 'None'
-      : (data?.data.secrets.find((secret) => secret.id === id)?.name ??
-        (isLoading ? 'Loading…' : 'Stored secret unavailable'));
+  const { canList, secrets, isLoading } = useBackupRepositorySecrets(repository);
+  const secretName = (id?: string | null) => {
+    if (!id) return 'None';
+    if (!canList) return 'Configured';
+    return secrets.find((secret) => secret.id === id)?.name ?? (isLoading ? 'Loading…' : 'Stored secret unavailable');
+  };
   const spec = repository.spec;
   const fields: [string, string][] =
     spec.$type === 'S3Compatible'

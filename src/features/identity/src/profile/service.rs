@@ -356,6 +356,7 @@ impl ProfileService {
                 oidc_provider_name: record.oidc_provider_name,
             },
             authorization: CurrentProfileAuthorizationDetails {
+                writable_resource_types: authorization.writable_resource_types(),
                 is_administrator: principal.is_administrator(),
                 alert_rules: combined_capabilities(
                     &authorization,

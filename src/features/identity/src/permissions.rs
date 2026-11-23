@@ -33,6 +33,14 @@ pub struct AuthorizationSnapshot {
 
 impl AuthorizationSnapshot {
     #[must_use]
+    pub fn writable_resource_types(&self) -> Vec<ResourceType> {
+        ResourceType::ALL
+            .into_iter()
+            .filter(|resource| self.permits(*resource, PermissionLevel::Write, None))
+            .collect()
+    }
+
+    #[must_use]
     pub fn permits(
         &self,
         resource_type: ResourceType,

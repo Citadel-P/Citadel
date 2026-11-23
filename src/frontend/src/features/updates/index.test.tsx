@@ -275,7 +275,7 @@ it('keeps restricted reads blocked until a failed profile check is retried succe
     }),
   );
   const { user } = renderCitadel(<UpdatesPage />, { route: '/updates' });
-  expect(await screen.findByRole('alert')).toHaveTextContent('Could not verify administrator access.');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t load this page');
   expect(read).not.toHaveBeenCalled();
   server.use(
     http.get('http://localhost/api/v1/profile', () => HttpResponse.json({ authorization: { isAdministrator: true } })),
