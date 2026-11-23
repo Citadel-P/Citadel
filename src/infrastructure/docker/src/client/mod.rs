@@ -9,6 +9,8 @@ pub mod runtime;
 mod storage_usage;
 mod transport;
 mod volume_content_policy;
+mod volume_events;
+mod volume_observations;
 pub use endpoint::DockerEndpoint;
 
 mod finite;

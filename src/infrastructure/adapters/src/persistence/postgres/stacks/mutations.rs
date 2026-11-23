@@ -64,7 +64,7 @@ impl PostgresStackRepository {
 impl PostgresStackRepository {
     pub(super) fn record_drift_impl<'a>(
         &'a self,
-        expected: &'a citadel_stacks::Stack,
+        expected: &'a citadel_stacks::StackDriftContext,
         status: StackReleaseStatus,
         info: ActivityEventInfo,
     ) -> BoxFuture<'a, Result<bool, StackError>> {
@@ -76,27 +76,16 @@ impl PostgresStackRepository {
         &self,
         after: Option<Uuid>,
         limit: i64,
-    ) -> BoxFuture<'_, Result<Vec<AuthorizedResource<citadel_stacks::Stack>>, StackError>> {
+    ) -> BoxFuture<'_, Result<Vec<citadel_stacks::StackDriftContext>, StackError>> {
         Box::pin(async move {
-            let sql = format!(
-                r#"{AUTHORIZED_CTES}{PROJECTION}
-WHERE s.controlstate='Idle'
-  AND r.status IN ('Healthy','Degraded')
-  AND COALESCE(s.driftpolicy->>'Mode','Disabled') <> 'Disabled'
-  AND ($3::uuid IS NULL OR s.id > $3)
-ORDER BY s.id
-LIMIT $4"#
-            );
-            sqlx::query(AssertSqlSafe(sql))
-                .bind(Uuid::nil())
-                .bind(true)
+            sqlx::query(include_str!("drift_candidates.sql"))
                 .bind(after)
                 .bind(limit)
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?
                 .into_iter()
-                .map(map_stack)
+                .map(drift::context)
                 .collect()
         })
     }

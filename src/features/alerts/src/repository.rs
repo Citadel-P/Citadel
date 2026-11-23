@@ -87,6 +87,19 @@ pub trait AlertRepository: Send + Sync {
         &'a self,
         observation: &'a AlertObservation,
     ) -> BoxFuture<'a, Result<Option<AlertEvent>, AlertError>>;
+
+    /// Healthy observations from a single bounded Stack monitor page.
+    fn reset_stack_drift<'a>(
+        &'a self,
+        observations: &'a [AlertObservation],
+    ) -> BoxFuture<'a, Result<(), AlertError>> {
+        Box::pin(async move {
+            for observation in observations {
+                self.process_event(observation).await?;
+            }
+            Ok(())
+        })
+    }
     fn claim_delivery(
         &self,
         owner: Uuid,

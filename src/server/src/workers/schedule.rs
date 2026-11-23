@@ -1,4 +1,4 @@
-//! Noncritical recurring work starts after one period plus a stable subsecond offset.
+//! Observed timers for fixed-period work and independent recovery deadlines.
 use std::time::Duration;
 
 pub(crate) fn startup_offset(name: &str) -> Duration {
@@ -9,7 +9,27 @@ pub(crate) fn startup_offset(name: &str) -> Duration {
 }
 
 pub(crate) fn interval(name: &str, period: Duration) -> ObservedInterval {
-    let first = tokio::time::Instant::now() + period + startup_offset(name);
+    observed_interval(period, period + startup_offset(name))
+}
+
+/// Spread independent sweeps across their first period. Subsequent ticks and
+/// explicit completion-relative rests retain the worker's normal cadence.
+pub(crate) fn phased_interval(name: &str, period: Duration) -> ObservedInterval {
+    observed_interval(period, first_phase(name, period))
+}
+
+pub(super) fn first_phase(name: &str, period: Duration) -> Duration {
+    let grace = period / 10;
+    let hash = name.bytes().fold(0xcbf29ce484222325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+    });
+    let window_ms = (period - grace).as_millis();
+    let offset_ms = u128::from(hash) % window_ms.max(1);
+    grace + Duration::from_millis(offset_ms as u64)
+}
+
+fn observed_interval(period: Duration, first_delay: Duration) -> ObservedInterval {
+    let first = tokio::time::Instant::now() + first_delay;
     let mut tick = tokio::time::interval_at(first, period);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let job = citadel_runtime::jobs::JobHandle::current();
@@ -59,6 +79,35 @@ impl ObservedInterval {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test(start_paused = true)]
+    async fn heavy_sweeps_have_distinct_first_deadlines_and_keep_their_cadence() {
+        let start = tokio::time::Instant::now();
+        let period = Duration::from_secs(300);
+        let mut phases = [
+            "statistics-compaction",
+            "stack-drift",
+            "job-history-maintenance",
+            "lifecycle-deployments",
+        ]
+        .map(|name| phased_interval(name, period).next_deadline().unwrap() - start);
+        phases.sort();
+        assert!(phases[0] >= Duration::from_secs(30) && phases[3] <= period);
+        assert!(
+            phases
+                .windows(2)
+                .all(|w| w[1] - w[0] >= Duration::from_secs(45))
+        );
+        let mut timer = phased_interval("statistics-compaction", period);
+        let first = timer.tick().await;
+        assert_eq!(timer.tick().await - first, period);
+        for delay in [60, 300] {
+            tokio::time::advance(Duration::from_secs(7)).await;
+            let completed = tokio::time::Instant::now();
+            timer.reset_after(Duration::from_secs(delay));
+            assert_eq!(timer.tick().await - completed, Duration::from_secs(delay));
+        }
+    }
+
     #[tokio::test(start_paused = true)]
     async fn first_expensive_iterations_are_delayed_and_staggered() {
         let now = tokio::time::Instant::now();

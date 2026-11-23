@@ -165,7 +165,11 @@ async fn maintenance_is_delayed_bounded_cancellable_and_notifies_only_after_comm
             "Maintenance",
             super::run_maintenance(store.clone(), source.clone(), cancel.clone()),
         );
-        tokio::time::sleep(Duration::from_secs(299)).await;
+        let first = crate::workers::schedule::first_phase(
+            "job-history-maintenance",
+            Duration::from_secs(300),
+        );
+        tokio::time::sleep(first - Duration::from_secs(1)).await;
         assert_eq!(store.calls.load(Ordering::SeqCst), 0);
         tokio::time::sleep(Duration::from_secs(309)).await;
         let job = catalog

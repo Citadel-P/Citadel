@@ -142,7 +142,7 @@ impl citadel_platforms::VolumeObservationPort for DockerClient {
             let (value, containers) = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => return Err(cancelled_error()),
-                result = async { tokio::try_join!(DockerClient::inspect_volume(self, name), self.volume_containers(name)) } => result.map_err(normalize_docker_error)?,
+                result = self.volume_details(name) => result.map_err(normalize_docker_error)?,
             };
             let mut volume = map_volume(value);
             volume.in_use |= !containers.is_empty();
@@ -420,7 +420,7 @@ fn map_network(value: DockerNetwork) -> RuntimeNetworkSummary {
     }
 }
 
-pub(super) fn map_volume(value: DockerVolume) -> RuntimeVolumeSummary {
+pub fn map_volume(value: DockerVolume) -> RuntimeVolumeSummary {
     RuntimeVolumeSummary {
         is_system: value.is_system,
         content_access_allowed: value.content_access_allowed,

@@ -269,7 +269,8 @@ pub(crate) async fn deployment_catch_up(
     store: Arc<dyn PlatformLifecycleStore>,
     realtime: Option<RealtimeHub>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut ticker = crate::workers::schedule::interval("lifecycle-deployments", DEPLOYMENT_SAFETY);
+    let mut ticker =
+        crate::workers::schedule::phased_interval("lifecycle-deployments", DEPLOYMENT_SAFETY);
     loop {
         tokio::select! { biased; () = cancel.cancelled() => return Ok(()), _ = ticker.tick() => {} }
         for target in targets.snapshot().await.iter() {

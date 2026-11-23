@@ -18,7 +18,8 @@ impl ActiveWake {
     pub fn new(signals: watch::Receiver<()>) -> Self {
         Self {
             signals,
-            ticker: super::schedule::interval("service-observer", FALLBACK).without_observation(),
+            ticker: super::schedule::phased_interval("service-observer", FALLBACK)
+                .without_observation(),
             active: false,
             startup: true,
             closed: false,
@@ -74,7 +75,7 @@ impl RecoveryWake {
     pub fn new(name: &str, signals: watch::Receiver<()>, delay: Duration) -> Self {
         Self {
             signals,
-            ticker: super::schedule::interval(name, FALLBACK).without_observation(),
+            ticker: super::schedule::phased_interval(name, FALLBACK).without_observation(),
             delay,
             pending: None,
             startup: true,
@@ -153,7 +154,7 @@ mod tests {
         assert_eq!(Instant::now() - start, Duration::from_secs(5));
         wake.active = false;
         assert!(wake.next(&token).await);
-        assert!(Instant::now() >= start + FALLBACK);
+        assert!((start + FALLBACK / 10..=start + FALLBACK).contains(&Instant::now()));
         token.cancel();
         assert!(!wake.next(&token).await);
     }
@@ -168,8 +169,8 @@ mod tests {
         assert_eq!(Instant::now(), start);
         // This is also the recovery path when a committed notification is lost.
         assert!(wake.next(&token).await);
-        assert!(Instant::now() >= start + FALLBACK);
-        assert!(Instant::now() < start + FALLBACK + Duration::from_secs(1));
+        assert!((start + FALLBACK / 10..=start + FALLBACK).contains(&Instant::now()));
+        assert!(Instant::now() <= start + FALLBACK);
         token.cancel();
         assert!(!wake.next(&token).await);
     }
@@ -188,7 +189,7 @@ mod tests {
         assert_eq!(Instant::now() - start, Duration::from_secs(65));
         drop(sender);
         assert!(wake.next(&token).await);
-        assert!(Instant::now() >= start + FALLBACK);
+        assert!((start + FALLBACK / 10..=start + FALLBACK).contains(&Instant::now()));
     }
 
     #[tokio::test(start_paused = true)]
@@ -200,6 +201,6 @@ mod tests {
         sender.send_modify(|_| {});
         let start = Instant::now();
         assert!(wake.next(&token).await);
-        assert!(Instant::now() < start + FALLBACK + Duration::from_secs(1));
+        assert!(Instant::now() <= start + FALLBACK);
     }
 }

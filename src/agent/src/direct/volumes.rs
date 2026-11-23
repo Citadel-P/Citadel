@@ -65,11 +65,11 @@ impl volume_service_server::VolumeService for Runtime {
                     .map_err(docker_error)?,
             )));
         }
-        let (value, containers) = tokio::try_join!(
-            self.docker.inspect_volume(&name),
-            self.docker.volume_containers(&name)
-        )
-        .map_err(docker_error)?;
+        let (value, containers) = self
+            .docker
+            .volume_details(&name)
+            .await
+            .map_err(docker_error)?;
         let mut result = volume(value);
         result.in_use |= !containers.is_empty();
         result.containers = containers

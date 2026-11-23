@@ -37,6 +37,19 @@ pub trait StackRuntime: Send + Sync {
         orchestration: StackOrchestrationMode,
         cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackRuntimeSnapshot, StackError>>;
+    /// An atomic observation of multiple Compose projects on one daemon. An
+    /// unavailable optimization falls back to fresh per-project inspection.
+    fn compose_snapshots<'a>(
+        &'a self,
+        _platform: Uuid,
+        _projects: &'a std::collections::BTreeSet<String>,
+        _cancel: &'a CancellationToken,
+    ) -> BoxFuture<
+        'a,
+        Result<Option<std::collections::BTreeMap<String, StackRuntimeSnapshot>>, StackError>,
+    > {
+        Box::pin(async { Ok(None) })
+    }
     fn reconcile<'a>(
         &'a self,
         platform_id: Uuid,

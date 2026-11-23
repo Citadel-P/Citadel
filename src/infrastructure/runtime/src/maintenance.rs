@@ -8,7 +8,7 @@ pub struct MaintenanceError(pub String);
 pub struct CompactionProgress {
     pub processed: u64,
     pub stalled_source: Option<i64>,
-    /// Physical discovery has unexamined sources, queued candidates, or a
+    /// History discovery has unexamined sources, queued candidates, or a
     /// productive completed scan whose remaining source-hours must be revisited.
     pub scan_pending: bool,
 }

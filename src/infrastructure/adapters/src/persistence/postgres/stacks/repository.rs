@@ -82,7 +82,7 @@ impl StackRepository for PostgresStackRepository {
 
     fn record_drift<'a>(
         &'a self,
-        expected: &'a citadel_stacks::Stack,
+        expected: &'a citadel_stacks::StackDriftContext,
         status: StackReleaseStatus,
         info: ActivityEventInfo,
     ) -> BoxFuture<'a, Result<bool, StackError>> {
@@ -93,7 +93,7 @@ impl StackRepository for PostgresStackRepository {
         &self,
         after: Option<Uuid>,
         limit: i64,
-    ) -> BoxFuture<'_, Result<Vec<AuthorizedResource<citadel_stacks::Stack>>, StackError>> {
+    ) -> BoxFuture<'_, Result<Vec<citadel_stacks::StackDriftContext>, StackError>> {
         self.drift_monitor_candidates_impl(after, limit)
     }
 

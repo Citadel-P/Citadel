@@ -10,8 +10,10 @@ pub async fn run_maintenance(
     source: Arc<dyn JobDiagnosticSource>,
     cancel: CancellationToken,
 ) -> Result<(), std::convert::Infallible> {
-    let mut tick =
-        super::super::schedule::interval("job-history-maintenance", Duration::from_secs(300));
+    let mut tick = super::super::schedule::phased_interval(
+        "job-history-maintenance",
+        Duration::from_secs(300),
+    );
     let budget = Duration::from_secs(5);
     if let Some(job) = JobHandle::current() {
         job.policy(

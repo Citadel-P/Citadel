@@ -26,6 +26,18 @@ impl PostgresInventoryProjectionStore {
     }
 }
 
+pub(super) async fn lock_platform(
+    tx: &mut Transaction<'_, Postgres>,
+    platform: Uuid,
+) -> Result<(), RuntimeCapabilityError> {
+    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
+        .bind(platform)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(storage)?;
+    Ok(())
+}
+
 pub(crate) async fn persist_delta(
     tx: &mut Transaction<'_, Postgres>,
     platform: Uuid,
@@ -34,11 +46,7 @@ pub(crate) async fn persist_delta(
 ) -> Result<bool, RuntimeCapabilityError> {
     use crate::persistence::postgres::platforms::nodes::store as nodes;
     store::validate_runtime_ids([delta.id()])?;
-    sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
-        .bind(platform)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(storage)?;
+    lock_platform(tx, platform).await?;
     let now = chrono::Utc::now();
     if let Some(node) = node {
         return match delta {
@@ -154,6 +162,54 @@ mod tests {
         let platform = Uuid::now_v7();
         sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount) VALUES($1,$2,'Local',0,0,0,$2,0,'{}','Online',0)").bind(platform).bind(platform.to_string()).execute(&pool).await.unwrap();
         let store = PostgresInventoryProjectionStore::new(pool.clone());
+        use citadel_platforms::jobs::observations::RuntimeProjectionStore;
+        let batch: Vec<_> = ["first", "second"]
+            .map(|name| ResourceDelta::Volume {
+                id: name.to_owned(),
+                value: Some(RuntimeVolumeSummary {
+                    name: name.to_owned(),
+                    in_use: true,
+                    ..Default::default()
+                }),
+            })
+            .into();
+        let stamp = SnapshotGeneration::capture(platform, None, ProjectionKind::Volumes).await;
+        assert!(
+            store
+                .accept_local_volume_batch(platform, &batch, &stamp)
+                .await
+                .unwrap()
+                .changed()
+        );
+        assert_eq!(
+            store
+                .accept_local_volume_batch(platform, &batch, &stamp)
+                .await
+                .unwrap(),
+            ProjectionChange::Unavailable
+        );
+        let stamp = SnapshotGeneration::capture(platform, None, ProjectionKind::Volumes).await;
+        let invalid = [
+            batch[0].clone(),
+            ResourceDelta::Volume {
+                id: "second".into(),
+                value: None,
+            },
+        ];
+        assert_eq!(
+            store
+                .accept_local_volume_batch(platform, &invalid, &stamp)
+                .await
+                .unwrap(),
+            ProjectionChange::Unavailable
+        );
+        assert!(
+            store
+                .accept_local_volume_batch(platform, &batch, &stamp)
+                .await
+                .unwrap()
+                .changed()
+        );
         for id in ["first", "sibling"] {
             let value = RuntimeImageSummary {
                 id: id.into(),

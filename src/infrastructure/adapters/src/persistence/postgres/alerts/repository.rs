@@ -180,6 +180,12 @@ impl AlertRepository for PostgresAlertRepository {
         self.raise_impl(event)
     }
 
+    fn reset_stack_drift<'a>(
+        &'a self,
+        observations: &'a [AlertObservation],
+    ) -> BoxFuture<'a, Result<(), AlertError>> {
+        Box::pin(self.reset_stack_drift_batch(observations))
+    }
     fn process_event<'a>(
         &'a self,
         observation: &'a AlertObservation,

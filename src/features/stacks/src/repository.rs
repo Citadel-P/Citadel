@@ -81,7 +81,7 @@ pub trait StackRepository: Send + Sync {
     fn discard_webhook(&self, id: Uuid) -> BoxFuture<'_, Result<(), StackError>>;
     fn record_drift<'a>(
         &'a self,
-        expected: &'a crate::Stack,
+        expected: &'a crate::StackDriftContext,
         status: StackReleaseStatus,
         info: ActivityEventInfo,
     ) -> BoxFuture<'a, Result<bool, StackError>>;
@@ -89,7 +89,7 @@ pub trait StackRepository: Send + Sync {
         &self,
         after: Option<Uuid>,
         limit: i64,
-    ) -> BoxFuture<'_, Result<Vec<AuthorizedResource<crate::Stack>>, StackError>>;
+    ) -> BoxFuture<'_, Result<Vec<crate::StackDriftContext>, StackError>>;
     fn list_authorized<'a>(
         &'a self,
         actor: ActorId,

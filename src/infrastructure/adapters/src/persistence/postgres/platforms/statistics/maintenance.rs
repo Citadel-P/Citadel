@@ -20,21 +20,57 @@ pub(crate) struct Discovery {
     end: bool,
     progressed: bool,
 }
+#[derive(Clone, Copy)]
+pub(crate) enum HistoryFamily {
+    Container,
+    Platform,
+    Coarse,
+}
+
 impl Discovery {
-    async fn next(
+    pub(super) async fn next(
         &mut self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        family: HistoryFamily,
         cutoff: i64,
         retained_from: i64,
     ) -> Result<(Option<(i64, uuid::Uuid)>, bool), sqlx::Error> {
         if self.candidates.is_empty() {
-            let page: Vec<(i64, uuid::Uuid, bool)> =
-                sqlx::query_as(include_str!("compaction_candidates.sql"))
+            let page: Vec<(i64, uuid::Uuid, bool)> = match family {
+                HistoryFamily::Container => {
+                    sqlx::query_as(include_str!("compaction_candidates.sql"))
+                        .bind(cutoff)
+                        .bind(retained_from)
+                        .bind(self.after)
+                        .fetch_all(&mut **tx)
+                        .await?
+                }
+                HistoryFamily::Platform => {
+                    sqlx::query_as(concat!(
+                        "SELECT id,platformid,COALESCE(from_time<until,false) FROM (",
+                        include_str!("platform_compaction_bounds.sql"),
+                        ") bounds ORDER BY id"
+                    ))
                     .bind(cutoff)
                     .bind(retained_from)
+                    .bind(None::<i64>)
                     .bind(self.after)
                     .fetch_all(&mut **tx)
-                    .await?;
+                    .await?
+                }
+                HistoryFamily::Coarse => {
+                    sqlx::query_as(concat!(
+                        "SELECT id,platformid,from_time IS NOT NULL FROM (",
+                        include_str!("platform_coarse_bounds.sql"),
+                        ") bounds ORDER BY id"
+                    ))
+                    .bind(retained_from)
+                    .bind(None::<i64>)
+                    .bind(self.after)
+                    .fetch_all(&mut **tx)
+                    .await?
+                }
+            };
             self.end = page.len() < 64;
             self.after = page.last().map_or(0, |row| row.0);
             self.candidates.extend(
@@ -51,7 +87,7 @@ impl Discovery {
         Ok((candidate, pending))
     }
 
-    fn committed(&mut self, progress: u64, pending: bool) -> bool {
+    pub(super) fn committed(&mut self, progress: u64, pending: bool) -> bool {
         self.progressed |= progress > 0;
         // A productive scan may have more source-hours. Carry this hint across
         // worker budgets and empty trailing pages, then require an idle sweep.
@@ -87,7 +123,9 @@ pub(crate) async fn compact_page(
     // including when cancellation drops an unfinished transaction.
     let mut discovery = discovery.lock().await;
     let mut tx = transaction(pool).await?;
-    let (candidate, pending) = discovery.next(&mut tx, cutoff, retained_from).await?;
+    let (candidate, pending) = discovery
+        .next(&mut tx, HistoryFamily::Container, cutoff, retained_from)
+        .await?;
     let Some((source, platform)) = candidate else {
         tx.commit().await?;
         return Ok((0, discovery.committed(0, pending)));

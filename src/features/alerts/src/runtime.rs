@@ -28,6 +28,18 @@ pub trait AlertEventSink: Send + Sync {
         &'a self,
         observation: &'a AlertObservation,
     ) -> BoxFuture<'a, Result<Option<AlertEvent>, AlertError>>;
+    /// Healthy observations from a single bounded Stack monitor page.
+    fn observe_healthy_stack_drift<'a>(
+        &'a self,
+        observations: &'a [AlertObservation],
+    ) -> BoxFuture<'a, Result<(), AlertError>> {
+        Box::pin(async move {
+            for observation in observations {
+                self.observe(observation).await?;
+            }
+            Ok(())
+        })
+    }
 }
 
 impl<T> AlertEventSink for T
@@ -39,6 +51,12 @@ where
         observation: &'a AlertObservation,
     ) -> BoxFuture<'a, Result<Option<AlertEvent>, AlertError>> {
         self.process_event(observation)
+    }
+    fn observe_healthy_stack_drift<'a>(
+        &'a self,
+        observations: &'a [AlertObservation],
+    ) -> BoxFuture<'a, Result<(), AlertError>> {
+        self.reset_stack_drift(observations)
     }
 }
 

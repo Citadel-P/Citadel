@@ -19,6 +19,7 @@ use crate::connectors::agent::client::AgentContainerAction;
 use crate::connectors::agent::client::AgentStackRegistry;
 use crate::persistence::postgres::stacks::release_resources;
 use citadel_docker::client::DockerClient;
+mod drift_observation;
 mod image_inventory;
 mod import;
 pub(crate) mod update_scanner;
@@ -481,6 +482,18 @@ impl StackRuntime for StackRuntimeRouter {
             }
         }
         .boxed()
+    }
+
+    fn compose_snapshots<'a>(
+        &'a self,
+        platform: Uuid,
+        projects: &'a std::collections::BTreeSet<String>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<
+        'a,
+        Result<Option<std::collections::BTreeMap<String, StackRuntimeSnapshot>>, StackError>,
+    > {
+        self.group_snapshot(platform, projects, cancel).boxed()
     }
 
     fn runtime_snapshot<'a>(

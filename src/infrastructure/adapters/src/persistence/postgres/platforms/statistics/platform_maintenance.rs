@@ -1,38 +1,34 @@
 //! Compact processed host samples and independently scoped node I/O history.
+use super::maintenance::{Discovery, HistoryFamily};
 use citadel_runtime::{maintenance::CompactionProgress, runtime_metrics::RuntimeWork};
 use sqlx::PgPool;
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 const SIZING_BUDGET: Duration = Duration::from_secs(1);
 const OBSERVATIONS: i64 = 100_000;
 const INPUT_BYTES: i64 = 32 * 1024 * 1024;
 
 pub(crate) async fn compact(
     pool: &PgPool,
-    cursor: &AtomicI64,
-) -> Result<Option<CompactionProgress>, sqlx::Error> {
+    discovery: &Mutex<Discovery>,
+) -> Result<CompactionProgress, sqlx::Error> {
     let now = chrono::Utc::now();
     let cutoff = now.timestamp().saturating_sub(86_400) / 60 * 60;
     let retained_from = now.timestamp() - 604_800 + i64::from(now.timestamp_subsec_nanos() > 0);
     let mut tx = super::maintenance::transaction(pool).await?;
-    let discovery = RuntimeWork::CompactionDiscovery.start();
-    let candidate: Option<(i64, uuid::Uuid, i64, i64)> =
-        sqlx::query_as(include_str!("platform_compaction_bounds.sql"))
-            .bind(cutoff)
-            .bind(retained_from)
-            .bind(None::<i64>)
-            .bind(cursor.load(Ordering::Relaxed))
-            .fetch_optional(&mut *tx)
-            .await?;
-    drop(discovery);
-    let Some((source, platform, oldest, _)) = candidate else {
+    let discovery_timer = RuntimeWork::CompactionDiscovery.start();
+    let mut scan = discovery.lock().await;
+    let (candidate, pending) = scan
+        .next(&mut tx, HistoryFamily::Platform, cutoff, retained_from)
+        .await?;
+    drop(discovery_timer);
+    let Some((source, platform)) = candidate else {
         tx.commit().await?;
-        return Ok(None);
+        return Ok(citadel_runtime::maintenance::CompactionProgress {
+            scan_pending: scan.committed(0, pending),
+            ..Default::default()
+        });
     };
-    cursor.store(source, Ordering::Relaxed);
-    RuntimeWork::CompactionDiscovery.age(std::time::Duration::from_secs(
-        now.timestamp().saturating_sub(oldest).max(0) as u64,
-    ));
     let wait = RuntimeWork::CompactionLockWait.start();
     // Writers take this same lock before checking sessions and sealing watermarks.
     sqlx::query("SELECT id FROM platforms WHERE id=$1 FOR NO KEY UPDATE")
@@ -43,16 +39,21 @@ pub(crate) async fn compact(
     let hold = RuntimeWork::CompactionLockHold.start();
     // A queued capture can make a sample pending again. Recompute under a fresh
     // snapshot after acquiring the lock, not from the candidate's old snapshot.
-    let bounds: Option<(i64, uuid::Uuid, i64, i64)> =
+    let bounds: Option<(i64, uuid::Uuid, Option<i64>, Option<i64>)> =
         sqlx::query_as(include_str!("platform_compaction_bounds.sql"))
             .bind(cutoff)
             .bind(retained_from)
             .bind(source)
-            .bind(0i64)
+            .bind(source - 1)
             .fetch_optional(&mut *tx)
             .await?;
     let mut progress = 0;
-    if let Some((_, _, from, until)) = bounds {
+    if let Some((_, _, Some(from), Some(until))) = bounds
+        && from < until
+    {
+        RuntimeWork::CompactionDiscovery.age(Duration::from_secs(
+            now.timestamp().saturating_sub(from).max(0) as u64,
+        ));
         let sizing = RuntimeWork::CompactionSizing.start();
         let started = Instant::now();
         let mut end = from / 60 * 60;
@@ -94,11 +95,11 @@ pub(crate) async fn compact(
         drop(sizing);
         if end <= from {
             tx.commit().await?;
-            return Ok(Some(CompactionProgress {
+            return Ok(CompactionProgress {
                 processed: 0,
                 stalled_source: Some(source),
-                ..Default::default()
-            }));
+                scan_pending: scan.committed(0, pending),
+            });
         }
         RuntimeWork::CompactionInput.units(observations as u64);
         RuntimeWork::CompactionInput.queued(captures as usize);
@@ -114,9 +115,9 @@ pub(crate) async fn compact(
     tx.commit().await?;
     drop(hold);
     RuntimeWork::CompactionProgress.units(progress);
-    Ok(Some(CompactionProgress {
+    Ok(CompactionProgress {
         processed: progress,
         stalled_source: None,
-        ..Default::default()
-    }))
+        scan_pending: scan.committed(progress, pending),
+    })
 }

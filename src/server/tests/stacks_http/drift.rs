@@ -78,7 +78,7 @@ pub(super) async fn verify(
     assert!(
         !store
             .record_drift(
-                &original,
+                &original.resource.into(),
                 StackReleaseStatus::Healthy,
                 citadel_activities::ActivityEventInfo::StackDriftResolved {
                     previous_fingerprint: "stale".into()
@@ -107,6 +107,29 @@ pub(super) async fn verify(
         recovered.latest_activity.as_ref().unwrap().info["$type"],
         "StackDriftResolved"
     );
+    // A release input can change in place while its ID and parent rowversion stay the same.
+    let stale = store
+        .drift_monitor_candidates(None, 100)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|s| s.id == id)
+        .unwrap();
+    sqlx::query("UPDATE stackreleases SET spec=jsonb_set(spec,'{ComposeFile}',to_jsonb((spec->>'ComposeFile')||E'\n# edit')) WHERE id=$1")
+        .bind(stale.current_stack_release_id).execute(pool).await.unwrap();
+    assert!(
+        !store
+            .record_drift(
+                &stale,
+                StackReleaseStatus::Degraded,
+                citadel_activities::ActivityEventInfo::StackDriftResolved {
+                    previous_fingerprint: "stale input".into()
+                }
+            )
+            .await
+            .unwrap()
+    );
+    verify_monitor_pagination(pool, stacks, id, runtime).await;
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype IN ('StackDriftDetected','StackDriftResolved')").bind(id).fetch_one(pool).await.unwrap();
     assert_eq!(count, 2);
     // Port: StackDriftMonitorJobTests event AutoFix, DetectOnly and intentional stop.
@@ -176,10 +199,30 @@ pub(super) async fn verify(
     )
     .with_entitlements(Arc::new(Entitlements(false)))
     .with_alerts(alerts.clone());
-    unlicensed.monitor_container_event(id).await.unwrap();
+    *denied_runtime.snapshot_barrier.lock().unwrap() = Some(Arc::new(tokio::sync::Barrier::new(2)));
+    let (event, periodic) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::join!(
+            unlicensed.monitor_container_event(id),
+            unlicensed.monitor_drift(None, 100)
+        )
+    })
+    .await
+    .expect("both observations should reach the runtime before either finishes");
+    *denied_runtime.snapshot_barrier.lock().unwrap() = None;
+    event.unwrap();
+    let periodic = periodic.unwrap();
+    assert_eq!(periodic.checked, 1);
+    assert!(periodic.failures.is_empty());
     assert_eq!(
-        unlicensed.monitor_drift(None, 100).await.unwrap().checked,
-        1
+        alerts
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|o| o.resource_id == id && o.matched)
+            .count(),
+        2,
+        "event and periodic observations must both count towards required matches"
     );
     assert_eq!(denied_runtime.reconcile_calls.load(Ordering::Relaxed), 0);
     assert!(matches!(
@@ -325,4 +368,78 @@ async fn bindings_permissions(app: &Router, pool: &sqlx::PgPool, id: Uuid) {
             .await
             .unwrap();
     }
+}
+
+/// Mirror a production-sized worker page, including an observation that cannot parse its Compose file.
+async fn verify_monitor_pagination(
+    pool: &sqlx::PgPool,
+    service: &StackService,
+    template: Uuid,
+    runtime: &CompletingStackRuntime,
+) {
+    let start = u128::MAX - 200;
+    let ids: Vec<_> = (1..=101).map(|n| Uuid::from_u128(start + n)).collect();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("INSERT INTO stacks(id,name,stacksource,stackupdatestate,driftpolicy,createdbyactorid)
+        SELECT item,'drift-page-'||i,s.stacksource,s.stackupdatestate,
+            CASE WHEN i%2=0 THEN jsonb_set(s.driftpolicy::jsonb,'{Mode}','\"AutoFix\"'::jsonb)::json ELSE s.driftpolicy END,s.createdbyactorid
+        FROM stacks s CROSS JOIN unnest($2::uuid[]) WITH ORDINALITY page(item,i) WHERE s.id=$1")
+        .bind(template).bind(&ids).execute(&mut *tx).await.unwrap();
+    sqlx::query("WITH releases AS (INSERT INTO stackreleases(id,stackid,createdbyactorid,platformid,status,version,spec)
+        SELECT gen_random_uuid(),item,r.createdbyactorid,r.platformid,'Healthy',1,
+          CASE WHEN i=1 THEN jsonb_set(r.spec,'{ComposeFile}',to_jsonb('invalid: ['::text)) ELSE r.spec END
+        FROM stacks s JOIN stackreleases r ON r.id=s.currentstackreleaseid
+        CROSS JOIN unnest($2::uuid[]) WITH ORDINALITY page(item,i) WHERE s.id=$1 RETURNING id,stackid)
+        UPDATE stacks s SET currentstackreleaseid=r.id FROM releases r WHERE s.id=r.stackid")
+        .bind(template).bind(&ids).execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+    let before_groups = runtime.group_checks.load(Ordering::Relaxed);
+    let before = query_counts::count(pool).await;
+    let first = service
+        .monitor_drift(Some(Uuid::from_u128(start)), 100)
+        .await
+        .unwrap();
+    query_counts::assert_single_query(pool, before).await;
+    assert_eq!(first.checked, 99);
+    assert_eq!(first.failures.len(), 1);
+    assert_eq!(first.failures[0].stack_id, ids[0]);
+    assert_eq!(first.next_cursor, Some(ids[99]));
+    let last = service.monitor_drift(first.next_cursor, 100).await.unwrap();
+    assert_eq!(last.checked, 1);
+    assert!(last.failures.is_empty());
+    assert!(last.next_cursor.is_none());
+    assert_eq!(
+        runtime.group_checks.load(Ordering::Relaxed) - before_groups,
+        1
+    );
+
+    let other = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount)
+        VALUES($1,$1::text,'Agent',1,0,1024,$1::text,0,'{\"$type\":\"Docker\"}','Online',0)")
+        .bind(other).execute(pool).await.unwrap();
+    sqlx::query("UPDATE stackreleases SET platformid=$1 WHERE stackid=ANY($2)")
+        .bind(other)
+        .bind(&ids[50..100])
+        .execute(pool)
+        .await
+        .unwrap();
+    for unavailable in [false, true] {
+        *runtime.unavailable_group.lock().unwrap() = unavailable.then_some(other);
+        let before = runtime.group_checks.load(Ordering::Relaxed);
+        let page = service
+            .monitor_drift(Some(Uuid::from_u128(start)), 100)
+            .await
+            .unwrap();
+        assert_eq!(runtime.group_checks.load(Ordering::Relaxed) - before, 2);
+        let runtime_failures = if unavailable { 50 } else { 0 };
+        assert_eq!(page.checked, 99 - runtime_failures);
+        assert_eq!(page.failures.len(), 1 + runtime_failures);
+        assert_eq!(page.next_cursor, Some(ids[99]));
+    }
+    *runtime.unavailable_group.lock().unwrap() = None;
+    sqlx::query("DELETE FROM stacks WHERE id=ANY($1)")
+        .bind(&ids)
+        .execute(pool)
+        .await
+        .unwrap();
 }

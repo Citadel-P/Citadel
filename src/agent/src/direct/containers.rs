@@ -76,11 +76,17 @@ impl container_service_server::ContainerService for Runtime {
                 .collect::<std::collections::HashMap<_, _>>(),
         )
         .expect("string filters");
+        let generation = self.docker.daemon_generation();
         let models = self
             .docker
             .list_container_models(r.all, r.limit, r.size, Some(&filter))
             .await
             .map_err(docker_error)?;
+        if metadata_only && generation != self.docker.daemon_generation() {
+            return Err(Status::unavailable(
+                "Docker daemon changed during container observation",
+            ));
+        }
         let cached = if metadata_only {
             Default::default()
         } else {
