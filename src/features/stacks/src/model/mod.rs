@@ -16,9 +16,9 @@ pub use operations::{
 };
 mod drift;
 pub use drift::{
-    StackDrift, StackDriftMonitorFailure, StackDriftMonitorResult, StackDriftReport,
-    StackReconciliationAction, StackReconciliationActionType, StackReconciliationResult,
-    StackReconciliationStatus,
+    StackDrift, StackDriftContext, StackDriftMonitorFailure, StackDriftMonitorResult,
+    StackDriftReport, StackReconciliationAction, StackReconciliationActionType,
+    StackReconciliationResult, StackReconciliationStatus,
 };
 mod resource;
 pub use resource::{Stack, StackRelease};

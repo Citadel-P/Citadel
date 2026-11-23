@@ -50,3 +50,17 @@ pub fn select_observation_rules<'a>(
     }
     (resets, winner)
 }
+
+pub fn trigger_due(
+    rule: &AlertRule,
+    matches: i32,
+    last_triggered: Option<chrono::DateTime<chrono::Utc>>,
+    observed: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    matches >= rule.required_matches.unwrap_or(1).max(1)
+        && !last_triggered
+            .zip(rule.cooldown_seconds)
+            .is_some_and(|(last, seconds)| {
+                observed < last + chrono::Duration::seconds(i64::from(seconds))
+            })
+}

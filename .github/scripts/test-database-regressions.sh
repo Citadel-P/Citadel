@@ -66,6 +66,9 @@ run_cargo test --locked --workspace --test stacks_http "$stack_test" -- --ignore
 run_cargo test --locked --workspace --test stacks_http "$stack_test" -- --ignored --exact --test-threads=1
 run_cargo test --locked --workspace --test identity_authorization_differential -- --ignored --test-threads=1
 run_cargo test --locked --workspace --test deployment_apply_persistence -- --ignored --test-threads=1
+direct_drift=grouped_drift_discards_successful_reply_from_replaced_direct_client
+run_cargo test --locked --workspace --test agent_mutations "$direct_drift" -- --ignored --exact --list | grep -Fx "$direct_drift: test"
+run_cargo test --locked --workspace --test agent_mutations "$direct_drift" -- --ignored --exact --test-threads=1
 run_cargo test --locked --workspace --test stack_persistence --test platform_inventory_persistence -- --ignored --test-threads=1
 run_cargo test --locked --workspace --test platforms_http -- --ignored --test-threads=1
 run_cargo test --locked --workspace --test edge_transport -- --ignored --test-threads=1
@@ -118,6 +121,16 @@ docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_schedule_
 test_name=platform_flush::shared_parent_validation_is_transaction_local_and_preserves_incident_state
 run_cargo test --locked -p citadel-adapters --test alert_persistence "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
 run_cargo test --locked -p citadel-adapters --test alert_persistence "$test_name" -- --ignored --exact --test-threads=1
+docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_alert_flush
+docker exec "$container" psql -h 127.0.0.1 -U citadel_test -d citadel_alert_flush -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION pg_stat_statements'
+(
+  export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_alert_flush"
+  for test_name in platform_flush::cold_metric_flush_completes_with_one_query_connection \
+      platform_replay::metric_flush_replays_the_single_observation_transitions; do
+    run_cargo test --locked -p citadel-adapters --test alert_persistence "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
+    run_cargo test --locked -p citadel-adapters --test alert_persistence "$test_name" -- --ignored --exact --test-threads=1
+  done
+)
 docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_alert_updates
 (
   export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_alert_updates"

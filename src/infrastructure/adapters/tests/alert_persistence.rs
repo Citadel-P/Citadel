@@ -940,3 +940,5 @@ mod instance_updates;
 
 #[path = "alert_persistence/platform_flush.rs"]
 mod platform_flush;
+#[path = "alert_persistence/platform_replay.rs"]
+mod platform_replay;

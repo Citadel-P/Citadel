@@ -2,8 +2,8 @@ use super::store::{PostgresInventoryProjectionStore, storage};
 use chrono::{DateTime, Utc};
 use citadel_platforms::jobs::observations::*;
 use citadel_platforms::jobs::{
-    ContainerDeltaResult, ContainerStateDelta, ProjectionChange, ResourceDelta, ResourceSnapshot,
-    SnapshotGeneration,
+    ContainerDeltaResult, ContainerStateDelta, ProjectionChange, ProjectionKind, ProjectionWrite,
+    ResourceChange, ResourceDelta, ResourceSnapshot, RuntimeEventKind, SnapshotGeneration,
 };
 use citadel_platforms::{RuntimeCapabilityError, RuntimeContainerSummary};
 use futures_util::future::BoxFuture;
@@ -40,6 +40,34 @@ impl RuntimeProjectionStore for PostgresInventoryProjectionStore {
         generation: Option<&'a SnapshotGeneration>,
     ) -> BoxFuture<'a, Result<ProjectionChange, RuntimeCapabilityError>> {
         async move { self.persist_resource_committed(snapshot, generation).await }.boxed()
+    }
+    fn accept_local_volume_batch<'a>(
+        &'a self,
+        platform: Uuid,
+        deltas: &'a [ResourceDelta],
+        generation: &'a SnapshotGeneration,
+    ) -> BoxFuture<'a, Result<ProjectionChange, RuntimeCapabilityError>> {
+        Box::pin(async move {
+            let write = ProjectionWrite::begin(platform, None, ProjectionKind::Volumes).await;
+            if !generation.matches(&write)
+                || deltas
+                    .iter()
+                    .any(|d| !d.valid_for(RuntimeEventKind::Volume(ResourceChange::Observe)))
+            {
+                return Ok(ProjectionChange::Unavailable);
+            }
+            if deltas.is_empty() {
+                return Ok(ProjectionChange::Unchanged);
+            }
+            super::store::validate_runtime_ids(deltas.iter().map(ResourceDelta::id))?;
+            // Standalone volumes are read live. One platform lock fences the
+            // entire observation before the worker publishes its create events.
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            super::delta::lock_platform(&mut tx, platform).await?;
+            tx.commit().await.map_err(storage)?;
+            write.committed();
+            Ok(ProjectionChange::Changed)
+        })
     }
     fn persist_delta<'a>(
         &'a self,

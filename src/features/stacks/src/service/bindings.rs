@@ -89,33 +89,9 @@ pub(super) fn orchestration(
     }
 }
 
-pub(super) fn project_name(stack: &crate::Stack) -> Result<String, StackError> {
-    if let Some(project) = stack
-        .spec
-        .as_ref()
-        .and_then(|spec| spec.common().project_name.clone())
-    {
-        return Ok(project);
-    }
-    let normalized = stack
-        .name
-        .to_ascii_lowercase()
-        .chars()
-        .map(|value| {
-            if value.is_ascii_alphanumeric() || value == '-' || value == '_' {
-                value
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>()
-        .trim_matches('-')
-        .to_owned();
-    if normalized.is_empty() {
-        Ok(format!("stack-{}", stack.id.simple()))
-    } else {
-        Ok(normalized)
-    }
+pub(super) fn drift_project_name(id: Uuid, name: &str, spec: Option<&StackSpec>) -> String {
+    spec.and_then(|spec| spec.common().project_name.clone())
+        .unwrap_or_else(|| crate::normalize_project_name(name, id))
 }
 
 #[must_use]

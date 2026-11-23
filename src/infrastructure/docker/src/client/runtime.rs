@@ -271,7 +271,12 @@ pub(super) fn cancelled_error() -> RuntimeCapabilityError {
 }
 
 pub fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityError {
-    let (kind, retryable) = match &error {
+    normalize_error_ref(&error)
+}
+
+fn normalize_error_ref(error: &DockerError) -> RuntimeCapabilityError {
+    let (kind, retryable) = match error {
+        DockerError::Shared(shared) => return normalize_error_ref(shared),
         DockerError::Transport(transport) if transport.is_timeout() => {
             (RuntimeErrorKind::Timeout, true)
         }
@@ -315,7 +320,7 @@ pub fn normalize_docker_error(error: DockerError) -> RuntimeCapabilityError {
     };
     let message = match error {
         DockerError::Transport(error) if error.is_timeout() => "Docker request timed out".into(),
-        DockerError::Api { message, .. } => serde_json::from_str::<serde_json::Value>(&message)
+        DockerError::Api { message, .. } => serde_json::from_str::<serde_json::Value>(message)
             .ok()
             .and_then(|v| v["message"].as_str().map(str::to_owned))
             .unwrap_or_else(|| "Docker rejected the operation".into()),

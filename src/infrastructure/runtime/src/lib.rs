@@ -2,6 +2,7 @@
 mod bounded_queue;
 mod buffers;
 pub mod dirty_queue;
+pub mod event_batch;
 pub use buffers::reset_stream_buffer;
 mod supervisor;
 pub use bounded_queue::{

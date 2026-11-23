@@ -816,6 +816,7 @@ fn spec(image: &str, project_name: Option<&str>) -> StackSpec {
 }
 
 struct ImportDocker {
+    reads: std::sync::Arc<std::sync::Mutex<Vec<(String, usize)>>>,
     client: DockerClient,
     document: std::sync::Arc<tokio::sync::RwLock<serde_json::Value>>,
     task: tokio::task::JoinHandle<()>,
@@ -828,6 +829,8 @@ impl ImportDocker {
         let listener = tokio::net::UnixListener::bind(&path).unwrap();
         let document = std::sync::Arc::new(tokio::sync::RwLock::new(document));
         let response = document.clone();
+        let reads = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let recorded = reads.clone();
         let task = tokio::spawn(async move {
             loop {
                 let (mut stream, _) = listener.accept().await.unwrap();
@@ -844,7 +847,39 @@ impl ImportDocker {
                     json!({"ApiVersion":"1.49","MinAPIVersion":"1.41"})
                 } else {
                     assert!(request.starts_with("GET /v1.49/containers/json?"));
-                    response.read().await.clone()
+                    let path = request.split_whitespace().nth(1).unwrap();
+                    let query =
+                        url::form_urlencoded::parse(path.split_once('?').unwrap().1.as_bytes())
+                            .collect::<std::collections::HashMap<_, _>>();
+                    let filters: serde_json::Value =
+                        serde_json::from_str(query.get("filters").map_or("{}", |v| v.as_ref()))
+                            .unwrap();
+                    let label = filters["label"][0].as_str().unwrap_or_default();
+                    let all = response.read().await;
+                    let rows: Vec<_> = all
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .filter(|row| {
+                            if let Some((key, value)) = label.split_once('=') {
+                                row["Labels"][key] == value
+                            } else {
+                                label.is_empty() || !row["Labels"][label].is_null()
+                            }
+                        })
+                        .take(
+                            query
+                                .get("limit")
+                                .and_then(|n| n.parse::<usize>().ok())
+                                .unwrap_or(usize::MAX),
+                        )
+                        .collect();
+                    let body = json!(rows);
+                    recorded
+                        .lock()
+                        .unwrap()
+                        .push((path.to_owned(), body.to_string().len()));
+                    body
                 }
                 .to_string();
                 stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
@@ -853,6 +888,7 @@ impl ImportDocker {
         Self {
             client: DockerClient::new(&path, Duration::from_secs(2)).unwrap(),
             document,
+            reads,
             task,
             path,
         }
@@ -862,6 +898,90 @@ impl Drop for ImportDocker {
     fn drop(&mut self) {
         self.task.abort();
         let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_WORKLOAD_DATABASE_URL"]
+async fn compose_group_reads_one_bounded_list_and_single_project_stays_filtered() {
+    let (pool, _, _, stack) = concurrency_fixture().await;
+    let platform = stack.platform_id.unwrap();
+    let cancel = CancellationToken::new();
+    for count in [5, 50] {
+        let rows = (0..count).map(|n|json!({
+            "Id":format!("id{n}"), "Names":[format!("/web{n}")], "State":"running",
+            "Labels":{"com.docker.compose.project":format!("project{n}"),"com.docker.compose.service":"web"}
+        })).collect::<Vec<_>>();
+        let docker = ImportDocker::new(json!(rows)).await;
+        let runtime = StackRuntimeRouter::new(pool.clone(), docker.client.clone(), None);
+        let projects = (0..count)
+            .map(|n| format!("project{n}"))
+            .collect::<std::collections::BTreeSet<_>>();
+        let start = std::time::Instant::now();
+        let mut expected = std::collections::BTreeMap::new();
+        for project in &projects {
+            let snapshot = runtime
+                .runtime_snapshot(
+                    platform,
+                    project,
+                    citadel_stacks::StackOrchestrationMode::DockerCompose,
+                    &cancel,
+                )
+                .await
+                .unwrap();
+            assert_eq!(snapshot.containers.len(), 1);
+            expected.insert(project, snapshot.containers[0].docker_container_id.clone());
+        }
+        let filtered_elapsed = start.elapsed();
+        let filtered = std::mem::take(&mut *docker.reads.lock().unwrap());
+        assert_eq!(filtered.len(), count);
+        let start = std::time::Instant::now();
+        let group = runtime
+            .compose_snapshots(platform, &projects, &cancel)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(group.len(), count);
+        for (project, id) in expected {
+            assert_eq!(group[project].containers[0].docker_container_id, id);
+        }
+        let group_elapsed = start.elapsed();
+        let grouped = std::mem::take(&mut *docker.reads.lock().unwrap());
+        assert_eq!(grouped.len(), 1);
+        assert!(grouped[0].0.contains("limit=4097"));
+        eprintln!(
+            "compose_projects={count} filtered_duration={filtered_elapsed:?} group_duration={group_elapsed:?} filtered_bytes={} grouped_bytes={}",
+            filtered.iter().map(|row| row.1).sum::<usize>(),
+            grouped[0].1
+        );
+        // More Compose-labelled containers than the group's completeness limit.
+        let mut crowded = vec![rows[0].clone(); 4097];
+        crowded.push(rows[1].clone());
+        *docker.document.write().await = json!(crowded);
+        assert!(
+            runtime
+                .compose_snapshots(platform, &projects, &cancel)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(docker.reads.lock().unwrap().len(), 1);
+        let one = runtime
+            .runtime_snapshot(
+                platform,
+                "project1",
+                citadel_stacks::StackOrchestrationMode::DockerCompose,
+                &cancel,
+            )
+            .await
+            .unwrap();
+        assert_eq!(one.containers.len(), 1);
+        let reads = docker.reads.lock().unwrap();
+        assert_eq!(reads.len(), 2);
+        assert_eq!(
+            reads[1].1, filtered[1].1,
+            "a singleton reads just its own container on a crowded host"
+        );
     }
 }
 
@@ -1472,5 +1592,62 @@ async fn verify_team_access(pool: &sqlx::PgPool, store: &PostgresStackRepository
                 Err(citadel_stacks::StackError::Forbidden)
             ));
         }
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_WORKLOAD_DATABASE_URL"]
+async fn grouped_drift_discards_successful_reply_from_replaced_edge_session() {
+    use citadel_adapters::connectors::edge::{EdgeRegistry, EdgeTarget};
+    use citadel_contracts::citadel::containers::v1::ListContainersResponse;
+    use prost::Message;
+
+    let (pool, _, _, stack) = concurrency_fixture().await;
+    let platform = stack.platform_id.unwrap();
+    sqlx::query("UPDATE platforms SET connectortype='EdgeAgent' WHERE id=$1")
+        .bind(platform)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let registry = EdgeRegistry::default();
+    let agent = Uuid::now_v7();
+    let target = EdgeTarget::platform(platform);
+    let (session, mut requests) = registry.register(target.clone(), agent).unwrap();
+    let docker = DockerClient::new("/unused-fixture.sock", Duration::from_secs(1)).unwrap();
+    let runtime = StackRuntimeRouter::new(pool.clone(), docker, None).with_edge(registry.clone());
+    let projects = ["a".into(), "b".into()].into();
+    let cancel = CancellationToken::new();
+    for replace in [false, true] {
+        let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+            tokio::join!(
+                runtime.compose_snapshots(platform, &projects, &cancel),
+                async {
+                    let request = requests.recv().await.unwrap();
+                    let id = Uuid::parse_str(&request.command_id).unwrap();
+                    let mut guard = pool.begin().await.unwrap();
+                    sqlx::query("LOCK TABLE platforms IN ACCESS EXCLUSIVE MODE")
+                        .execute(&mut *guard).await.unwrap();
+                    let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+                        .fetch_one(&mut *guard).await.unwrap();
+                    session.output(id, ListContainersResponse::default().encode_to_vec());
+                    session.complete(id, true);
+                    // Hold Core's post-read route lookup so even a fully consumed,
+                    // successful RPC cannot authorize reuse after a session handover.
+                    if replace {
+                        loop {
+                            let blocked: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)))")
+                                .bind(pid).fetch_one(&pool).await.unwrap();
+                            if blocked { break; }
+                            tokio::time::sleep(Duration::from_millis(5)).await;
+                        }
+                        registry.register(target.clone(),agent).unwrap();
+                    }
+                    guard.commit().await.unwrap();
+                }
+            )
+        })
+        .await
+        .unwrap();
+        assert_eq!(result.unwrap().is_none(), replace);
     }
 }

@@ -12,16 +12,10 @@ impl StackService {
         if !event_drift_eligible(&stack) {
             return Ok(());
         }
-        let report = if stack.drift_policy.mode == crate::StackDriftMode::AutoFix
-            && self.operational_guardrails_enabled().await?
-        {
-            let result = self
-                .reconcile_drift_with_mode(actor, true, id, false)
-                .await?;
-            result.after_report.unwrap_or(result.before_report)
-        } else {
-            self.drift(actor, true, id).await?
-        };
+        let stack: crate::StackDriftContext = stack.resource.into();
+        let can_auto_fix = stack.drift_policy.mode == crate::StackDriftMode::AutoFix
+            && self.operational_guardrails_enabled().await?;
+        let (report, _) = self.monitor_candidate(&stack, actor, can_auto_fix).await?;
         if let Some((status, info)) = drift_status_update(&stack, &report)
             && self.store.record_drift(&stack, status, info).await?
         {

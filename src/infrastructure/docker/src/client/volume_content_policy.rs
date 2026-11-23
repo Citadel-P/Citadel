@@ -17,24 +17,34 @@ impl DockerClient {
         let containers = self
             .list_container_models(Some(true), None, Some(false), None)
             .await?;
-        let policy = StorageProtection::from_containers(&containers);
-        for volume in volumes {
-            volume.is_system = policy.is_system(volume);
-            volume.content_access_allowed = Some(policy.allows(volume));
-        }
+        Self::apply_volume_mounts(volumes, &containers);
         Ok(())
+    }
+
+    pub(super) fn apply_volume_mounts(
+        volumes: &mut [DockerVolume],
+        containers: &[ContainerSummary],
+    ) {
+        let policy = StorageProtection::from_containers(containers);
+        for volume in volumes {
+            policy.apply(volume);
+        }
     }
 }
 
 #[derive(Default)]
-struct StorageProtection {
+pub(super) struct StorageProtection {
     volumes: HashSet<String>,
     bind_sources: HashSet<PathBuf>,
     incomplete: bool,
 }
 
 impl StorageProtection {
-    fn from_containers(containers: &[ContainerSummary]) -> Self {
+    pub(super) fn apply(&self, volume: &mut DockerVolume) {
+        volume.is_system = self.is_system(volume);
+        volume.content_access_allowed = Some(self.allows(volume));
+    }
+    pub(super) fn from_containers(containers: &[ContainerSummary]) -> Self {
         let mut policy = Self::default();
         for container in containers {
             let Some(labels) = &container.labels else {

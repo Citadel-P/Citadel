@@ -131,7 +131,7 @@ async fn mock_docker(
         "/v1.49/containers/slow/json"=>json!({"Id":"slow","Config":{"Labels":{}}}),
         "/v1.49/containers/slow/start"=>{tokio::time::sleep(Duration::from_secs(5)).await;return axum::http::StatusCode::NO_CONTENT.into_response()},
         "/v1.49/containers/fixture/json"=>json!({"Id":"fixture","SizeRw":9007199254740993i64,"State":{"Status":"running","Running":true,"ExitCode":0},"Config":{"Image":"redis","Env":null,"Labels":null,"ExposedPorts":{"6379/tcp":{}}},"HostConfig":{"ReadonlyRootfs":false,"Memory":0,"PortBindings":{"6379/tcp":[{"HostIp":"127.0.0.1","HostPort":"6379"}]}},"NetworkSettings":{"HairpinMode":false,"Networks":{"frontend":{"NetworkID":"net","Aliases":null,"GlobalIPv6Address":"::1"}}}}),
-        "/v1.49/containers/json" if uri.contains("volume") => json!([{"Id":"web", "Names":["/web"], "Image":"alpine", "ImageID":"image", "State":"running", "NetworkSettings":{"Networks":{"Mixed.Network":{"NetworkID":"net"}}}, "Ports":[{"PrivatePort":80,"PublicPort":8080,"Type":"tcp","IP":"::"}]}]),
+        "/v1.49/containers/json" if uri.contains("volume") || uri.ends_with("all=true&size=false") => json!([{"Id":"web", "Mounts":[{"Type":"volume","Name":"data","Destination":"/data"}], "Names":["/web"], "Image":"alpine", "ImageID":"image", "State":"running", "NetworkSettings":{"Networks":{"Mixed.Network":{"NetworkID":"net"}}}, "Ports":[{"PrivatePort":80,"PublicPort":8080,"Type":"tcp","IP":"::"}]}]),
         "/v1.49/containers/json"=>json!([]),
         "/v1.49/containers/large/top"=>json!({"Titles":["USER","PID","PPID","TIME","COMMAND"],"Processes":vec![vec!["x".repeat(300); 5]; 1025]}),
         "/v1.49/containers/fixture/top"=>json!({"Titles":["USER","PID","PPID","TIME","COMMAND"],"Processes":[["root","42","1","00:00:01","server"]]}),
@@ -803,7 +803,7 @@ async fn core_volume_inspection_keeps_cluster_metadata_and_attached_container_po
     assert_eq!(
         requests
             .iter()
-            .filter(|(_, uri, _)| uri.starts_with("/v1.49/containers/json?all=true&filters="))
+            .filter(|(_, uri, _)| uri.starts_with("/v1.49/containers/json?"))
             .count(),
         1
     );

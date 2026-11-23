@@ -23,15 +23,15 @@ pub use model::{
     ImageUpdateState, RecreateStackOnNewCommitState, RecreateStackOnNewImageState,
     ResolvedStackBindings, ResolvedStackBuildImageBinding, ResourceBindingSnapshot, Stack,
     StackAction, StackAdoptionIssue, StackApplyEventType, StackApplySource, StackBinding,
-    StackBuildImageBinding, StackCommand, StackDeletionClaim, StackDrift, StackDriftMode,
-    StackDriftMonitorFailure, StackDriftMonitorResult, StackDriftPolicy, StackDriftReport,
-    StackError, StackImportClaim, StackImportKind, StackOperationClaim, StackOrchestrationMode,
-    StackProgressItem, StackReconciliationAction, StackReconciliationActionType,
-    StackReconciliationResult, StackReconciliationStatus, StackRelease, StackReleaseSource,
-    StackReleaseStatus, StackRuntimeContainer, StackRuntimeResult, StackRuntimeService,
-    StackRuntimeSnapshot, StackSource, StackSourceFile, StackSpec, StackSpecCommon,
-    StackStateClaim, StackUpdateBehavior, StackUpdateState, StackWebhookConfig,
-    normalize_project_name,
+    StackBuildImageBinding, StackCommand, StackDeletionClaim, StackDrift, StackDriftContext,
+    StackDriftMode, StackDriftMonitorFailure, StackDriftMonitorResult, StackDriftPolicy,
+    StackDriftReport, StackError, StackImportClaim, StackImportKind, StackOperationClaim,
+    StackOrchestrationMode, StackProgressItem, StackReconciliationAction,
+    StackReconciliationActionType, StackReconciliationResult, StackReconciliationStatus,
+    StackRelease, StackReleaseSource, StackReleaseStatus, StackRuntimeContainer,
+    StackRuntimeResult, StackRuntimeService, StackRuntimeSnapshot, StackSource, StackSourceFile,
+    StackSpec, StackSpecCommon, StackStateClaim, StackUpdateBehavior, StackUpdateState,
+    StackWebhookConfig, normalize_project_name,
 };
 
 pub use commands::{
@@ -52,8 +52,8 @@ pub use compose::{
 };
 
 pub use service::{
-    NoopStackChangeNotifier, StackChangeNotifier, StackProgress, StackService, StackUpdateScanner,
-    calculate_drift, import_runtime_fingerprint,
+    DriftPass, NoopStackChangeNotifier, StackChangeNotifier, StackProgress, StackService,
+    StackUpdateScanner, calculate_drift, import_runtime_fingerprint,
 };
 
 pub use repository::{GitCheckInputs, StackCheckCandidate, StackCheckWork, StackRepository};

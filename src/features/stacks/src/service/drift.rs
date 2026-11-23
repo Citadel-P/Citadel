@@ -8,73 +8,38 @@ impl StackService {
         }
     }
 
-    pub async fn monitor_drift(
+    pub(super) async fn monitor_candidate(
         &self,
-        after: Option<Uuid>,
-        limit: i64,
-    ) -> Result<StackDriftMonitorResult, StackError> {
-        if limit <= 0 {
-            return Err(validation(
-                "The Stack drift monitor limit must be positive.",
+        stack: &crate::StackDriftContext,
+        actor: ActorId,
+        can_auto_fix: bool,
+    ) -> Result<(StackDriftReport, bool), StackError> {
+        let report = self.inspect_drift(stack, actor).await?;
+        self.finish_drift_observation(stack, actor, can_auto_fix, report)
+            .await
+    }
+
+    pub(super) async fn finish_drift_observation(
+        &self,
+        stack: &crate::StackDriftContext,
+        actor: ActorId,
+        can_auto_fix: bool,
+        report: StackDriftReport,
+    ) -> Result<(StackDriftReport, bool), StackError> {
+        if report.has_drift
+            && stack.drift_policy.mode == crate::StackDriftMode::AutoFix
+            && can_auto_fix
+        {
+            let repair = self
+                .reconcile_drift_with_mode(actor, true, stack.id, false)
+                .await?;
+            return Ok((
+                repair.after_report.unwrap_or(repair.before_report),
+                !repair.actions.is_empty(),
             ));
         }
-        let mut result = StackDriftMonitorResult {
-            checked: 0,
-            reconciled: 0,
-            failures: Vec::new(),
-            next_cursor: None,
-        };
-        let candidates = self.store.drift_monitor_candidates(after, limit).await?;
-        // Detection stays available after a license expires; only repairs are gated.
-        let can_auto_fix = candidates
-            .iter()
-            .any(|stack| stack.drift_policy.mode == crate::StackDriftMode::AutoFix)
-            && self.operational_guardrails_enabled().await?;
-        let system = ActorId::new(Uuid::from_u128(1));
-        for stack in candidates {
-            if self.shutdown.is_cancelled() {
-                break;
-            }
-            result.next_cursor = Some(stack.id);
-            let outcome =
-                if stack.drift_policy.mode == crate::StackDriftMode::AutoFix && can_auto_fix {
-                    self.reconcile_drift_with_mode(system, true, stack.id, false)
-                        .await
-                        .map(|reconciliation| {
-                            result.reconciled += usize::from(!reconciliation.actions.is_empty());
-                            reconciliation
-                                .after_report
-                                .unwrap_or(reconciliation.before_report)
-                        })
-                } else {
-                    self.drift(system, true, stack.id).await
-                };
-            let outcome = match outcome {
-                Ok(report) => {
-                    if let Some((status, info)) = drift_status_update(&stack, &report) {
-                        self.store
-                            .record_drift(&stack, status, info)
-                            .await
-                            .map(|changed| {
-                                if changed {
-                                    self.notifier.changed(stack.id, "driftChanged");
-                                }
-                            })
-                    } else {
-                        Ok(())
-                    }
-                }
-                Err(error) => Err(error),
-            };
-            match outcome {
-                Ok(()) => result.checked += 1,
-                Err(error) => result.failures.push(StackDriftMonitorFailure {
-                    stack_id: stack.id,
-                    message: error.to_string(),
-                }),
-            }
-        }
-        Ok(result)
+        self.observe_drift(stack, &report).await;
+        Ok((report, false))
     }
 
     pub async fn drift(
@@ -84,8 +49,19 @@ impl StackService {
         id: Uuid,
     ) -> Result<StackDriftReport, StackError> {
         let stack = self.store.get_authorized(actor, administrator, id).await?;
+        let context = stack.resource.into();
+        let report = self.inspect_drift(&context, actor).await?;
+        self.observe_drift(&context, &report).await;
+        Ok(report)
+    }
+
+    async fn inspect_drift(
+        &self,
+        stack: &crate::StackDriftContext,
+        actor: ActorId,
+    ) -> Result<StackDriftReport, StackError> {
         let platform_id = stack.platform_id.ok_or(StackError::NotFound)?;
-        let project = project_name(&stack)?;
+        let project = drift_project_name(stack.id, &stack.name, stack.spec.as_ref());
         let runtime = self
             .runtime
             .runtime_snapshot(
@@ -95,32 +71,42 @@ impl StackService {
                 &self.shutdown.child_token(),
             )
             .await?;
-        let report = if matches!(stack.spec, Some(StackSpec::Git { .. }))
+        if matches!(stack.spec, Some(StackSpec::Git { .. }))
             && stack.drift_policy.mode != crate::StackDriftMode::Disabled
             && !matches!(
                 stack.status,
                 StackReleaseStatus::Stopped | StackReleaseStatus::Paused
-            ) {
-            let claim = drift_source_claim(&stack, actor)?;
+            )
+        {
+            let claim = drift_source_claim(stack, actor)?;
             let source = self.source_materializer.as_ref().ok_or_else(|| {
                 StackError::Runtime("Git Stack source reading is unavailable.".into())
             })?;
             let files = source
                 .compose_contents(&claim, &self.shutdown.child_token())
                 .await?;
-            calculate_drift_from_compose(&stack, &runtime, &files)?
+            compare_compose(stack.id, platform_id, &stack.drift_policy, &runtime, &files)
         } else {
-            calculate_drift(&stack, &runtime)?
-        };
+            calculate_spec_drift(
+                stack.id,
+                stack.platform_id,
+                stack.status,
+                &stack.drift_policy,
+                stack.spec.as_ref(),
+                &runtime,
+            )
+        }
+    }
+
+    async fn observe_drift(&self, stack: &crate::StackDriftContext, report: &StackDriftReport) {
         if stack.drift_policy.alert_on_drift
             && let Some(alerts) = &self.alerts
         {
-            let observation = stack_drift_observation(&stack, &report, "StackDriftDetected");
+            let observation = stack_drift_observation(stack, report, "StackDriftDetected");
             if let Err(error) = alerts.observe(&observation).await {
                 tracing::warn!(%error, stack_id=%stack.id, "Stack drift Alert evaluation failed");
             }
         }
-        Ok(report)
     }
 
     pub async fn update_drift_policy(
@@ -305,7 +291,7 @@ pub(super) fn stable_runtime_status(snapshot: &StackRuntimeSnapshot) -> Option<S
 }
 
 pub(super) fn stack_drift_observation(
-    stack: &crate::Stack,
+    stack: &crate::StackDriftContext,
     report: &StackDriftReport,
     alert_type: &str,
 ) -> AlertObservation {
@@ -343,7 +329,7 @@ pub(super) fn event_drift_eligible(stack: &crate::Stack) -> bool {
 }
 
 pub(super) fn drift_status_update(
-    stack: &crate::Stack,
+    stack: &crate::StackDriftContext,
     report: &StackDriftReport,
 ) -> Option<(StackReleaseStatus, ActivityEventInfo)> {
     if stack.control_state != citadel_primitives::ResourceControlState::Idle
@@ -356,16 +342,7 @@ pub(super) fn drift_status_update(
     {
         return None;
     }
-    let info = stack
-        .latest_activity
-        .as_ref()
-        .map(|activity| &activity.info);
-    let previous = info
-        .filter(|info| {
-            info.get("$type").and_then(serde_json::Value::as_str) == Some("StackDriftDetected")
-        })
-        .and_then(|info| info.get("Fingerprint").or_else(|| info.get("fingerprint")))
-        .and_then(serde_json::Value::as_str);
+    let previous = stack.previous_fingerprint.as_deref();
     if !report.has_drift {
         return previous
             .filter(|_| stack.status == StackReleaseStatus::Degraded)
@@ -404,39 +381,65 @@ pub fn calculate_drift(
     stack: &crate::Stack,
     runtime: &StackRuntimeSnapshot,
 ) -> Result<StackDriftReport, StackError> {
-    if stack.drift_policy.mode == crate::StackDriftMode::Disabled
+    calculate_spec_drift(
+        stack.id,
+        stack.platform_id,
+        stack.status,
+        &stack.drift_policy,
+        stack.spec.as_ref(),
+        runtime,
+    )
+}
+
+fn calculate_spec_drift(
+    id: Uuid,
+    platform: Option<Uuid>,
+    status: StackReleaseStatus,
+    policy: &crate::StackDriftPolicy,
+    spec: Option<&StackSpec>,
+    runtime: &StackRuntimeSnapshot,
+) -> Result<StackDriftReport, StackError> {
+    let platform_id = platform.ok_or(StackError::NotFound)?;
+    if policy.mode == crate::StackDriftMode::Disabled
         || matches!(
-            stack.status,
+            status,
             StackReleaseStatus::Stopped | StackReleaseStatus::Paused
         )
     {
         return Ok(StackDriftReport {
-            stack_id: stack.id,
-            platform_id: stack.platform_id.ok_or(StackError::NotFound)?,
+            stack_id: id,
+            platform_id,
             has_drift: false,
             has_auto_fixable_drift: false,
             has_structural_drift: false,
             drifts: Vec::new(),
         });
     }
-    let spec = stack.spec.as_ref().ok_or(StackError::NotFound)?;
     let compose = spec
+        .ok_or(StackError::NotFound)?
         .compose_file()
         .ok_or_else(|| validation("Git Stack drift requires materialized source."))?;
-    calculate_drift_from_compose(stack, runtime, &[compose.to_owned()])
+    compare_compose(id, platform_id, policy, runtime, &[compose.to_owned()])
 }
 
-pub(super) fn calculate_drift_from_compose(
-    stack: &crate::Stack,
+pub(super) fn compare_compose(
+    id: Uuid,
+    platform_id: Uuid,
+    policy: &crate::StackDriftPolicy,
     runtime: &StackRuntimeSnapshot,
     files: &[String],
 ) -> Result<StackDriftReport, StackError> {
-    let desired = parse_compose(files)?;
-    let desired_names = desired
-        .services
-        .iter()
-        .map(|service| service.name.as_str())
-        .collect::<BTreeSet<_>>();
+    let names = super::drift_inputs::compile(files)?;
+    Ok(compare_names(id, platform_id, policy, runtime, &names))
+}
+
+pub(super) fn compare_names(
+    id: Uuid,
+    platform_id: Uuid,
+    policy: &crate::StackDriftPolicy,
+    runtime: &StackRuntimeSnapshot,
+    desired_names: &BTreeSet<String>,
+) -> StackDriftReport {
     let actual_names = runtime
         .containers
         .iter()
@@ -449,12 +452,18 @@ pub(super) fn calculate_drift_from_compose(
         }))
         .collect::<BTreeSet<_>>();
     let mut drifts = Vec::new();
-    for missing in desired_names.difference(&actual_names) {
+    for missing in desired_names
+        .iter()
+        .filter(|name| !actual_names.contains(name.as_str()))
+    {
         drifts.push(StackDrift::MissingContainer {
             service_name: (*missing).to_owned(),
         });
     }
-    for extra in actual_names.difference(&desired_names) {
+    for extra in actual_names
+        .iter()
+        .filter(|name| !desired_names.contains(**name))
+    {
         for container in runtime
             .containers
             .iter()
@@ -500,39 +509,39 @@ pub(super) fn calculate_drift_from_compose(
         .iter()
         .any(|drift| matches!(drift, StackDrift::MissingContainer { .. }));
     let has_auto = drifts.iter().any(|drift| match drift {
-        StackDrift::ContainerStopped { .. } => stack.drift_policy.auto_start_stopped_containers,
-        StackDrift::ContainerPaused { .. } => stack.drift_policy.auto_resume_paused_containers,
-        StackDrift::ExtraContainer { .. } => stack.drift_policy.remove_extra_containers,
+        StackDrift::ContainerStopped { .. } => policy.auto_start_stopped_containers,
+        StackDrift::ContainerPaused { .. } => policy.auto_resume_paused_containers,
+        StackDrift::ExtraContainer { .. } => policy.remove_extra_containers,
         _ => false,
     });
-    Ok(StackDriftReport {
-        stack_id: stack.id,
-        platform_id: stack.platform_id.ok_or(StackError::NotFound)?,
+    StackDriftReport {
+        stack_id: id,
+        platform_id,
         has_drift: !drifts.is_empty(),
         has_auto_fixable_drift: has_auto,
         has_structural_drift: has_structural,
         drifts,
-    })
+    }
 }
 
 /// Never compare a deployed release against a moving branch or an unapplied pin.
 pub(super) fn drift_source_claim(
-    stack: &crate::Stack,
+    stack: &crate::StackDriftContext,
     actor: ActorId,
 ) -> Result<StackOperationClaim, StackError> {
     let mut spec = stack.spec.clone().ok_or(StackError::NotFound)?;
-    let source = stack.source.as_ref().filter(|source| !source.resolved_commit_sha.trim().is_empty())
+    let source = stack.deployed_commit.as_ref().filter(|commit| !commit.trim().is_empty())
         .ok_or_else(|| StackError::Conflict("The deployed Git commit is unavailable. Reapply the Stack to establish its drift baseline.".into()))?;
     let StackSpec::Git { commit_sha, .. } = &mut spec else {
         return Err(validation("A Git Stack is required."));
     };
-    *commit_sha = Some(source.resolved_commit_sha.clone());
+    *commit_sha = Some(source.clone());
     Ok(StackOperationClaim {
         stack_id: stack.id,
         release_id: stack.current_stack_release_id,
         platform_id: stack.platform_id.ok_or(StackError::NotFound)?,
         name: stack.name.clone(),
-        project_name: project_name(stack)?,
+        project_name: drift_project_name(stack.id, &stack.name, stack.spec.as_ref()),
         platform_type: stack.platform_type,
         spec,
         row_version: stack.row_version,

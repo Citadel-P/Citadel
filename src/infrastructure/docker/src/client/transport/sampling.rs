@@ -81,6 +81,24 @@ impl DockerClient {
         &self,
         path: &str,
     ) -> Result<Vec<u8>, DockerError> {
+        bounded_body(self.json_response(path).await?, MAX_JSON_BODY_BYTES).await
+    }
+
+    pub(in crate::client) async fn dated_json_bytes(
+        &self,
+        path: &str,
+    ) -> Result<(Vec<u8>, Option<chrono::DateTime<chrono::Utc>>), DockerError> {
+        let response = self.json_response(path).await?;
+        let date = response
+            .headers()
+            .get(reqwest::header::DATE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| chrono::DateTime::parse_from_rfc2822(v).ok())
+            .map(|date| date.to_utc());
+        Ok((bounded_body(response, MAX_JSON_BODY_BYTES).await?, date))
+    }
+
+    async fn json_response(&self, path: &str) -> Result<reqwest::Response, DockerError> {
         let version = self.negotiated_version().await?;
         let response = self
             .client
@@ -88,8 +106,7 @@ impl DockerClient {
             .timeout(self.request_timeout)
             .send()
             .await?;
-        let response = self.checked_response(response).await?;
-        bounded_body(response, MAX_JSON_BODY_BYTES).await
+        self.checked_response(response).await
     }
 }
 

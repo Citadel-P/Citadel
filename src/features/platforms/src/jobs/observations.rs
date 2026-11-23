@@ -36,6 +36,12 @@ pub trait RuntimeProjectionStore: Send + Sync {
         snapshot: &'a ResourceSnapshot,
         generation: Option<&'a SnapshotGeneration>,
     ) -> BoxFuture<'a, Result<ProjectionChange, RuntimeCapabilityError>>;
+    fn accept_local_volume_batch<'a>(
+        &'a self,
+        platform: Uuid,
+        deltas: &'a [ResourceDelta],
+        generation: &'a SnapshotGeneration,
+    ) -> BoxFuture<'a, Result<ProjectionChange, RuntimeCapabilityError>>;
     fn persist_delta<'a>(
         &'a self,
         platform: Uuid,

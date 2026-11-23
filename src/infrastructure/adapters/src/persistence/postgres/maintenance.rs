@@ -222,20 +222,23 @@ async fn drain_cleanup(
 /// Compaction runs independently of the slower retention sweep under the same lease.
 pub async fn compact(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let progress = super::platforms::statistics::maintenance::compact(pool).await?;
-    Ok(progress
-        + super::platforms::statistics::platform_maintenance::compact(
-            pool,
-            &std::sync::atomic::AtomicI64::new(0),
-        )
-        .await?
-        .unwrap_or_default()
-        .processed
-        + super::platforms::statistics::platform_coarse::compact(
-            pool,
-            &std::sync::atomic::AtomicI64::new(0),
-        )
-        .await?
-        .unwrap_or_default())
+    let mut total = progress;
+    for coarse in [false, true] {
+        let discovery = Default::default();
+        loop {
+            let page = if coarse {
+                super::platforms::statistics::platform_coarse::compact(pool, &discovery).await?
+            } else {
+                super::platforms::statistics::platform_maintenance::compact(pool, &discovery)
+                    .await?
+            };
+            total += page.processed;
+            if page.processed > 0 || !page.scan_pending {
+                break;
+            }
+        }
+    }
+    Ok(total)
 }
 
 /// Refresh tokens have a separate expiry cadence. Backup leases are ownership
@@ -273,8 +276,8 @@ pub async fn recover_on_startup(pool: &PgPool) -> Result<(), sqlx::Error> {
 pub struct PostgresMaintenanceStore {
     pool: PgPool,
     build_cursor: tokio::sync::Mutex<BuildCursor>,
-    platform_cursor: std::sync::atomic::AtomicI64,
-    coarse_cursor: std::sync::atomic::AtomicI64,
+    platform_discovery: tokio::sync::Mutex<super::platforms::statistics::maintenance::Discovery>,
+    coarse_discovery: tokio::sync::Mutex<super::platforms::statistics::maintenance::Discovery>,
     physical_discovery: tokio::sync::Mutex<super::platforms::statistics::maintenance::Discovery>,
 }
 impl PostgresMaintenanceStore {
@@ -282,8 +285,8 @@ impl PostgresMaintenanceStore {
         Self {
             pool,
             build_cursor: Default::default(),
-            platform_cursor: std::sync::atomic::AtomicI64::new(0),
-            coarse_cursor: std::sync::atomic::AtomicI64::new(0),
+            platform_discovery: Default::default(),
+            coarse_discovery: Default::default(),
             physical_discovery: Default::default(),
         }
     }
@@ -340,29 +343,24 @@ impl citadel_runtime::maintenance::MaintenanceStore for PostgresMaintenanceStore
                 sweep.containers_exhausted = count == 0 && !pending;
             }
             if !sweep.platform_exhausted {
-                match platform_maintenance::compact(&self.pool, &self.platform_cursor)
+                let page = platform_maintenance::compact(&self.pool, &self.platform_discovery)
                     .await
-                    .map_err(storage_error)?
-                {
-                    None => sweep.platform_exhausted = true,
-                    Some(platform) => {
-                        result.processed += platform.processed;
-                        result.stalled_source = platform.stalled_source;
-                        // Sealing minutes can make another fifteen-minute block eligible.
-                        if platform.processed > 0 {
-                            sweep.coarse_exhausted = false;
-                        }
-                    }
+                    .map_err(storage_error)?;
+                sweep.platform_exhausted = !page.scan_pending;
+                result.scan_pending |= page.scan_pending;
+                result.processed += page.processed;
+                result.stalled_source = page.stalled_source;
+                if page.processed > 0 {
+                    sweep.coarse_exhausted = false;
                 }
             }
             if !sweep.coarse_exhausted {
-                match platform_coarse::compact(&self.pool, &self.coarse_cursor)
+                let page = platform_coarse::compact(&self.pool, &self.coarse_discovery)
                     .await
-                    .map_err(storage_error)?
-                {
-                    None => sweep.coarse_exhausted = true,
-                    Some(count) => result.processed += count,
-                }
+                    .map_err(storage_error)?;
+                sweep.coarse_exhausted = !page.scan_pending;
+                result.scan_pending |= page.scan_pending;
+                result.processed += page.processed;
             }
             Ok(result)
         })

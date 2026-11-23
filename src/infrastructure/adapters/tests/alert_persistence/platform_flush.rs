@@ -48,7 +48,8 @@ async fn cold_metric_flush_completes_with_one_query_connection() {
         .with_change_notifier(Arc::new(move || {
             changed.fetch_add(1, Ordering::SeqCst);
         }));
-    let store = PostgresPlatformAlertBatchStore::new(pool.clone(), "0.1.5", Arc::new(alerts));
+    let alerts = Arc::new(alerts);
+    let store = PostgresPlatformAlertBatchStore::new(pool.clone(), "0.1.5", alerts.clone());
     let backlog = store.backlog().await.unwrap();
     assert!(backlog.pending > 0 && backlog.blocks_compaction);
     assert_eq!(backlog.oldest_created, Some(1));
@@ -83,6 +84,43 @@ async fn cold_metric_flush_completes_with_one_query_connection() {
         .unwrap();
     assert!(!pending);
     assert_eq!(store.backlog().await.unwrap().pending, 0);
+    sqlx::query("INSERT INTO alertrules(id,name,type,severity,status,createdbyactorid,limitedto,quiethours) VALUES(gen_random_uuid(),'stack reset','StackDriftDetected','Critical','Enabled',$1,'[]','[]')").bind(actor).execute(&pool).await.unwrap();
+    let healthy: Vec<_> = (0..50)
+        .map(|_| citadel_alerts::AlertObservation {
+            alert_type: "StackDriftDetected".into(),
+            info: json!({}),
+            resource_id: Uuid::now_v7(),
+            resource_name: "stack".into(),
+            resource_type: "Stack".into(),
+            deduplication_component: "drift".into(),
+            observed_at: chrono::Utc::now(),
+            value: None,
+            matched: false,
+        })
+        .collect();
+    use citadel_alerts::AlertEventSink;
+    alerts.observe_healthy_stack_drift(&healthy).await.unwrap();
+    async fn reset_counts(pool: &sqlx::PgPool) -> (i64, i64, i64) {
+        sqlx::query_as("SELECT COALESCE(sum(calls) FILTER (WHERE query LIKE '%WITH enabled AS MATERIALIZED%pair.ordinal, pg_advisory_xact_lock%'),0)::bigint,COALESCE(sum(calls) FILTER (WHERE query LIKE '%SELECT pair.ordinal%WHERE state.consecutivematches IS DISTINCT%'),0)::bigint,COALESCE(sum(calls) FILTER(WHERE query LIKE 'SELECT consecutivematches,lasttriggeredat,%'),0)::bigint FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database()) AND query NOT LIKE '%pg_stat_statements%'").fetch_one(pool).await.unwrap()
+    }
+    let stats: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='pg_stat_statements')",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let before = if stats {
+        Some(reset_counts(&pool).await)
+    } else {
+        None
+    };
+    alerts.observe_healthy_stack_drift(&healthy).await.unwrap();
+    if let Some((locks, reads, individual)) = before {
+        assert_eq!(
+            reset_counts(&pool).await,
+            (locks + 1, reads + 1, individual)
+        );
+    }
     pool.close().await;
 }
 
@@ -212,6 +250,15 @@ async fn shared_parent_validation_is_transaction_local_and_preserves_incident_st
         } else {
             0
         };
+        async fn match_batches(pool: &sqlx::PgPool) -> i64 {
+            sqlx::query_scalar("SELECT COALESCE(sum(calls),0)::bigint FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database WHERE datname=current_database()) AND query LIKE 'INSERT INTO alertrulestates%SELECT ruleid,resourceid,%,actor FROM unnest%'")
+                .fetch_one(pool).await.unwrap()
+        }
+        let batches = if measured {
+            match_batches(&pool).await
+        } else {
+            0
+        };
         let acknowledged = if created == 4 {
             // One of the 32 healthy pairs becomes unsettled while the flush
             // waits. Its fresh state must be visible after the lock is granted.
@@ -240,6 +287,10 @@ async fn shared_parent_validation_is_transaction_local_and_preserves_incident_st
         assert_eq!(acknowledged, 32);
         if measured {
             assert_eq!(
+                match_batches(&pool).await - batches,
+                i64::from(created <= 2)
+            );
+            assert_eq!(
                 resolution_attempts(&pool).await - attempts,
                 match created {
                     3 => 32,
@@ -249,7 +300,7 @@ async fn shared_parent_validation_is_transaction_local_and_preserves_incident_st
             );
             assert_eq!(
                 checks(&pool).await - before,
-                i64::from(created != 5),
+                i64::from(created == 3 || created == 4),
                 "the per-rule evaluator only runs when a pair needs work"
             );
         }
@@ -260,6 +311,34 @@ async fn shared_parent_validation_is_transaction_local_and_preserves_incident_st
         .fetch_one(&pool)
         .await
         .unwrap();
+        if created == 2 {
+            // An open incident may suppress a second insert while its matches
+            // continue accumulating. Only a newly inserted event resets them.
+            sqlx::query(
+                "UPDATE alertrulestates SET consecutivematches=2147483646 WHERE alertruleid=$1",
+            )
+            .bind(rule)
+            .execute(&pool)
+            .await
+            .unwrap();
+            for _ in 0..2 {
+                sqlx::query("UPDATE platformstats SET alertpending=true WHERE created=2")
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+                assert_eq!(store.flush_pending(500).await.unwrap(), 32);
+                let saturated: i64 = sqlx::query_scalar("SELECT count(*) FROM alertrulestates WHERE alertruleid=$1 AND consecutivematches=2147483647")
+                    .bind(rule).fetch_one(&pool).await.unwrap();
+                assert_eq!(saturated, 32);
+                let incidents: i64 =
+                    sqlx::query_scalar("SELECT count(*) FROM alertevents WHERE alertruleid=$1")
+                        .bind(rule)
+                        .fetch_one(&pool)
+                        .await
+                        .unwrap();
+                assert_eq!(incidents, 32);
+            }
+        }
         assert_eq!(active, open);
         assert_eq!(notifications.load(Ordering::SeqCst), expected_notifications);
     }

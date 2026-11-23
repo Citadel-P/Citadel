@@ -491,3 +491,100 @@ async fn later_partition_failure_preserves_completed_expiry_and_retries_remainin
     assert!(!exists(&pool, "statisticsrollups", day).await);
     close_storage_fixture(pool, database).await;
 }
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_STATISTICS_DATABASE_URL"]
+async fn platform_and_node_discovery_bound_probes_and_drain_past_empty_pages() {
+    let (pool, database) = storage_fixture().await;
+    let scope = platform(&pool).await;
+    sqlx::query("INSERT INTO platformhistorysources(platformid,nodeid) SELECT $1,'sparse-'||n FROM generate_series(1,2000)n").bind(scope.platform_id).execute(&pool).await.unwrap();
+    let start = (chrono::Utc::now().timestamp() / 86400 - 3) * 86400;
+    sqlx::query("INSERT INTO platformnodeiostats(platformid,nodeid,created,containerio)
+        SELECT $1,'sparse-'||n,$2::bigint+t,jsonb_build_array(jsonb_build_object('containerId','web','rxBytes',t))
+        FROM unnest(ARRAY[1001,1800]) n CROSS JOIN (SELECT generate_series(0,119) AS t UNION ALL SELECT 900) ticks")
+        .bind(scope.platform_id).bind(start).execute(&pool).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("ANALYZE platformhistorysources")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query(concat!(
+        "PREPARE minute(bigint,bigint,bigint,bigint) AS ",
+        include_str!(
+            "../../src/persistence/postgres/platforms/statistics/platform_compaction_bounds.sql"
+        )
+    ))
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    sqlx::query(concat!(
+        "PREPARE coarse(bigint,bigint,bigint) AS ",
+        include_str!(
+            "../../src/persistence/postgres/platforms/statistics/platform_coarse_bounds.sql"
+        )
+    ))
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    fn check(plan: &serde_json::Value) {
+        assert!(plan["Actual Loops"].as_f64().unwrap() <= 64., "{plan}");
+        for child in plan["Plans"].as_array().into_iter().flatten() {
+            check(child);
+        }
+    }
+    for mode in ["force_generic_plan", "force_custom_plan"] {
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "SET LOCAL plan_cache_mode={mode}"
+        )))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        for stmt in [
+            format!("minute({},0,null,0)", start + 86400),
+            "coarse(0,null,0)".into(),
+        ] {
+            let plan: serde_json::Value = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "EXPLAIN(ANALYZE,BUFFERS,WAL,TIMING OFF,FORMAT JSON) EXECUTE {stmt}"
+            )))
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+            assert_eq!(plan[0]["Plan"]["Actual Rows"].as_f64(), Some(64.));
+            check(&plan[0]["Plan"]);
+        }
+    }
+    tx.rollback().await.unwrap();
+    let store = PostgresMaintenanceStore::new(pool.clone());
+    let mut sweep = Default::default();
+    for pass in 0..180 {
+        if pass % 8 == 0 {
+            sweep = Default::default();
+        }
+        let work = store.compact_next(&mut sweep).await.unwrap();
+        if work.processed == 0 && !work.scan_pending {
+            break;
+        }
+        assert!(pass < 179, "never reached an idle sweep");
+    }
+    let remaining: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM platformnodeiostats WHERE platformid=$1")
+            .bind(scope.platform_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(remaining, 2, "only the newest capture of each node remains");
+    let sealed: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM platformhistorysources
+        WHERE platformid=$1 AND compacteduntil>=$2 AND coarseneduntil>=$2",
+    )
+    .bind(scope.platform_id)
+    .bind(start + 900)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        sealed, 2,
+        "both minute and coarse discovery reached the late sources"
+    );
+    close_storage_fixture(pool, database).await;
+}

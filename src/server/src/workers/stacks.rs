@@ -81,7 +81,7 @@ pub(crate) async fn stack_drift_monitor(
     cancellation: CancellationToken,
     stacks: Arc<StackService>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut ticker = super::schedule::interval("stack-drift", DRIFT_MONITOR_INTERVAL);
+    let mut ticker = super::schedule::phased_interval("stack-drift", DRIFT_MONITOR_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
@@ -94,9 +94,13 @@ pub(crate) async fn stack_drift_monitor(
         };
         let _iteration = citadel_runtime::runtime_metrics::RuntimeWork::StackDrift.start();
         let mut cursor = None;
+        let mut pass = Default::default();
         loop {
             let observation = citadel_runtime::jobs::JobHandle::iteration();
-            match stacks.monitor_drift(cursor, DRIFT_MONITOR_BATCH).await {
+            match stacks
+                .monitor_drift_page(cursor, DRIFT_MONITOR_BATCH, &mut pass)
+                .await
+            {
                 Ok(result) => {
                     if let Some(i) = observation {
                         i.finish(
@@ -118,7 +122,7 @@ pub(crate) async fn stack_drift_monitor(
                             "reconciled Stack drift"
                         );
                     }
-                    let last_page = result.checked < DRIFT_MONITOR_BATCH as usize;
+                    let last_page = cursor.is_none();
                     for failure in result.failures {
                         report_drift_problem(failure.stack_id);
                         tracing::warn!(

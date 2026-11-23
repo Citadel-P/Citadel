@@ -133,8 +133,10 @@ fn one_stopped_service_is_not_reported_as_two_missing_services() {
             .collect(),
         services: Vec::new(),
     };
-    let report = calculate_drift_from_compose(
-        &stack,
+    let report = compare_compose(
+        stack.id,
+        stack.platform_id.unwrap(),
+        &stack.drift_policy,
         &runtime,
         &[
             "services:\n  demo-app:\n    image: demo-app\n  demo-app-agent:\n    image: demo-app-agent\n"
@@ -226,7 +228,7 @@ fn drift_status_respects_policy_deduplication_and_recovery_origin() {
         },
     )
     .unwrap();
-    let (status, info) = drift_status_update(&stack, &report).unwrap();
+    let (status, info) = drift_status_update(&stack.clone().into(), &report).unwrap();
     assert_eq!(status, StackReleaseStatus::Degraded);
     stack.status = status;
     stack.latest_activity = Some(citadel_activities::ActivitySummary {
@@ -237,11 +239,11 @@ fn drift_status_respects_policy_deduplication_and_recovery_origin() {
         created_at: chrono::Utc::now(),
         info: serde_json::to_value(info).unwrap(),
     });
-    assert!(drift_status_update(&stack, &report).is_none());
+    assert!(drift_status_update(&stack.clone().into(), &report).is_none());
     report.has_drift = false;
     report.drifts.clear();
     assert!(matches!(
-        drift_status_update(&stack, &report),
+        drift_status_update(&stack.clone().into(), &report),
         Some((
             StackReleaseStatus::Healthy,
             ActivityEventInfo::StackDriftResolved { .. }
@@ -249,14 +251,16 @@ fn drift_status_respects_policy_deduplication_and_recovery_origin() {
     ));
     stack.latest_activity = None;
     assert!(
-        drift_status_update(&stack, &report).is_none(),
+        drift_status_update(&stack.clone().into(), &report).is_none(),
         "unrelated degradation must not be healed"
     );
     report.has_drift = true;
     stack.status = StackReleaseStatus::Healthy;
     stack.drift_policy.mark_degraded = false;
     assert_eq!(
-        drift_status_update(&stack, &report).unwrap().0,
+        drift_status_update(&stack.clone().into(), &report)
+            .unwrap()
+            .0,
         StackReleaseStatus::Healthy
     );
     for status in [
@@ -265,11 +269,11 @@ fn drift_status_respects_policy_deduplication_and_recovery_origin() {
         StackReleaseStatus::Applying,
     ] {
         stack.status = status;
-        assert!(drift_status_update(&stack, &report).is_none());
+        assert!(drift_status_update(&stack.clone().into(), &report).is_none());
     }
     stack.status = StackReleaseStatus::Healthy;
     stack.control_state = citadel_primitives::ResourceControlState::Processing;
-    assert!(drift_status_update(&stack, &report).is_none());
+    assert!(drift_status_update(&stack.clone().into(), &report).is_none());
 }
 
 #[test]
@@ -380,7 +384,7 @@ fn git_drift_is_pinned_to_the_deployed_commit_and_requires_a_baseline() {
     stack.stack_source = StackSource::Git;
     stack.spec = Some(serde_json::from_value(serde_json::json!({"$type":"Git", "gitRepoId":Uuid::now_v7(), "branch":"main", "commitSha":"unapplied", "composePaths":["compose.yml","override.yml"]})).unwrap());
     assert!(matches!(
-        drift_source_claim(&stack, stack.audit.created_by_actor_id),
+        drift_source_claim(&stack.clone().into(), stack.audit.created_by_actor_id),
         Err(StackError::Conflict(_))
     ));
     stack.source = Some(
@@ -389,7 +393,7 @@ fn git_drift_is_pinned_to_the_deployed_commit_and_requires_a_baseline() {
         )
         .unwrap(),
     );
-    let claim = drift_source_claim(&stack, stack.audit.created_by_actor_id).unwrap();
+    let claim = drift_source_claim(&stack.clone().into(), stack.audit.created_by_actor_id).unwrap();
     let StackSpec::Git {
         commit_sha,
         compose_paths,
@@ -424,12 +428,25 @@ fn git_drift_compares_all_compose_files_and_still_detects_real_drift() {
         });
     }
     assert!(
-        !calculate_drift_from_compose(&stack, &runtime, &files)
-            .unwrap()
-            .has_drift
+        !compare_compose(
+            stack.id,
+            stack.platform_id.unwrap(),
+            &stack.drift_policy,
+            &runtime,
+            &files
+        )
+        .unwrap()
+        .has_drift
     );
     runtime.containers.pop();
-    let report = calculate_drift_from_compose(&stack, &runtime, &files).unwrap();
+    let report = compare_compose(
+        stack.id,
+        stack.platform_id.unwrap(),
+        &stack.drift_policy,
+        &runtime,
+        &files,
+    )
+    .unwrap();
     assert!(report.has_structural_drift);
     assert!(
         matches!(&report.drifts[0], StackDrift::MissingContainer { service_name } if service_name == "worker")
@@ -499,4 +516,80 @@ fn compose_failure_summary_does_not_replay_progress_or_duplicate_errors() {
         super::apply::apply_failure_message(&result),
         format!("Stack deployment failed (exit code 1).\n{error}")
     );
+}
+
+#[tokio::test]
+async fn drift_pass_reuses_only_successful_identical_desired_inputs() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Reader(AtomicUsize);
+    impl crate::StackSourceMaterializerPort for Reader {
+        fn materialize<'a>(
+            &'a self,
+            _: &'a StackOperationClaim,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<crate::StackApplySource, StackError>> {
+            unreachable!()
+        }
+        fn compose_contents<'a>(
+            &'a self,
+            claim: &'a StackOperationClaim,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<Vec<String>, StackError>> {
+            let call = self.0.fetch_add(1, Ordering::SeqCst);
+            assert!(
+                matches!(&claim.spec, StackSpec::Git{commit_sha:Some(sha),..} if sha=="deployed")
+            );
+            Box::pin(async move {
+                if call == 0 {
+                    return Err(StackError::NotFound);
+                }
+                Ok(vec!["services:\n  git:\n    image: nginx\n".into()])
+            })
+        }
+    }
+    let reader = Reader(AtomicUsize::new(0));
+    let token = CancellationToken::new();
+    let actor = ActorId::new(Uuid::now_v7());
+    let mut pass = DriftPass::default();
+    let mut stack: crate::StackDriftContext =
+        stack(StackReleaseStatus::Healthy, StackDriftPolicy::default()).into();
+    let first = pass.load(None, &token, &stack, actor).await.unwrap();
+    stack.row_version += 1;
+    let same = pass.load(None, &token, &stack, actor).await.unwrap();
+    assert!(Arc::ptr_eq(&first, &same));
+    if let Some(StackSpec::WebEditor { compose_file, .. }) = &mut stack.spec {
+        *compose_file = "services:\n  changed:\n    image: nginx\n".into();
+    }
+    assert!(
+        pass.load(None, &token, &stack, actor)
+            .await
+            .unwrap()
+            .contains("changed")
+    );
+    stack.spec=Some(serde_json::from_value(serde_json::json!({"$type":"Git","gitRepoId":Uuid::now_v7(),"branch":"main","composePaths":["compose.yml","extra.yml"]})).unwrap());
+    stack.deployed_commit = Some("deployed".into());
+    assert!(
+        pass.load(Some(&reader), &token, &stack, actor)
+            .await
+            .is_err()
+    );
+    let names = pass
+        .load(Some(&reader), &token, &stack, actor)
+        .await
+        .unwrap();
+    stack.id = Uuid::now_v7();
+    assert!(Arc::ptr_eq(
+        &names,
+        &pass
+            .load(Some(&reader), &token, &stack, actor)
+            .await
+            .unwrap()
+    ));
+    if let Some(StackSpec::Git { compose_paths, .. }) = &mut stack.spec {
+        compose_paths.reverse();
+    }
+    pass.load(Some(&reader), &token, &stack, actor)
+        .await
+        .unwrap();
+    assert_eq!(reader.0.load(Ordering::SeqCst), 3);
 }

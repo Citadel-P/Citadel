@@ -399,6 +399,62 @@ pub(crate) async fn event_consumer(
             None => return Ok(()),
         };
         let observation = citadel_runtime::jobs::JobHandle::iteration();
+        if local_volume_create(&event) {
+            let mut seen = std::collections::HashSet::from([event.container_id.clone()]);
+            let Some((batch, carry)) = citadel_runtime::event_batch::gather(
+                event,
+                stream.as_mut(),
+                |_, next| local_volume_create(next) && seen.insert(next.container_id.clone()),
+                &cancellation,
+            )
+            .await
+            else {
+                return Ok(());
+            };
+            pending = carry;
+            for event in &batch {
+                record_consumed(&metrics, event);
+            }
+            let handled = tokio::select! {
+                biased; ()=cancellation.cancelled()=>return Ok(()),
+                result=apply_local_volume_batch(&batch,&docker,store.as_ref(),&targets,realtime.as_ref())=>result
+            };
+            let failed = handled.as_ref().is_err();
+            if let Err(error) = &handled {
+                tracing::warn!(%error,"Volume event observation failed");
+            }
+            for event in &batch {
+                let applied = handled.as_ref().is_ok_and(|ids| {
+                    event
+                        .container_id
+                        .as_ref()
+                        .is_some_and(|id| ids.contains(id))
+                });
+                request_event_refresh(
+                    event,
+                    if applied {
+                        DeltaOutcome::Applied
+                    } else {
+                        DeltaOutcome::Unavailable
+                    },
+                    &targets,
+                    &event_refresh,
+                    &cancellation,
+                )
+                .await;
+            }
+            if let Some(observation) = observation {
+                observation.finish(
+                    if failed {
+                        citadel_runtime::jobs::JobOutcome::Failed
+                    } else {
+                        citadel_runtime::jobs::JobOutcome::Completed
+                    },
+                    None,
+                );
+            }
+            continue;
+        }
         if state_event(&event) {
             let Some((batch, carry)) = super::super::container_batch::gather(
                 event,
@@ -520,6 +576,75 @@ pub(crate) async fn event_consumer(
                 None,
             );
         }
+    }
+}
+
+fn local_volume_create(event: &InventoryEvent) -> bool {
+    !event.stream_recovered
+        && event.platform_id.is_none()
+        && matches!(event.source, ReconciliationTrigger::LocalEvent)
+        && matches!(
+            event.kind,
+            RuntimeEventKind::Volume(citadel_platforms::jobs::ResourceChange::Observe)
+        )
+        && event.container_id.as_ref().is_some_and(|id| !id.is_empty())
+}
+
+async fn apply_local_volume_batch(
+    batch: &[InventoryEvent],
+    docker: &DockerClient,
+    store: &dyn RuntimeProjectionStore,
+    targets: &PlatformRuntimeRegistry,
+    realtime: Option<&RealtimeHub>,
+) -> Result<std::collections::HashSet<String>, Box<dyn std::error::Error + Send + Sync>> {
+    use citadel_platforms::jobs::{ProjectionKind, ResourceDelta, SnapshotGeneration};
+    let mut targets_and_stamps = vec![];
+    for target in targets
+        .snapshot()
+        .await
+        .iter()
+        .filter(|t| t.connector_type == citadel_platforms::ConnectorKind::Local)
+    {
+        targets_and_stamps.push((
+            target.id,
+            SnapshotGeneration::capture(target.id, None, ProjectionKind::Volumes).await,
+        ));
+    }
+    if targets_and_stamps.is_empty() {
+        return Ok(Default::default());
+    }
+    let names = batch
+        .iter()
+        .filter_map(|e| e.container_id.clone())
+        .collect::<Vec<_>>();
+    let deltas = docker
+        .observe_created_volumes(names)
+        .await?
+        .into_iter()
+        .flatten()
+        .map(|v| ResourceDelta::Volume {
+            id: v.name.clone(),
+            value: Some(citadel_docker::client::inventory::map_volume(v)),
+        })
+        .collect::<Vec<_>>();
+    let mut accepted = true;
+    for (id, generation) in targets_and_stamps {
+        let change = store
+            .accept_local_volume_batch(id, &deltas, &generation)
+            .await?;
+        accepted &= change.accepted();
+        if change.changed()
+            && let Some(hub) = realtime
+        {
+            for delta in &deltas {
+                hub.publish_resource_observation(id, None, "create", delta);
+            }
+        }
+    }
+    if accepted {
+        Ok(deltas.iter().map(|d| d.id().to_owned()).collect())
+    } else {
+        Ok(Default::default())
     }
 }
 

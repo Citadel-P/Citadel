@@ -64,7 +64,7 @@ async fn recovery(
     store: Arc<dyn MaintenanceStore>,
     realtime: Option<RealtimeHub>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut tick = super::schedule::interval("recovery", super::recovery::FALLBACK);
+    let mut tick = super::schedule::phased_interval("recovery", super::recovery::FALLBACK);
     loop {
         tokio::select! { ()=token.cancelled()=>break, _=tick.tick()=>{} }
         match citadel_runtime::jobs::observe_work(store.reconcile(), |v| {
@@ -127,7 +127,8 @@ async fn compaction(
     token: CancellationToken,
     store: Arc<dyn MaintenanceStore>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut tick = super::schedule::interval("statistics-compaction", COMPACTION_IDLE_INTERVAL);
+    let mut tick =
+        super::schedule::phased_interval("statistics-compaction", COMPACTION_IDLE_INTERVAL);
     if let Some(job) = citadel_runtime::jobs::JobHandle::current() {
         job.policy(
             format!(
@@ -224,6 +225,10 @@ mod tests {
         atomic::{AtomicBool, AtomicUsize, Ordering},
     };
 
+    fn first_compaction() -> Duration {
+        crate::workers::schedule::first_phase("statistics-compaction", COMPACTION_IDLE_INTERVAL)
+    }
+
     #[derive(Default)]
     struct Store {
         hours: Mutex<Vec<usize>>,
@@ -314,7 +319,7 @@ mod tests {
                 None,
                 Duration::from_secs(900),
             );
-            tokio::time::sleep(Duration::from_secs(307)).await;
+            tokio::time::sleep(first_compaction() + Duration::from_secs(7)).await;
             let snapshot = catalog.snapshot();
             assert_eq!(snapshot.jobs.len(), 4);
             let job = snapshot
@@ -384,7 +389,7 @@ mod tests {
             None,
             Duration::from_secs(900),
         );
-        tokio::time::sleep(Duration::from_secs(302)).await;
+        tokio::time::sleep(first_compaction() + Duration::from_secs(2)).await;
         let snapshot = catalog.snapshot();
         let job = snapshot
             .jobs
@@ -436,7 +441,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn compaction_waits_five_minutes_at_startup_when_idle_and_after_errors() {
+    async fn compaction_waits_for_its_phase_then_five_minutes_when_idle_or_after_errors() {
         for fail in [false, true] {
             let store = Arc::new(Store {
                 fail,
@@ -450,7 +455,7 @@ mod tests {
                 None,
                 Duration::from_secs(900),
             ));
-            tokio::time::sleep(Duration::from_secs(299)).await;
+            tokio::time::sleep(first_compaction() - Duration::from_secs(1)).await;
             assert_eq!(store.compactions.load(Ordering::SeqCst), 0);
             tokio::time::sleep(Duration::from_secs(3)).await;
             assert_eq!(store.compactions.load(Ordering::SeqCst), 1);
@@ -479,7 +484,7 @@ mod tests {
             None,
             Duration::from_secs(900),
         ));
-        tokio::time::sleep(Duration::from_secs(304)).await;
+        tokio::time::sleep(first_compaction() + Duration::from_secs(4)).await;
         assert_eq!(store.compactions.load(Ordering::SeqCst), 128);
         assert_eq!(store.hours.lock().unwrap()[0], 1);
         tokio::time::sleep(Duration::from_secs(58)).await;
@@ -513,7 +518,7 @@ mod tests {
             None,
             Duration::from_secs(900),
         ));
-        tokio::time::sleep(Duration::from_secs(302)).await;
+        tokio::time::sleep(first_compaction() + Duration::from_secs(2)).await;
         assert!(store.active.load(Ordering::SeqCst));
         tokio::time::sleep(Duration::from_secs(5)).await;
         assert!(
@@ -714,7 +719,7 @@ mod tests {
                 None,
                 Duration::from_secs(900),
             ));
-            tokio::time::sleep(Duration::from_secs(301)).await;
+            tokio::time::sleep(first_compaction() + Duration::from_secs(1)).await;
             assert_eq!(
                 store.compactions.load(Ordering::SeqCst),
                 3,
@@ -755,7 +760,7 @@ mod tests {
             None,
             Duration::from_secs(900),
         ));
-        tokio::time::sleep(Duration::from_secs(301)).await;
+        tokio::time::sleep(first_compaction() + Duration::from_secs(1)).await;
         assert_eq!(
             store.compactions.load(Ordering::SeqCst),
             3,

@@ -17,7 +17,8 @@ pub(crate) async fn run(
     containers: Arc<ContainerMutationService>,
     mut wake: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut tick = super::super::schedule::interval("pruning", super::super::recovery::FALLBACK);
+    let mut tick =
+        super::super::schedule::phased_interval("pruning", super::super::recovery::FALLBACK);
     let mut startup = true;
     let mut wake_open = true;
     loop {

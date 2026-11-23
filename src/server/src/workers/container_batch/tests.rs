@@ -1,5 +1,6 @@
 use super::*;
-use futures_util::stream;
+use futures_util::{StreamExt, stream};
+use std::time::Duration;
 
 #[tokio::test(start_paused = true)]
 async fn six_events_and_barrier_preserve_order() {

@@ -280,7 +280,18 @@ impl AgentExecutionClient {
         label: &str,
         cancellation: &CancellationToken,
     ) -> Result<Vec<citadel_platforms::RuntimeContainerSummary>, RuntimeCapabilityError> {
+        self.list_containers_by_label_limit(label, None, cancellation)
+            .await
+    }
+
+    pub(crate) async fn list_containers_by_label_limit(
+        &self,
+        label: &str,
+        limit: Option<i32>,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<citadel_platforms::RuntimeContainerSummary>, RuntimeCapabilityError> {
         let mut request = super::client::container_metadata_request(false);
+        request.limit = limit;
         request.filters.insert(
             "label".into(),
             OptionChain {

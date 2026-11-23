@@ -193,18 +193,19 @@ impl platform_service_server::PlatformService for Runtime {
     ) -> Result<Response<Self::StreamDaemonEventStream>, Status> {
         let docker = self.docker.clone();
         let samples = self.samples.clone();
-        let mut events = docker.events(None, None).await.map_err(docker_error)?;
+        let raw_events = docker.events(None, None).await.map_err(docker_error)?;
         // A newly established stream cannot prove that cached running identities
         // survived the previous connection's gap.
         samples.invalidate();
         let cancel = self.shutdown.child_token();
         let guard = cancel.clone().drop_guard();
+        let mut events = docker.volume_event_stream(raw_events, cancel.clone());
         Ok(Response::new(Box::pin(async_stream::try_stream! {
             let _guard = guard;
             loop {
                 let event = tokio::select! { ()=cancel.cancelled()=>break, event=events.next()=>event };
                 let Some(event) = event else { break; };
-                let e = event.map_err(docker_error)?;
+                let (e,volume_observation) = event.map_err(docker_error)?;
                 use daemon_event_response::Kind;
                 let Some(normalized) = events::normalize(&e) else { continue; };
                 let scope = match e.scope.as_str() { "local" => 1, "swarm" => 2, _ => 0 };
@@ -249,7 +250,7 @@ impl platform_service_server::PlatformService for Runtime {
                         Kind::DaemonImageEventResponse(DaemonImageEventResponse{action:e.action,image_id:id,image})
                     }
                     RuntimeEventKind::Volume(change)=>{
-                        let volume=if change == ResourceChange::Tombstone{None}else{docker.inspect_volume(&id).await.ok().map(super::volumes::volume)};
+                        let volume=if change == ResourceChange::Tombstone{None}else{volume_observation.map(super::volumes::volume)};
                         Kind::DaemonVolumeEventResponse(DaemonVolumeEventResponse{action:e.action,volume_id:id,volume})
                     }
                     RuntimeEventKind::Network(change)=>{

@@ -7,7 +7,7 @@ pub(crate) async fn reconcile(
     cancellation: CancellationToken,
     volumes: Arc<VolumeContentAdapter>,
 ) -> Result<(), std::convert::Infallible> {
-    let mut tick = super::schedule::interval("volume_helpers", super::recovery::FALLBACK);
+    let mut tick = super::schedule::phased_interval("volume_helpers", super::recovery::FALLBACK);
     let mut startup = true;
     let mut after = Uuid::nil();
     loop {

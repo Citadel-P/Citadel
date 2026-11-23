@@ -216,13 +216,28 @@ impl PlatformRuntimeRouter {
     ) -> Result<crate::connectors::agent::execution::AgentExecutionClient, RuntimeCapabilityError>
     {
         use crate::connectors::agent::execution::AgentExecutionClient;
-        match self
-            .resolve_connection(connection, None, false, cancellation)
-            .await?
-        {
-            Runtime::Agent(agent) => Ok(AgentExecutionClient::Direct(Arc::new(agent))),
-            Runtime::Edge(runtime) => Ok(AgentExecutionClient::Edge(runtime.session)),
-            Runtime::Local(_) => Err(unavailable()),
+        match connection.connector {
+            citadel_platforms::ConnectorKind::Agent => self
+                .direct_for(connection, cancellation)
+                .await
+                .map(AgentExecutionClient::Direct),
+            citadel_platforms::ConnectorKind::EdgeAgent => self
+                .edge
+                .get(&EdgeTarget::platform(connection.id))
+                .map(AgentExecutionClient::Edge)
+                .map_err(|_| unavailable()),
+            citadel_platforms::ConnectorKind::Local => Err(unavailable()),
+        }
+    }
+
+    async fn direct_for(
+        &self,
+        connection: &PlatformConnection,
+        cancellation: &CancellationToken,
+    ) -> Result<Arc<AgentClient>, RuntimeCapabilityError> {
+        tokio::select! {
+            () = cancellation.cancelled() => Err(RuntimeCapabilityError::new(RuntimeErrorKind::Cancelled, "Platform operation cancelled.", false)),
+            value = self.resolver.resolve_agent(connection.id, &connection.address) => value,
         }
     }
 
@@ -300,16 +315,13 @@ impl PlatformRuntimeRouter {
                 return Err(unavailable());
             }
         }
-        let address = &connection.address;
         let runtime = match connection.connector {
             citadel_platforms::ConnectorKind::Local => Runtime::Local(&self.docker),
             citadel_platforms::ConnectorKind::Agent => Runtime::Agent(
-                tokio::select! {
-                    () = cancellation.cancelled() => return Err(RuntimeCapabilityError::new(RuntimeErrorKind::Cancelled, "Platform operation cancelled.", false)),
-                    value = self.resolver.resolve_agent(platform_id, address) => value?,
-                }
-                .as_ref()
-                .clone(),
+                self.direct_for(connection, cancellation)
+                    .await?
+                    .as_ref()
+                    .clone(),
             ),
             citadel_platforms::ConnectorKind::EdgeAgent => Runtime::Edge(EdgeRuntime {
                 session: self

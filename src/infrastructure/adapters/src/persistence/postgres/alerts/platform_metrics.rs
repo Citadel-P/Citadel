@@ -159,9 +159,10 @@ async fn flush_pending(
             core_version,
         ));
     }
-    const RESET_BATCH_SIZE: usize = 512;
+    const PAIR_BATCH_SIZE: usize = 512;
     let mut evaluation = super::rule_evaluation::RuleEvaluation::new(&mut tx);
     let mut healthy = Vec::new();
+    let mut matches = Vec::new();
     for observation in &observations {
         let (resets, winner) = citadel_alerts::rules::evaluation::select_observation_rules(
             &rules[observation.alert_type.as_str()],
@@ -170,24 +171,28 @@ async fn flush_pending(
         );
         for rule in resets {
             healthy.push((rule, observation));
-            if healthy.len() == RESET_BATCH_SIZE {
+            if healthy.len() == PAIR_BATCH_SIZE {
                 alerts
-                    .process_metric_resets(&mut evaluation, &healthy)
+                    .process_healthy_resets(&mut evaluation, &healthy)
                     .await?;
                 healthy.clear();
             }
         }
         if let Some(rule) = winner {
-            alerts
-                .process_rule_in(&mut evaluation, rule, observation, None)
-                .await
-                .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+            matches.push((rule, observation));
+            if matches.len() == PAIR_BATCH_SIZE {
+                super::metric_matches::apply(&mut evaluation, &matches).await?;
+                matches.clear();
+            }
         }
     }
     if !healthy.is_empty() {
         alerts
-            .process_metric_resets(&mut evaluation, &healthy)
+            .process_healthy_resets(&mut evaluation, &healthy)
             .await?;
+    }
+    if !matches.is_empty() {
+        super::metric_matches::apply(&mut evaluation, &matches).await?;
     }
     let changed = evaluation.changed;
     let acknowledged = sqlx::query("UPDATE platformstats stats SET alertpending=false FROM unnest($1::uuid[],$2::text[]) claimed(id,revision) WHERE stats.id=claimed.id AND stats.xmin::text=claimed.revision")

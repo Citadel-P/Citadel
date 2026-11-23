@@ -162,14 +162,12 @@ impl PostgresAlertRepository {
             .execute(&mut **transaction)
             .await
             .map_err(storage)?;
-        if next_consecutive < rule.required_matches.unwrap_or(1).max(1) {
-            return Ok(None);
-        }
-        if last_triggered.is_some_and(|last| {
-            rule.cooldown_seconds.is_some_and(|seconds| {
-                observation.observed_at < last + chrono::Duration::seconds(i64::from(seconds))
-            })
-        }) {
+        if !citadel_alerts::rules::evaluation::trigger_due(
+            rule,
+            next_consecutive,
+            last_triggered,
+            observation.observed_at,
+        ) {
             return Ok(None);
         }
         let id = Uuid::now_v7();

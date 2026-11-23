@@ -116,6 +116,8 @@ impl FromStr for ApiVersion {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DockerError {
+    #[error(transparent)]
+    Shared(std::sync::Arc<DockerError>),
     #[error("Docker Unix-socket transport is only available on Unix targets")]
     UnsupportedPlatform,
     #[error("Invalid Docker endpoint: {0}")]
@@ -170,7 +172,7 @@ pub struct DockerClient {
     generation: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub(super) daemon_id: std::sync::Arc<Mutex<Option<String>>>,
     pub(super) configuration: std::sync::Arc<RwLock<Option<NegotiatedConfiguration>>>,
-    pub(super) storage_usage: std::sync::Arc<Mutex<super::storage_usage::UsageCache>>,
+    pub(super) storage_usage: std::sync::Arc<super::storage_usage::StorageObservations>,
 }
 
 impl DockerClient {
@@ -388,7 +390,7 @@ impl DockerClient {
     /// Reconnect/daemon replacement invalidates negotiated and static metadata together.
     pub async fn invalidate_daemon(&self) {
         self.invalidate_version().await;
-        *self.storage_usage.lock().await = Default::default();
+        *self.storage_usage.totals.lock().await = Default::default();
     }
 
     pub(super) async fn invalidate_version(&self) {
@@ -557,7 +559,20 @@ impl DockerClient {
         }
         let query = (!parts.is_empty()).then(|| parts.join("&"));
         let response = self.send_stream("/events", query.as_deref()).await?;
-        Ok(json_lines(response, MAX_STREAM_ITEM_BYTES))
+        let docker = self.clone();
+        Ok(Box::pin(
+            json_lines::<DockerEvent>(response, MAX_STREAM_ITEM_BYTES).inspect(move |item| {
+                if let Ok(event) = item
+                    && event.resource_type == "volume"
+                    && matches!(
+                        super::events::normalize(event),
+                        Some(super::events::RuntimeEventKind::Volume(_))
+                    )
+                {
+                    docker.invalidate_volume_usage();
+                }
+            }),
+        ))
     }
 
     pub async fn container_stats(

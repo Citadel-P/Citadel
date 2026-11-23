@@ -60,9 +60,10 @@ use sha2::{Digest, Sha256};
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct MutationFixture {
     fail_network_create: bool,
+    list_gate: Option<Arc<ListGate>>,
     network_create_calls: Arc<AtomicUsize>,
     container_delete_calls: Arc<AtomicUsize>,
     deployment_apply_calls: Arc<AtomicUsize>,
@@ -100,9 +101,16 @@ type TestStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 impl ContainerService for MutationFixture {
     async fn list(
         &self,
-        _: Request<ListContainersRequest>,
+        request: Request<ListContainersRequest>,
     ) -> Result<Response<ListContainersResponse>, Status> {
-        Err(Status::unimplemented("not used"))
+        let Some(gate) = &self.list_gate else {
+            return Err(Status::unimplemented("not used"));
+        };
+        require_signature(&request)?;
+        assert_eq!(request.get_ref().limit, Some(4097));
+        gate.started.notify_one();
+        gate.resume.notified().await;
+        Ok(Response::new(ListContainersResponse::default()))
     }
 
     async fn start(&self, request: Request<ContainerIds>) -> Result<Response<()>, Status> {
@@ -465,6 +473,7 @@ async fn agent_network_volume_and_deployment_mutations_are_signed_and_transport_
     let action_calls = Arc::new(AtomicUsize::new(0));
     let stack_calls = Arc::new(AtomicUsize::new(0));
     let (address, shutdown) = start_fixture(MutationFixture {
+        list_gate: None,
         fail_network_create: false,
         network_create_calls: calls.clone(),
         container_delete_calls: container_calls.clone(),
@@ -595,6 +604,7 @@ async fn agent_network_volume_and_deployment_mutations_are_signed_and_transport_
 #[tokio::test]
 async fn terminal_signs_exact_open_and_streams_input_resize_and_cancellation() {
     let (address, shutdown) = start_fixture(MutationFixture {
+        list_gate: None,
         fail_network_create: false,
         network_create_calls: Arc::default(),
         container_delete_calls: Arc::default(),
@@ -656,6 +666,7 @@ async fn terminal_signs_exact_open_and_streams_input_resize_and_cancellation() {
 async fn agent_mutations_do_not_retry_an_ambiguous_failure() {
     let calls = Arc::new(AtomicUsize::new(0));
     let (address, shutdown) = start_fixture(MutationFixture {
+        list_gate: None,
         fail_network_create: true,
         network_create_calls: calls.clone(),
         container_delete_calls: Arc::new(AtomicUsize::new(0)),
@@ -679,6 +690,7 @@ async fn agent_mutations_do_not_retry_an_ambiguous_failure() {
 #[tokio::test]
 async fn signed_agent_container_create_and_binary_exec_are_bounded() {
     let (address, shutdown) = start_fixture(MutationFixture {
+        list_gate: None,
         fail_network_create: false,
         network_create_calls: Arc::new(AtomicUsize::new(0)),
         container_delete_calls: Arc::new(AtomicUsize::new(0)),
@@ -839,6 +851,7 @@ fn stack_claim() -> StackOperationClaim {
 async fn signed_agent_inspection_preserves_image_state_and_redacts_secrets() {
     use citadel_platforms::containers::ContainerInspectionPort;
     let (address, shutdown) = start_fixture(MutationFixture {
+        list_gate: None,
         fail_network_create: false,
         network_create_calls: Arc::default(),
         container_delete_calls: Arc::default(),
@@ -886,6 +899,7 @@ async fn signed_agent_inspection_preserves_image_state_and_redacts_secrets() {
 async fn container_shutdown_allows_grace_beyond_transport_timeout_and_remains_cancellable() {
     let calls = Arc::new(AtomicUsize::new(0));
     let (address, shutdown) = start_fixture(MutationFixture {
+        list_gate: None,
         fail_network_create: false,
         network_create_calls: Arc::default(),
         container_delete_calls: Arc::default(),
@@ -950,4 +964,78 @@ async fn start_fixture(fixture: MutationFixture) -> (String, CancellationToken) 
     });
     tokio::time::sleep(Duration::from_millis(20)).await;
     (format!("http://{address}"), cancellation)
+}
+
+#[derive(Default)]
+struct ListGate {
+    started: tokio::sync::Notify,
+    resume: tokio::sync::Notify,
+}
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_WORKLOAD_DATABASE_URL"]
+async fn grouped_drift_discards_successful_reply_from_replaced_direct_client() {
+    use citadel_adapters::connectors::routing::{
+        platforms::runtime::{PlatformAgentResolver, PlatformRuntimeRouter},
+        stacks::StackRuntimeRouter,
+    };
+    use citadel_docker::client::DockerClient;
+    use citadel_platforms::RuntimeCapabilityError;
+    use citadel_stacks::StackRuntime;
+    use futures_util::future::BoxFuture;
+    use uuid::Uuid;
+    struct CurrentClient(std::sync::Mutex<Arc<AgentClient>>);
+    impl PlatformAgentResolver for CurrentClient {
+        fn resolve_agent<'a>(
+            &'a self,
+            _: Uuid,
+            _: &'a str,
+        ) -> BoxFuture<'a, Result<Arc<AgentClient>, RuntimeCapabilityError>> {
+            Box::pin(async { Ok(self.0.lock().unwrap().clone()) })
+        }
+    }
+
+    let url = std::env::var("CITADEL_WORKLOAD_DATABASE_URL").unwrap();
+    citadel_database::MigrationRunner::migrate(&url)
+        .await
+        .unwrap();
+    let pool = sqlx::PgPool::connect(&url).await.unwrap();
+    let gate = Arc::new(ListGate::default());
+    let (address, shutdown) = start_fixture(MutationFixture {
+        list_gate: Some(gate.clone()),
+        ..Default::default()
+    })
+    .await;
+    let platform = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,address,connectortype,cpucount,imagecount,memtotal,name,networkcount,platformdescriptor,status,volumecount)
+        VALUES($1,$2,'Agent',1,0,1024,$1::text,0,'{\"$type\":\"Docker\"}','Online',0)")
+        .bind(platform).bind(&address).execute(&pool).await.unwrap();
+    let active = Arc::new(CurrentClient(std::sync::Mutex::new(Arc::new(
+        connect(&address).await,
+    ))));
+    let replacement = Arc::new(connect(&address).await);
+    let docker = DockerClient::new("/unused-fixture.sock", Duration::from_secs(1)).unwrap();
+    let routed = PlatformRuntimeRouter::new(pool.clone(), docker.clone(), None, Default::default())
+        .with_agent_resolver(active.clone());
+    let stacks = StackRuntimeRouter::new(pool, docker, None).with_runtime_router(routed);
+    let projects = ["first".into(), "second".into()].into();
+    let cancel = CancellationToken::new();
+    for replace in [false, true] {
+        let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+            tokio::join!(
+                stacks.compose_snapshots(platform, &projects, &cancel),
+                async {
+                    gate.started.notified().await;
+                    if replace {
+                        *active.0.lock().unwrap() = replacement.clone();
+                    }
+                    gate.resume.notify_one();
+                }
+            )
+        })
+        .await
+        .unwrap();
+        assert_eq!(result.unwrap().is_none(), replace);
+    }
+    shutdown.cancel();
 }

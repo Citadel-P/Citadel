@@ -17,6 +17,8 @@ mod distribution;
 mod event_observation;
 #[path = "docker_transport/generated_boundary.rs"]
 mod generated_boundary;
+#[path = "docker_transport/volume_events.rs"]
+mod volume_events;
 
 #[tokio::test]
 async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
@@ -24,7 +26,7 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
     let listener = UnixListener::bind(&path).unwrap();
     let server = tokio::spawn(async move {
         let mut usage_calls = 0;
-        for _ in 0..12 {
+        for _ in 0..11 {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut bytes = Vec::new();
             let mut buffer = [0; 2048];
@@ -41,7 +43,7 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
             } else if request.starts_with("GET /v1.49/volumes/data ") {
                 r#"{"Name":"data","Driver":"local"}"#
             } else if request.starts_with("GET /v1.49/containers/json?all=true&size=false ") {
-                r#"[{"Id":"core","State":"exited","Labels":{"com.citadel.system-role":"core"},"Mounts":[{"Type":"volume","Name":"data"}]}]"#
+                r#"[{"Id":"web","Names":["/web"],"Image":"alpine","ImageID":"image","State":"running","Mounts":[{"Type":"volume","Name":"data","Destination":"/app"}],"NetworkSettings":{"Networks":{"Mixed.Network":{"NetworkID":""}}},"Ports":[{"PrivatePort":80,"PublicPort":8080,"Type":"tcp","IP":"::"}]},{"Id":"core","State":"exited","Labels":{"com.citadel.system-role":"core"},"Mounts":[{"Type":"volume","Name":"data"}]},{"Id":"other","Mounts":[{"Type":"volume","Name":"unrelated","Source":"data"}]}]"#
             } else if request.starts_with("GET /v1.49/system/df?type=volume ") {
                 usage_calls += 1;
                 if usage_calls == 1 {
@@ -50,16 +52,7 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
                     r#"{"Volumes":[{"Name":"data","UsageData":{"Size":8192,"RefCount":2}}]}"#
                 }
             } else {
-                assert!(
-                    request.starts_with("GET /v1.49/containers/json?all=true&filters="),
-                    "{request}"
-                );
-                assert!(
-                    urlencoding::decode(&request)
-                        .unwrap()
-                        .contains(r#""volume":["data"]"#)
-                );
-                r#"[{"Id":"web","Names":["/web"],"Image":"alpine","ImageID":"image","State":"running","NetworkSettings":{"Networks":{"Mixed.Network":{"NetworkID":""}}},"Ports":[{"PrivatePort":80,"PublicPort":8080,"Type":"tcp","IP":"::"}]}]"#
+                panic!("unexpected additional Docker request: {request}");
             };
             socket
                 .write_all(
@@ -110,6 +103,7 @@ async fn volume_sizes_are_joined_by_name_from_volume_only_disk_usage() {
         citadel_platforms::VolumeObservationPort::inspect_volume(&client, "data", &cancel)
             .await
             .unwrap();
+    assert_eq!(inspected.containers.len(), 2);
     assert!(inspected.is_system);
     assert_eq!(inspected.content_access_allowed, Some(false));
     assert_eq!(inspected.usage_data.unwrap()["Size"], 8192);

@@ -154,6 +154,9 @@ use bindings::*;
 mod read;
 
 mod drift;
+mod drift_inputs;
+pub use drift_inputs::DriftPass;
+mod drift_monitor;
 use drift::*;
 
 mod mutations;
