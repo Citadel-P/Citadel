@@ -3,6 +3,7 @@ import { createContext } from 'react';
 import { MfaPolicy } from '@/api/generated/api.types';
 
 export interface SetupError {
+  maintenance?: boolean;
   title: string;
   message: string;
 }

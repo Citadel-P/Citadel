@@ -204,7 +204,9 @@ describe('ResourceForm failed reads', () => {
       </Routes>,
       { route: '/registries/edit/failing' },
     );
-    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load this resource');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      status === 403 ? 'Access denied' : status === 404 ? 'We couldn’t find the page' : 'Unable to load this resource',
+    );
     server.use(
       http.get('http://localhost/api/v1/registries/failing/_cfg', () =>
         HttpResponse.json({ id: 'failing', name: 'Recovered registry', capabilities: { canWrite: true } }),

@@ -92,7 +92,12 @@ export function RepositoryCard({
 
   const cardActions = {
     edit: () => (
-      <DropdownActionButton title="Edit" icon={<Eye className="h-4 w-4" />} disabled={!canRead} onClick={openEdit} />
+      <DropdownActionButton
+        title={repository.capabilities?.canWrite ? 'Edit' : 'View'}
+        icon={<Eye className="h-4 w-4" />}
+        disabled={!canRead}
+        onClick={openEdit}
+      />
     ),
     validate: () => operationAction('validate', 'Validate', <CheckCircle2 className="h-4 w-4" />),
     initialize: () => operationAction('initialize', 'Initialize', <DatabaseBackup className="h-4 w-4" />),

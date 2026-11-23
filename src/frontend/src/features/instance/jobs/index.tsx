@@ -1,3 +1,4 @@
+import { PageError } from '@/components/custom/page-error';
 import { useState } from 'react';
 import { SearchField } from '@/components/custom/search-field';
 import { CircleDot, Layers } from 'lucide-react';
@@ -36,7 +37,7 @@ export function InstanceJobs() {
       ),
     }))
     .filter((group) => group.jobs.length > 0);
-  if (result.denied) return <p role="alert">Administrator access is required to view jobs.</p>;
+  if (result.denied) return <PageError status={403} message="Administrator access is required to view jobs." />;
   return (
     <section className="space-y-4" aria-label="Background jobs">
       {snapshot && !result.isLive && (

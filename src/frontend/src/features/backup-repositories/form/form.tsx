@@ -1,3 +1,4 @@
+import { type RepositorySecretTarget, useBackupRepositorySecrets } from '../hooks/useBackupRepositorySecrets';
 import { useReconcileBackupRepository } from '../cache';
 import {
   BackupRepositoryFormInput,
@@ -15,7 +16,6 @@ import {
   BackupRepositoryType,
   BackupRepositoryView,
   PlatformView,
-  ResourceType,
   S3BucketLookup,
 } from '@/api/generated/api.types';
 import { ResourceSelectorField } from '@/components/custom/common';
@@ -168,7 +168,7 @@ export function BackupRepositoryForm({
                   <SecretSelector
                     value={value ?? undefined}
                     disabled={mode === 'edit'}
-                    targetResourceId={id}
+                    repository={resource}
                     onChange={(passwordSecretId) => set({ passwordSecretId: passwordSecretId ?? '' })}
                   />
                 ),
@@ -334,7 +334,7 @@ export function BackupRepositoryForm({
                         <SecretSelector
                           value={value}
                           disabled={specDisabled}
-                          targetResourceId={id}
+                          repository={resource}
                           onChange={(accessKeySecretId) => set({ spec: { accessKeySecretId } as any })}
                         />
                       ),
@@ -348,7 +348,7 @@ export function BackupRepositoryForm({
                         <SecretSelector
                           value={value}
                           disabled={specDisabled}
-                          targetResourceId={id}
+                          repository={resource}
                           onChange={(secretKeySecretId) => set({ spec: { secretKeySecretId } as any })}
                         />
                       ),
@@ -363,7 +363,7 @@ export function BackupRepositoryForm({
                           value={value}
                           allowNone
                           disabled={specDisabled}
-                          targetResourceId={id}
+                          repository={resource}
                           onChange={(sessionTokenSecretId) => set({ spec: { sessionTokenSecretId } as any })}
                         />
                       ),
@@ -389,7 +389,7 @@ export function BackupRepositoryForm({
         ],
       }),
     }),
-    [disabled, fileSystemSpec.platformId, id, mode, resource?.status, selectedLocation, selectedType, specDisabled],
+    [disabled, fileSystemSpec.platformId, mode, resource, selectedLocation, selectedType, specDisabled],
   );
 
   return (
@@ -478,21 +478,18 @@ export function SecretSelector({
   onChange,
   disabled,
   allowNone = false,
-  targetResourceId,
+  repository,
 }: {
   value?: string | null;
   onChange: (value: string | null) => void;
   disabled?: boolean;
   allowNone?: boolean;
-  targetResourceId?: string;
+  repository?: RepositorySecretTarget | null;
 }) {
-  const { data, isLoading } = useRead('listSecretDefinitions', {
-    query: {
-      targetResourceType: ResourceType.BackupRepository,
-      targetResourceId,
-    },
-  });
-  const secrets = data?.data.secrets ?? [];
+  const { canList, secrets, isLoading } = useBackupRepositorySecrets(repository);
+  if (!canList) {
+    return <span className="text-sm text-muted-foreground">{value ? 'Configured' : 'None'}</span>;
+  }
 
   return (
     <ResourceSelectorField

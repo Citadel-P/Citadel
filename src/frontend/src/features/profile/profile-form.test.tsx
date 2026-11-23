@@ -23,7 +23,13 @@ const profile: CurrentProfileView = {
     oidcProviderId: null,
     oidcProviderName: null,
   },
-  authorization: { isAdministrator: false, tags: capabilities, bindings: capabilities, alertRules: capabilities },
+  authorization: {
+    writableResourceTypes: [],
+    isAdministrator: false,
+    tags: capabilities,
+    bindings: capabilities,
+    alertRules: capabilities,
+  },
   directRoles: [],
   teams: [],
 };

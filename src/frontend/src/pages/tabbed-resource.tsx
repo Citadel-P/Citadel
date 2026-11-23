@@ -192,7 +192,13 @@ const TabContentWrapper = <T,>({ tab, Components, search }: TabContentWrapperPro
   return (
     <>
       {!!error && (
-        <ResourceReadError error={error} refetch={refetch} isFetching={isFetching} stale={hasItems && showContent} />
+        <ResourceReadError
+          page
+          error={error}
+          refetch={refetch}
+          isFetching={isFetching}
+          stale={hasItems && showContent}
+        />
       )}
       {showContent && (
         <tab.Content

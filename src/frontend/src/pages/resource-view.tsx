@@ -1,5 +1,7 @@
+import { requestErrorStatus } from '@/lib/request-error';
+import { PageError } from '@/components/custom/page-error';
 import { AppContent } from '@/components/custom/app-content';
-import { Button } from '@/components/ui/button';
+import { ResourceReadError } from '@/components/custom/resource-read-error';
 import Loader from '@/components/ui/loader';
 import { useRead } from '@/lib/hooks';
 import type { ResourceType } from '@/api/types';
@@ -37,17 +39,15 @@ function AdministratorResource({ children }: { children: React.ReactNode }) {
         <Loader />
       </AppContent>
     );
+  if (
+    requestErrorStatus(profile.error) === 403 ||
+    (profile.isSuccess && !profile.data.data.authorization.isAdministrator)
+  )
+    return <PageError status={403} message="Administrator access is required." />;
   if (profile.isError)
     return (
       <AppContent>
-        <p role="alert">Could not verify administrator access.</p>
-        <Button onClick={() => void profile.refetch()}>Retry</Button>
-      </AppContent>
-    );
-  if (!profile.data?.data.authorization.isAdministrator)
-    return (
-      <AppContent>
-        <p role="alert">Administrator access is required.</p>
+        <ResourceReadError page error={profile.error} refetch={profile.refetch} isFetching={profile.isFetching} />
       </AppContent>
     );
   return children;

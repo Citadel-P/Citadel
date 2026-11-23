@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { lazy, Suspense } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router';
 import { renderCitadel } from '@/test/render-citadel';
@@ -39,6 +39,19 @@ describe('page error containment', () => {
       </ErrorBoundary>,
     );
     expect(await screen.findByRole('button', { name: 'Reload app' })).toBeVisible();
+  });
+
+  it('offers recovery for a root failure before routing is available', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <ErrorBoundary root>
+        <Page fail />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByRole('heading', { name: 'Citadel could not be displayed' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Reload app' })).toBeVisible();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /error \d+/i })).not.toBeInTheDocument();
   });
 
   it('keeps navigation usable after a render crash and resets on route change', async () => {

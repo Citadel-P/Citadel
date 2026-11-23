@@ -1,3 +1,5 @@
+import { Unplug, Wrench } from 'lucide-react';
+import { ErrorPanel } from '@/components/custom/page-error';
 import Loader from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { Navigate, Outlet, useLocation } from 'react-router';
@@ -7,16 +9,16 @@ import { hasMfaFlowStep } from '@/features/auth/mfa/mfa-flow';
 import { SetupError, useSetupContext } from './setup-context';
 
 function SetupUnavailable({ error, retry }: { error: SetupError; retry: () => void }) {
+  const Icon = error.maintenance ? Wrench : Unplug;
   return (
-    <div className="flex min-h-screen items-center justify-center bg-card px-6">
-      <div className="w-full max-w-sm space-y-4 text-center">
-        <h1 className="text-xl font-semibold">{error.title}</h1>
-        <p className="text-sm text-muted-foreground">{error.message}</p>
-        <Button type="button" variant="outline" onClick={retry}>
-          Try again
-        </Button>
-      </div>
-    </div>
+    <ErrorPanel
+      title={error.title}
+      message={error.message}
+      illustration={<Icon aria-hidden="true" className="my-6 size-24 text-muted-foreground" strokeWidth={1.25} />}>
+      <Button type="button" onClick={retry}>
+        Try again
+      </Button>
+    </ErrorPanel>
   );
 }
 

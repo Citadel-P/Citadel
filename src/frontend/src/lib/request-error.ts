@@ -6,6 +6,11 @@ export function requestErrorStatus(error: unknown): number | undefined {
   return response?.status ?? response?.error?.status;
 }
 
+export function isMaintenanceError(error: unknown): boolean {
+  const problem = (error as { error?: { type?: string } } | null)?.error;
+  return requestErrorStatus(error) === 503 && problem?.type === 'maintenance';
+}
+
 export function canShowCachedResource(error: unknown): boolean {
   return ![401, 403, 404].includes(requestErrorStatus(error) ?? 0);
 }

@@ -90,9 +90,10 @@ const EditFormData = ({
   const { item, isLoading, error, refetch, isFetching } = formData ?? {};
 
   if (error && !canShowCachedResource(error))
-    return <ResourceReadError error={error} refetch={refetch} isFetching={isFetching} />;
+    return <ResourceReadError page error={error} refetch={refetch} isFetching={isFetching} />;
   if (!item && isLoading) return <ResourceSkeleton variant="form" embedded />;
-  if (!item) return <ResourceReadError error={error ?? { status: 404 }} refetch={refetch} isFetching={isFetching} />;
+  if (!item)
+    return <ResourceReadError page error={error ?? { status: 404 }} refetch={refetch} isFetching={isFetching} />;
 
   const Content = skipMetadataUpdate
     ? Components.supportsHeaderRename
@@ -102,7 +103,7 @@ const EditFormData = ({
 
   return (
     <>
-      {!!error && <ResourceReadError error={error} refetch={refetch} isFetching={isFetching} stale />}
+      {!!error && <ResourceReadError page error={error} refetch={refetch} isFetching={isFetching} stale />}
       <Content key={id} id={id!} item={item} Components={Components} type={type} />
     </>
   );

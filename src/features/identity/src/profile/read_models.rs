@@ -27,9 +27,10 @@ pub struct ResourceCapabilities {
     pub can_execute: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentProfileAuthorizationDetails {
+    pub writable_resource_types: Vec<ResourceType>,
     pub is_administrator: bool,
     pub alert_rules: ResourceCapabilities,
     pub bindings: ResourceCapabilities,

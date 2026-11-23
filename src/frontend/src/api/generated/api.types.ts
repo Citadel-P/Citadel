@@ -3033,6 +3033,7 @@ export interface CurrentProfileAuthorizationView {
   bindings: ResourceCapabilitiesView;
   isAdministrator: boolean;
   tags: ResourceCapabilitiesView;
+  writableResourceTypes: ResourceType[];
 }
 
 export interface CurrentProfileView {

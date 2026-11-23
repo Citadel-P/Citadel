@@ -1,4 +1,6 @@
 import { Component, type ReactNode } from 'react';
+import { FileWarning } from 'lucide-react';
+import { ErrorPanel } from './page-error';
 import { Button } from '@/components/ui/button';
 
 type Failure = 'render' | 'module-load' | null;
@@ -20,19 +22,18 @@ export class ErrorBoundary extends Component<{ children: ReactNode; root?: boole
     if (!this.state.failure) return this.props.children;
     const reload = this.props.root || this.state.failure === 'module-load';
     return (
-      <section role="alert" className="m-6 space-y-3 rounded-lg border bg-card p-6 text-sm">
-        <h1 className="font-semibold">
-          {this.props.root ? 'Citadel could not be displayed' : 'This page could not be displayed'}
-        </h1>
-        <p className="text-muted-foreground">
-          {reload ? 'Reload the app to try again.' : 'Try again, or choose another page from the sidebar.'}
-        </p>
+      <ErrorPanel
+        title={this.props.root ? 'Citadel could not be displayed' : 'This page could not be displayed'}
+        message={reload ? 'Reload the app to try again.' : 'Try again, or choose another page from the sidebar.'}
+        illustration={
+          <FileWarning aria-hidden="true" className="my-6 size-24 text-muted-foreground" strokeWidth={1.25} />
+        }>
         <Button
           variant="outline"
           onClick={() => (reload ? window.location.reload() : this.setState({ failure: null }))}>
           {reload ? 'Reload app' : 'Try again'}
         </Button>
-      </section>
+      </ErrorPanel>
     );
   }
 }

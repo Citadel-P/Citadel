@@ -1,8 +1,10 @@
 import { lazy } from 'react';
+import { ResourceType as PermissionResource } from '@/api/generated/api.types';
 import type { DockerResourceType, ResourceType, SwarmResourceType } from '@/api/types';
 import type { RequiredComponents, RequiredDockerInfoComponents, RequiredFormComponents } from '@/pages/types';
 import type { ResourceViewProps } from '@/pages/resource-view';
 import type { ResourceFormViewProps } from '@/pages/resource-form-view';
+import { ResourceCreateAccess } from '@/pages/resource-create-access';
 import type { ResourceInfoViewProps } from '@/pages/resource-info';
 
 const list = (load: () => Promise<RequiredComponents>) =>
@@ -12,8 +14,8 @@ const list = (load: () => Promise<RequiredComponents>) =>
       default: (props: Omit<ResourceViewProps, 'Components'>) => <ResourceView {...props} Components={Components} />,
     };
   });
-const form = (load: () => Promise<RequiredFormComponents>) =>
-  lazy(async () => {
+const form = (load: () => Promise<RequiredFormComponents>, access?: PermissionResource | 'administrator') => {
+  const Page = lazy(async () => {
     const [Components, { ResourceFormView }] = await Promise.all([load(), import('@/pages/resource-form-view')]);
     return {
       default: (props: Omit<ResourceFormViewProps, 'Components'>) => (
@@ -21,6 +23,19 @@ const form = (load: () => Promise<RequiredFormComponents>) =>
       ),
     };
   });
+  return function ResourceFormPage(props: Omit<ResourceFormViewProps, 'Components'>) {
+    const page = <Page {...props} />;
+    if (props.mode === 'edit') return page;
+    return (
+      <ResourceCreateAccess
+        type={props.type}
+        access={access}
+        platformScoped={props.type in DockerResourceInfoPages || props.type in SwarmResourceInfoPages}>
+        {page}
+      </ResourceCreateAccess>
+    );
+  };
+};
 const detail = (load: () => Promise<RequiredDockerInfoComponents>) =>
   lazy(async () => {
     const [Components, { ResourceInfoView }] = await Promise.all([load(), import('@/pages/resource-info')]);
@@ -80,13 +95,19 @@ export const ResourceFormPages: Partial<Record<ResourceType, ReturnType<typeof f
   Registry: form(() => import('./registries/form').then((m) => m.RegistryFormComponents)),
   Deployment: form(() => import('./deployments/form').then((m) => m.DeploymentFormComponents)),
   SwarmService: form(() => import('./swarm-services/form').then((m) => m.SwarmServiceFormComponents)),
-  AlertRule: form(() => import('./alerters/alert-rules/form').then((m) => m.AlertRuleFormComponents)),
+  AlertRule: form(
+    () => import('./alerters/alert-rules/form').then((m) => m.AlertRuleFormComponents),
+    PermissionResource.Alert,
+  ),
   Stack: form(() => import('./stacks/form').then((m) => m.StackFormComponents)),
   GitRepository: form(() => import('./git-repos/form').then((m) => m.GitRepoFormComponents)),
-  User: form(() => import('./access/users/form').then((m) => m.UserFormComponents)),
-  Team: form(() => import('./access/teams/form').then((m) => m.TeamFormComponents)),
-  ServiceAccount: form(() => import('./access/service-accounts/form').then((m) => m.ServiceAccountFormComponents)),
-  OidcProvider: form(() => import('./oidc-providers/form').then((m) => m.OidcProviderFormComponents)),
+  User: form(() => import('./access/users/form').then((m) => m.UserFormComponents), 'administrator'),
+  Team: form(() => import('./access/teams/form').then((m) => m.TeamFormComponents), 'administrator'),
+  ServiceAccount: form(
+    () => import('./access/service-accounts/form').then((m) => m.ServiceAccountFormComponents),
+    'administrator',
+  ),
+  OidcProvider: form(() => import('./oidc-providers/form').then((m) => m.OidcProviderFormComponents), 'administrator'),
   Script: form(() => import('./scripts/form').then((m) => m.ScriptFormComponents)),
   Build: form(() => import('./builds/form').then((m) => m.BuildFormComponents)),
   BuildAgentPool: form(() => import('./build-pools/form').then((m) => m.BuildPoolFormComponents)),

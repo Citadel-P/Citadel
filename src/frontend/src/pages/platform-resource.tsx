@@ -26,7 +26,7 @@ const PlatformResourceContent = () => {
   if (isLoading && !currentPlatform) return <ResourceSkeleton variant={resourceId ? 'detail' : 'list'} />;
 
   if (!currentPlatform || (platformRead?.error && !canShowCachedResource(platformRead.error)))
-    return <ResourceReadError {...platformRead} error={platformRead?.error ?? { status: 404 }} />;
+    return <ResourceReadError page {...platformRead} error={platformRead?.error ?? { status: 404 }} />;
 
   if (currentPlatform?.type === PlatformType.DockerSwarm && type in SwarmResourcePathMap) {
     return <ResourceSwarmPage />;

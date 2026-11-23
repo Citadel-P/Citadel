@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
-import { requestErrorMessage } from '@/lib/request-error';
+import { PageError } from './page-error';
+import { isMaintenanceError, requestErrorMessage, requestErrorStatus } from '@/lib/request-error';
 
 export interface ResourceReadState {
   error?: unknown;
@@ -12,7 +13,30 @@ export function ResourceReadError({
   refetch,
   isFetching,
   stale = false,
-}: ResourceReadState & { stale?: boolean }) {
+  page = false,
+}: ResourceReadState & { stale?: boolean; page?: boolean }) {
+  const retry = refetch && (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={isFetching}
+      onClick={() => {
+        void refetch();
+      }}>
+      {isFetching ? 'Retrying…' : 'Retry'}
+    </Button>
+  );
+  const status = requestErrorStatus(error);
+  if (page && (status === 403 || status === 404)) return <PageError status={status}>{retry}</PageError>;
+  if (page && !stale) {
+    if (status === 500) return <PageError status={500}>{retry}</PageError>;
+    if (isMaintenanceError(error))
+      return (
+        <PageError status={503} message={requestErrorMessage(error)}>
+          {retry}
+        </PageError>
+      );
+  }
   return (
     <div
       role="alert"
@@ -22,17 +46,7 @@ export function ResourceReadError({
         <p className="text-muted-foreground">{requestErrorMessage(error)}</p>
         {stale && <p className="text-muted-foreground">Showing previously loaded data. It may be out of date.</p>}
       </div>
-      {refetch && (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isFetching}
-          onClick={() => {
-            void refetch();
-          }}>
-          {isFetching ? 'Retrying…' : 'Retry'}
-        </Button>
-      )}
+      {retry}
     </div>
   );
 }

@@ -76,7 +76,13 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
         {Components.SubHeader && <Components.SubHeader />}
 
         {!!error && (
-          <ResourceReadError error={error} refetch={refetch} isFetching={isFetching} stale={hasItems && showContent} />
+          <ResourceReadError
+            page
+            error={error}
+            refetch={refetch}
+            isFetching={isFetching}
+            stale={hasItems && showContent}
+          />
         )}
         {showContent && (
           <Content

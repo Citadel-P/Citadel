@@ -148,3 +148,28 @@ fn authorization_requires_level_and_specific_bit() {
     ));
     assert!(!snapshot.permits(ResourceType::ServiceAccount, PermissionLevel::Write, None));
 }
+
+#[test]
+fn writable_resource_types_follow_effective_global_grants() {
+    let grant = |resource_type, level| PermissionGrant {
+        resource_type,
+        level,
+        specifics: Default::default(),
+    };
+    let mut snapshot = AuthorizationSnapshot {
+        actor_id: ActorId::new(Uuid::now_v7()),
+        enabled: true,
+        direct_and_team_permissions: vec![
+            grant(ResourceType::Stack, PermissionLevel::Read),
+            grant(ResourceType::BackupPolicy, PermissionLevel::Write),
+            grant(ResourceType::Script, PermissionLevel::Execute),
+            grant(ResourceType::Script, PermissionLevel::Read),
+        ],
+    };
+    assert_eq!(
+        snapshot.writable_resource_types(),
+        vec![ResourceType::Script, ResourceType::BackupPolicy]
+    );
+    snapshot.enabled = false;
+    assert!(snapshot.writable_resource_types().is_empty());
+}

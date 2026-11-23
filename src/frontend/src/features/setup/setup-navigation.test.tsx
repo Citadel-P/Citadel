@@ -119,6 +119,29 @@ describe('First-run setup navigation', () => {
     expect(screen.queryByText('Platforms page')).not.toBeInTheDocument();
   });
 
+  it('shows confirmed maintenance and retries startup on the same route', async () => {
+    const url = 'http://localhost/api/v1/setup/status';
+    const detail = 'New work is temporarily unavailable.';
+    server.use(http.get(url, () => HttpResponse.json({ type: 'maintenance', detail }, { status: 503 })));
+    renderSetup('/setup');
+    expect(await screen.findByRole('heading', { name: 'Update maintenance' })).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent(detail);
+    expect(screen.queryByRole('link', { name: 'Go to homepage' })).not.toBeInTheDocument();
+
+    server.use(
+      http.get(url, () =>
+        HttpResponse.json({
+          requiresSetup: true,
+          passwordMinimumLength: 15,
+          passwordMaximumLength: 128,
+        }),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('button', { name: 'Create administrator' })).toBeVisible();
+    expect(screen.getByTestId('path')).toHaveTextContent('/setup');
+  });
+
   it('shows login when another request has already completed setup', async () => {
     server.use(
       http.get('http://localhost/api/v1/setup/status', () =>

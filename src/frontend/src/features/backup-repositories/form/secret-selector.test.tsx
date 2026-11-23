@@ -14,7 +14,12 @@ it('keeps repository scoping and searches stored secrets', async () => {
     }),
   );
   const onChange = vi.fn();
-  const { user } = renderCitadel(<SecretSelector targetResourceId="repository" onChange={onChange} />);
+  const { user } = renderCitadel(
+    <SecretSelector
+      repository={{ id: 'repository', capabilities: { canRead: true, canWrite: true, canExecute: false } }}
+      onChange={onChange}
+    />,
+  );
   await screen.findByText('Select a stored secret');
   await user.click(screen.getByRole('combobox'));
   expect(screen.queryByRole('option', { name: 'No session token' })).not.toBeInTheDocument();

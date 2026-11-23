@@ -97,9 +97,11 @@ impl From<citadel_identity::CurrentProfileAuthenticationDetails>
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentProfileAuthorizationView {
+    #[schema(value_type = Vec<crate::api::resources::vocabulary::ResourceTypeSchema>)]
+    pub writable_resource_types: Vec<citadel_primitives::ResourceType>,
     pub is_administrator: bool,
     pub alert_rules: ResourceCapabilitiesView,
     pub bindings: ResourceCapabilitiesView,
@@ -111,6 +113,7 @@ impl From<CurrentProfileAuthorizationView>
 {
     fn from(value: CurrentProfileAuthorizationView) -> Self {
         Self {
+            writable_resource_types: value.writable_resource_types,
             is_administrator: value.is_administrator,
             alert_rules: value.alert_rules.into(),
             bindings: value.bindings.into(),
@@ -124,6 +127,7 @@ impl From<citadel_identity::CurrentProfileAuthorizationDetails>
 {
     fn from(value: citadel_identity::CurrentProfileAuthorizationDetails) -> Self {
         Self {
+            writable_resource_types: value.writable_resource_types,
             is_administrator: value.is_administrator,
             alert_rules: value.alert_rules.into(),
             bindings: value.bindings.into(),
