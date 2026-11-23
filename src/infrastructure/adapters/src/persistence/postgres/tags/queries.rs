@@ -114,16 +114,6 @@ pub(crate) fn unique_ids(ids: &[Uuid]) -> Vec<Uuid> {
     ids
 }
 
-pub(crate) fn exactly_one(value: u64) -> Result<(), TagError> {
-    match value {
-        1 => Ok(()),
-        0 => Err(TagError::NotFound),
-        _ => Err(TagError::Storage(
-            "Mutation affected an unexpected number of rows.".into(),
-        )),
-    }
-}
-
 pub(crate) fn database_error(error: sqlx::Error) -> TagError {
     if let sqlx::Error::Database(db) = &error {
         if db.code().as_deref() == Some("23505") {
@@ -140,4 +130,33 @@ pub(crate) fn database_error(error: sqlx::Error) -> TagError {
 
 pub(crate) fn storage(error: impl std::fmt::Display) -> TagError {
     TagError::Storage(error.to_string())
+}
+
+pub(super) fn visible_tags(single: bool) -> String {
+    let filter = if single { "AND tag.id=$5" } else { "" };
+    format!("{AUTHORIZED_BY_LEVELS_CTE} {}, visible_tags AS MATERIALIZED (
+        SELECT tag.* FROM tags tag WHERE ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
+            SELECT FROM actor_scope scope JOIN resourceaccesses access ON access.actorid=scope.actorid
+            WHERE access.resourcetype=$2 AND access.resourceid=tag.id AND access.permissionlevel=ANY($3)))
+        {filter}
+    ) {}",
+        include_str!("usage_targets.sql"),
+        include_str!("usage_counts.sql"))
+}
+
+pub(super) async fn linked_types(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+) -> Result<Vec<TaggableResourceType>, TagError> {
+    let kinds = sqlx::query_scalar::<_, String>(
+        "SELECT DISTINCT resourcetype FROM resourcetags WHERE tagid=$1",
+    )
+    .bind(id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(storage)?;
+    kinds
+        .into_iter()
+        .map(|kind| serde_json::from_value(serde_json::Value::String(kind)).map_err(storage))
+        .collect()
 }

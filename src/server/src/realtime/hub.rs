@@ -419,6 +419,19 @@ impl RealtimeHub {
         )
     }
 
+    pub fn publish_tag_change(&self, kinds: &[citadel_tags::TaggableResourceType]) -> u64 {
+        if self.inner.sender.receiver_count() == 0 {
+            return self.current_revision();
+        }
+        self.publish(
+            None,
+            "Tag",
+            Uuid::nil(),
+            "tagChanged",
+            json!({"resourceTypes":kinds}),
+        )
+    }
+
     pub fn publish_resource_changes(&self, resource_type: &'static str, ids: &[Uuid]) -> u64 {
         if ids.is_empty() || self.inner.sender.receiver_count() == 0 {
             return self.current_revision();

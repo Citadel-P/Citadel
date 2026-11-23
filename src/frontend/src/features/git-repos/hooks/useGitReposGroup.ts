@@ -1,39 +1,32 @@
+import { collectionGroup } from '@/lib/collection-scope';
 import { useCollectionRows } from '@/hooks/useCollectionRows';
 import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
 import { useCallback, useMemo } from 'react';
 import { RealtimeConnection } from '@/lib/realtime-connection';
-import { AuthorizedGitRepositoryView } from '@/api/generated/api.types';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
 
 export const useGitReposGroup = () => {
-  const { selectedTagNames } = useResourceTagFilter();
+  const { selectedTagNames, filterReady } = useResourceTagFilter();
   const readArgs = useMemo(
     () => (selectedTagNames.length ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const groupName = 'git-repositories';
+  const groupName = collectionGroup('git-repositories', selectedTagNames);
   const structuralSharing = useCollectionStructuralSharing(groupName);
   const { data, isLoading, error, refetch, isFetching } = useRead('listGitRepositories', readArgs, {
+    enabled: filterReady,
     structuralSharing,
   });
   const capabilities = data?.data.capabilities;
-  const matches = useCallback(
-    (repo: AuthorizedGitRepositoryView) =>
-      selectedTagNames.every((selected) =>
-        repo.tags.some((tag) => tag.name.toLowerCase() === selected.trim().toLowerCase() || tag.id === selected.trim()),
-      ),
-    [selectedTagNames],
-  );
   const reload = useCallback(async () => {
     const result = await refetch();
     return result.isSuccess ? result.data.data.gitRepositories : undefined;
   }, [refetch]);
-  const [gitRepos, handleGitRepoInfoUpdated, onJoinedGroup] = useCollectionRows(
+  const [gitRepos, handleGitRepoInfoUpdated, onJoinedGroup, onCollectionSnapshot] = useCollectionRows(
     data?.data.gitRepositories,
     JSON.stringify(readArgs ?? {}),
-    matches,
     reload,
   );
 
@@ -52,8 +45,10 @@ export const useGitReposGroup = () => {
   );
 
   useRealtimeGroup({
+    enabled: filterReady,
     groupName,
     onJoinedGroup,
+    onCollectionSnapshot,
     setupEventListeners,
     removeEventListeners,
   });

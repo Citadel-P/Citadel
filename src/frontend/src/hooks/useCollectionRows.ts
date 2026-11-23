@@ -5,12 +5,14 @@ const markerLimit = 256;
 type Collection<T> = {
   rows?: T[];
   deleted: ReadonlySet<string>;
+  liveSnapshot?: boolean;
   saturated?: boolean;
   refreshAttempt?: number;
 };
 
 // An ordinary query result can overlap a live deletion or come from a filter's cache.
 export function collectionSnapshot<T extends Row>(previous: Collection<T>, snapshot?: T[]): Collection<T> {
+  if (previous.liveSnapshot) return previous;
   if (!snapshot) return { ...previous, rows: undefined };
   const known = previous.saturated ? new Set(previous.rows?.map((row) => row.id)) : undefined;
   const rows =
@@ -29,6 +31,7 @@ export function collectionEvent<T extends Row>(
 ): Collection<T> {
   let deleted = previous.deleted;
   if (action === 'delete') {
+    if (previous.liveSnapshot) return { ...previous, rows: previous.rows?.filter((item) => item.id !== row.id) };
     const saturated = previous.saturated || deleted.size >= markerLimit;
     return {
       ...previous,
@@ -55,16 +58,22 @@ export function collectionEvent<T extends Row>(
   return { ...previous, rows: updated, deleted };
 }
 
+const acceptsScopedRow = () => true;
+
 export function useCollectionRows<T extends Row>(
   snapshot: T[] | undefined,
   scope: string,
-  matches: (row: T) => boolean,
   reload: () => Promise<T[] | undefined>,
   merge?: (incoming: T, existing: T) => T,
 ) {
   const [state, setState] = useState<Collection<T>>({ rows: snapshot, deleted: new Set() });
   const [baseline, setBaseline] = useState(snapshot);
-  if (baseline !== snapshot) {
+  const [previousScope, setPreviousScope] = useState(scope);
+  if (scope !== previousScope) {
+    setPreviousScope(scope);
+    setBaseline(snapshot);
+    setState({ rows: snapshot, deleted: new Set() });
+  } else if (baseline !== snapshot) {
     setBaseline(snapshot);
     setState((current) => collectionSnapshot(current, snapshot));
   }
@@ -99,9 +108,18 @@ export function useCollectionRows<T extends Row>(
   const onEvent = useCallback(
     (row: T, action: string) => {
       if (action === 'delete') deletes.current++;
-      setState((current) => collectionEvent(current, row, action, matches, merge));
+      setState((current) => collectionEvent(current, row, action, acceptsScopedRow, merge));
     },
-    [matches, merge],
+    [merge],
   );
-  return [state.rows, onEvent, onJoinedGroup] as const;
+  const onCollectionSnapshot = useCallback((active: boolean) => {
+    setState((current) =>
+      active
+        ? { rows: [], deleted: new Set(), liveSnapshot: true }
+        : current.liveSnapshot
+          ? { ...current, liveSnapshot: false }
+          : current,
+    );
+  }, []);
+  return [state.rows, onEvent, onJoinedGroup, onCollectionSnapshot] as const;
 }

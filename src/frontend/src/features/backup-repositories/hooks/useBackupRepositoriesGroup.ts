@@ -5,8 +5,6 @@ import { RealtimeConnection } from '@/lib/realtime-connection';
 import { useCallback } from 'react';
 import { useCollectionRows } from '@/hooks/useCollectionRows';
 
-const allRepositories = () => true;
-
 export const useBackupRepositoriesGroup = () => {
   const groupName = 'backup-repositories';
   const structuralSharing = useCollectionStructuralSharing(groupName);
@@ -20,7 +18,6 @@ export const useBackupRepositoriesGroup = () => {
   const [repositories, handleBackupRepositoryInfoUpdated, onJoinedGroup] = useCollectionRows(
     data?.data.repositories,
     'backup-repositories',
-    allRepositories,
     reload,
   );
 

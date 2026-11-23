@@ -20,7 +20,7 @@ it('deduplicates creates, reconciles filters and preserves feature-specific merg
 it('guards deletes across cached snapshots and accepts a new scoped read on rejoin', async () => {
   const initial = [row];
   const reload = vi.fn(async () => [{ ...row, value: 2 }]);
-  const hook = renderHook(({ snapshot }) => useCollectionRows(snapshot, 'all', matches, reload), {
+  const hook = renderHook(({ snapshot }) => useCollectionRows(snapshot, 'all', reload), {
     initialProps: { snapshot: initial },
   });
   act(() => hook.result.current[2]());
@@ -31,4 +31,21 @@ it('guards deletes across cached snapshots and accepts a new scoped read on rejo
   act(() => hook.result.current[2]());
   await waitFor(() => expect(hook.result.current[0]).toEqual([{ ...row, value: 2 }]));
   expect(reload).toHaveBeenCalledOnce();
+});
+
+it('keeps an authoritative scoped snapshot across a late HTTP read, then accepts fallback reads', () => {
+  const reload = vi.fn(async () => [row]);
+  const hook = renderHook(({ snapshot }) => useCollectionRows(snapshot, 'prod', reload), {
+    initialProps: { snapshot: [row] },
+  });
+  act(() => hook.result.current[3](true));
+  expect(hook.result.current[0]).toEqual([]);
+  const incoming = { ...row, id: 'new' };
+  act(() => hook.result.current[1](incoming, 'update'));
+  hook.rerender({ snapshot: [row] });
+  expect(hook.result.current[0]).toEqual([incoming]);
+  act(() => hook.result.current[3](false));
+  hook.rerender({ snapshot: [row] });
+  expect(hook.result.current[0]).toEqual([row]);
+  expect(reload).not.toHaveBeenCalled();
 });

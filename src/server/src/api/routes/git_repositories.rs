@@ -1,4 +1,5 @@
 //! Git repositories HTTP routes, authorization and local request handling.
+use crate::api::mutation_notifications::affects_tag_usage;
 use crate::{
     api::{
         catalog_query::{
@@ -76,12 +77,18 @@ pub(crate) fn documented_catalog_routes() -> utoipa_axum::router::OpenApiRouter<
 {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list_git_repositories))
-        .normalized_routes(utoipa_axum::routes!(create_git_repository))
-        .normalized_routes(utoipa_axum::routes!(delete_git_repositories))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(
+            create_git_repository
+        )))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(
+            delete_git_repositories
+        )))
         .normalized_routes(utoipa_axum::routes!(get_git_repository))
         .normalized_routes(utoipa_axum::routes!(get_git_repository_config))
         .normalized_routes(utoipa_axum::routes!(update_git_repository))
-        .normalized_routes(utoipa_axum::routes!(update_git_repository_metadata))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(
+            update_git_repository_metadata
+        )))
         .normalized_routes(utoipa_axum::routes!(rename_git_repository))
 }
 
@@ -468,7 +475,7 @@ fn execution_error(error: GitRepositoryExecutionError) -> ApiError {
         (status = 200, description = "Success", body = GitRepositoriesResponse, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
-    params(("tags" = Option<Vec<String>>, Query)),
+    params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]

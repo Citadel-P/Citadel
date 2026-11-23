@@ -1,4 +1,5 @@
 //! Script HTTP routes, authorization and local request handling.
+use crate::api::mutation_notifications::affects_tag_usage;
 use crate::api::resources::scripts::authorized::{authorized_scripts, map_error};
 use crate::{
     api::{
@@ -50,13 +51,13 @@ pub fn router(state: ScriptHttpState) -> Router {
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<ScriptHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list))
-        .normalized_routes(utoipa_axum::routes!(create))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(create)))
         .normalized_routes(utoipa_axum::routes!(get_one))
         .normalized_routes(utoipa_axum::routes!(duplicate_draft))
         .normalized_routes(utoipa_axum::routes!(rename))
         .normalized_routes(utoipa_axum::routes!(update))
-        .normalized_routes(utoipa_axum::routes!(update_metadata))
-        .normalized_routes(utoipa_axum::routes!(remove))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(update_metadata)))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(remove)))
         .normalized_routes(utoipa_axum::routes!(run_script))
         .normalized_routes(utoipa_axum::routes!(test_script))
         .normalized_routes(utoipa_axum::routes!(list_runs))
@@ -168,7 +169,7 @@ async fn script_response(
         (status = 200, description = "Success", body = ScriptList, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
-    params(("tags" = Option<Vec<String>>, Query)),
+    params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -180,7 +181,7 @@ async fn list(
 ) -> HttpResult {
     let principal = actor(principal, &headers)?;
     let tags = api_result(
-        crate::api::routes::tags::parse_filters(query.as_deref()),
+        crate::api::request_validation::parse_tag_filters(query.as_deref()),
         &headers,
     )?;
     let scripts = api_result(

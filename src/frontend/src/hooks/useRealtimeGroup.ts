@@ -1,3 +1,4 @@
+import { collectionListeners } from '@/lib/collection-scope';
 import { useEffect, useRef, useState } from 'react';
 import { GROUP_CAPACITY_ERROR, RealtimeConnection, RealtimeConnectionState } from '@/lib/realtime-connection';
 import { useRealtimeContext } from '@/lib/context/realtime-context';
@@ -6,6 +7,7 @@ type UseRealtimeGroupOpts = {
   groupName?: string | readonly string[];
   setupEventListeners: (hub: RealtimeConnection) => void;
   removeEventListeners?: (hub: RealtimeConnection) => void;
+  onCollectionSnapshot?: (active: boolean) => void;
   onSubscriptionError?: (error: unknown) => void;
   onJoinedGroup?: (hub: RealtimeConnection) => void;
   skip?: boolean;
@@ -18,6 +20,7 @@ export const useRealtimeGroup = ({
   removeEventListeners,
   onJoinedGroup,
   onSubscriptionError,
+  onCollectionSnapshot,
   skip,
   enabled = true,
 }: UseRealtimeGroupOpts) => {
@@ -54,8 +57,11 @@ export const useRealtimeGroup = ({
     state === RealtimeConnectionState.Connected;
 
   useEffect(() => {
-    if (limited) onErrorRef.current?.(new Error(GROUP_CAPACITY_ERROR));
-  }, [limited]);
+    if (limited) {
+      onCollectionSnapshot?.(false);
+      onErrorRef.current?.(new Error(GROUP_CAPACITY_ERROR));
+    }
+  }, [limited, onCollectionSnapshot]);
 
   useEffect(() => {
     if (live) onJoinedRef.current?.(subscription.connection);
@@ -87,13 +93,24 @@ export const useRealtimeGroup = ({
 
     const joined: string[] = [];
     let releasedCount = 0;
+    const listenerConnection =
+      typeof groupName === 'string' && groupName.startsWith('{')
+        ? collectionListeners(connection, groupName)
+        : connection;
+    const scopedSnapshot =
+      typeof groupName === 'string' && groupName.startsWith('{') ? onCollectionSnapshot : undefined;
+    const startSnapshot = () => scopedSnapshot?.(true);
     let listenersRemoved = false;
     let disposed = false;
 
     const removeListeners = () => {
       if (listenersRemoved) return;
       listenersRemoved = true;
-      removeEventListeners?.(connection);
+      if (scopedSnapshot) {
+        listenerConnection.off('CollectionSnapshotStarted', startSnapshot);
+        scopedSnapshot(false);
+      }
+      removeEventListeners?.(listenerConnection);
     };
 
     const leaveJoinedGroups = async () => {
@@ -105,7 +122,8 @@ export const useRealtimeGroup = ({
     const run = async () => {
       try {
         setLoading(true);
-        setupEventListeners(connection);
+        if (scopedSnapshot) listenerConnection.on('CollectionSnapshotStarted', startSnapshot);
+        setupEventListeners(listenerConnection);
         for (const currentGroupName of groupNames) {
           await joinGroup(currentGroupName);
           joined.push(currentGroupName);
@@ -139,7 +157,18 @@ export const useRealtimeGroup = ({
       removeListeners();
       leaveJoinedGroups().catch(console.warn);
     };
-  }, [groupName, skip, enabled, state, connection, joinGroup, leaveGroup, setupEventListeners, removeEventListeners]);
+  }, [
+    groupName,
+    skip,
+    enabled,
+    state,
+    connection,
+    joinGroup,
+    leaveGroup,
+    setupEventListeners,
+    removeEventListeners,
+    onCollectionSnapshot,
+  ]);
 
   return { isLoading, isConnected: live, isCapacityLimited: !!limited };
 };

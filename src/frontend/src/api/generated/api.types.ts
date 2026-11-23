@@ -10500,6 +10500,7 @@ export class Api<
      */
     listBackupPolicies: (
       query?: {
+        /** Repeat to match all tag names, case-insensitively. An unknown name matches no resources. */
         tags?: string[];
       },
       params: RequestParams = {},
@@ -11527,6 +11528,7 @@ export class Api<
      */
     listBuildAgentPools: (
       query?: {
+        /** Repeat to match all tag names, case-insensitively. An unknown name matches no resources. */
         tags?: string[];
       },
       params: RequestParams = {},
@@ -11930,6 +11932,7 @@ export class Api<
      */
     listBuildProjects: (
       query?: {
+        /** Repeat to match all tag names, case-insensitively. An unknown name matches no resources. */
         tags?: string[];
       },
       params: RequestParams = {},
@@ -12960,6 +12963,7 @@ export class Api<
      */
     listDeployments: (
       query?: {
+        /** Repeat to match all tag names, case-insensitively. An unknown name matches no resources. */
         tags?: string[];
         /** @format uuid */
         platformId?: string;
@@ -13804,6 +13808,7 @@ export class Api<
      */
     listGitRepositories: (
       query?: {
+        /** Repeat to match all tag names, case-insensitively. An unknown name matches no resources. */
         tags?: string[];
       },
       params: RequestParams = {},
@@ -15544,6 +15549,7 @@ export class Api<
      */
     listPlatforms: (
       query?: {
+        /** Repeat to match all tag names, case-insensitively. An unknown name matches no resources. */
         tags?: string[];
       },
       params: RequestParams = {},
@@ -17875,6 +17881,7 @@ export class Api<
       query?: {
         /** @default false */
         includeDisabled?: boolean;
+        /** Repeat to match all tag names, case-insensitively. An unknown name matches no resources. */
         tags?: string[];
       },
       params: RequestParams = {},
@@ -19085,6 +19092,7 @@ export class Api<
      */
     listScripts: (
       query?: {
+        /** Repeat to match all tag names, case-insensitively. An unknown name matches no resources. */
         tags?: string[];
       },
       params: RequestParams = {},
@@ -20173,6 +20181,7 @@ export class Api<
      */
     listStacks: (
       query?: {
+        /** Repeat to match all tag names, case-insensitively. An unknown name matches no resources. */
         tags?: string[];
         /** @format uuid */
         platformId?: string;
@@ -21008,6 +21017,7 @@ export class Api<
      */
     listManagedSwarmServices: (
       query?: {
+        /** Repeat to match all tag names, case-insensitively. An unknown name matches no resources. */
         tags?: string[];
         /** @format uuid */
         platformId?: string;
@@ -21531,6 +21541,38 @@ export class Api<
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Tags
+     * @name ResolveTagFilter
+     * @summary Get comparison keys for tag filter names
+     * @request GET:/api/v1/tags/_filter
+     * @secure
+     * @response `200` `Record<string,string>` Supplied tag names mapped to their case-insensitive keys
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    resolveTagFilter: (
+      query: {
+        /** Repeated literal tag names */
+        tags: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<Record<string, string>, ProblemDetails>({
+        path: `/api/v1/tags/_filter`,
+        method: "GET",
+        query: query,
+        secure: true,
         format: "json",
         ...params,
       }),

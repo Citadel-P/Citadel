@@ -1,5 +1,6 @@
 //! Platforms HTTP routes, authorization and local request handling.
 use crate::api::error::runtime_error_response;
+use crate::api::mutation_notifications::affects_tag_usage;
 use crate::api::resources::capabilities::ResourceCapabilitiesView;
 use crate::api::resources::platforms::capabilities::{
     container_capabilities, permission_for, platform_capabilities, resource_capabilities,
@@ -153,8 +154,8 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Platform
         .normalized_routes(utoipa_axum::routes!(list))
         .normalized_routes(utoipa_axum::routes!(download))
         .normalized_routes(utoipa_axum::routes!(list_platforms))
-        .normalized_routes(utoipa_axum::routes!(create_platform))
-        .normalized_routes(utoipa_axum::routes!(delete_platforms))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(create_platform)))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(delete_platforms)))
         .normalized_routes(utoipa_axum::routes!(get_agent_setup))
         .normalized_routes(utoipa_axum::routes!(rotate_key))
         .normalized_routes(utoipa_axum::routes!(patch))
@@ -168,7 +169,9 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Platform
         .normalized_routes(utoipa_axum::routes!(install_node_agents))
         .normalized_routes(utoipa_axum::routes!(repair_node_agents))
         .normalized_routes(utoipa_axum::routes!(revoke))
-        .normalized_routes(utoipa_axum::routes!(update_platform_metadata))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(
+            update_platform_metadata
+        )))
         .normalized_routes(utoipa_axum::routes!(list_containers))
         .normalized_routes(utoipa_axum::routes!(get_container))
         .normalized_routes(utoipa_axum::routes!(container_health_history))
@@ -610,28 +613,7 @@ fn required<T>(result: Result<Option<T>, ApiError>, headers: &HeaderMap) -> Http
         .ok_or_else(|| crate::api::error::HttpError::from_parts(ApiError::NotFound, headers))
 }
 
-fn parse_tag_filters(query: Option<&str>) -> Result<Vec<String>, ApiError> {
-    let mut tags = Vec::new();
-    for (key, value) in url::form_urlencoded::parse(query.unwrap_or_default().as_bytes()) {
-        if !key.eq_ignore_ascii_case("tags") {
-            continue;
-        }
-        if tags.len() >= 100 {
-            return Err(ApiError::Validation(
-                "At most 100 Platform tags may be filtered at once.".to_owned(),
-            ));
-        }
-        let tag = value.trim();
-        if !tag.is_empty()
-            && !tags
-                .iter()
-                .any(|existing: &String| existing.eq_ignore_ascii_case(tag))
-        {
-            tags.push(tag.to_owned());
-        }
-    }
-    Ok(tags)
-}
+use crate::api::request_validation::parse_tag_filters;
 
 fn validate_docker_resource_id(value: &str) -> Result<(), ApiError> {
     if value.trim().is_empty() || value.len() > MAX_DOCKER_RESOURCE_ID_BYTES {

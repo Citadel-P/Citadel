@@ -10,7 +10,7 @@ import { useSwarmServicesGroup } from './useSwarmServicesGroup';
 const platformId = '00000000-0000-0000-0000-000000000200';
 
 describe('useSwarmServicesGroup', () => {
-  it('keeps managed Service tasks synchronized from the Swarm inventory stream', async () => {
+  it('keeps managed Service tasks synchronized through the authorized service collection', async () => {
     const fake = new FakeRealtimeConnection();
     server.use(
       http.get('http://localhost/api/v1/swarmServices', () =>
@@ -29,16 +29,10 @@ describe('useSwarmServicesGroup', () => {
     });
 
     expect(await screen.findByText('web.1')).toBeVisible();
-    await waitFor(() => expect(fake.listenerCount('SwarmInventoryUpdated')).toBe(1));
+    await waitFor(() => expect(fake.listenerCount('ManagedSwarmServiceUpdated')).toBe(1));
 
     act(() => {
-      fake.emit('SwarmInventoryUpdated', {
-        platformId,
-        services: {
-          items: [{ id: 'docker-service-1', runningTaskCount: 1, desiredTaskCount: 1, updateState: 'completed' }],
-        },
-        tasks: { items: [task('task-2', 'web.2')] },
-      });
+      fake.emit('ManagedSwarmServiceUpdated', service([task('task-2', 'web.2')]), 'update');
     });
 
     expect(await screen.findByText('web.2')).toBeVisible();

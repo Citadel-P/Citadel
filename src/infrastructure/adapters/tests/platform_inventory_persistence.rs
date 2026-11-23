@@ -212,7 +212,11 @@ async fn projections_stats_and_authorized_reads_survive_store_recreation() {
     // Recreate the adapter to prove that reads come from PostgreSQL, not process memory.
     let reads = PostgresPlatformReader::new(pool.clone());
     let platforms = reads
-        .list_authorized(ActorId::new(actor_id), true, &[tag_id.to_string()])
+        .list_authorized(
+            ActorId::new(actor_id),
+            true,
+            &[format!("platform-{}", tag_id.simple())],
+        )
         .await
         .unwrap();
     assert_eq!(platforms.len(), 1);
@@ -602,11 +606,10 @@ async fn seed_platform(pool: &sqlx::PgPool, platform_id: Uuid, actor_id: Uuid, t
         .execute(pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO tags (id,color,createdbyactorid,name,normalizedname) VALUES ($1,'blue',$2,$3,$4)")
+    sqlx::query("INSERT INTO tags (id,color,createdbyactorid,name,normalizedname) VALUES ($1,'blue',$2,$3,lower($3))")
         .bind(tag_id)
         .bind(actor_id)
         .bind(format!("platform-{marker}"))
-        .bind(format!("PLATFORM-{marker}"))
         .execute(pool)
         .await
         .unwrap();

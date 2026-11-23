@@ -52,12 +52,13 @@ impl PostgresBackupPersistence {
 }
 
 impl PostgresBackupPersistence {
-    pub(super) fn list_policies_impl(
-        &self,
+    pub(super) fn list_policies_impl<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
         owner: Option<Uuid>,
-    ) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>> {
+        tag_names: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<BackupPolicy>, BackupError>> {
         Box::pin(async move {
             let query = format!(
                 r#"{AUTHORIZED_CTE}
@@ -69,6 +70,10 @@ WHERE policy.archivedat IS NULL AND ($5::uuid IS NULL OR policy.id=$5)
       WHERE access.resourcetype=$2 AND access.resourceid=policy.id
         AND access.permissionlevel = ANY($3)
   ))
+  AND NOT EXISTS (SELECT FROM unnest($6::text[]) requested(name)
+      WHERE NOT EXISTS (SELECT FROM tags tag JOIN resourcetags link ON link.tagid=tag.id
+          WHERE tag.normalizedname=lower(requested.name) AND link.resourcetype='BackupPolicy'
+            AND link.resourceid=policy.id))
 ORDER BY policy.name,policy.id"#
             );
             let policies = sqlx::query(AssertSqlSafe(query.as_str()))
@@ -77,6 +82,7 @@ ORDER BY policy.name,policy.id"#
                 .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
                 .bind(administrator)
                 .bind(owner)
+                .bind(tag_names)
                 .fetch_all(&self.pool)
                 .await
                 .map_err(storage)?

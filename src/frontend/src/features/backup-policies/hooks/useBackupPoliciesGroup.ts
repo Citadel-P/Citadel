@@ -1,3 +1,4 @@
+import { collectionGroup } from '@/lib/collection-scope';
 import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
 import { useCollectionRows } from '@/hooks/useCollectionRows';
 import { BackupPolicyView } from '@/api/generated/api.types';
@@ -13,35 +14,26 @@ const mergeRun = (incoming: BackupPolicyView, existing: BackupPolicyView) => ({
 });
 
 export const useBackupPoliciesGroup = () => {
-  const { selectedTagNames } = useResourceTagFilter();
+  const { selectedTagNames, filterReady } = useResourceTagFilter();
   const readArgs = useMemo(
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const groupName = 'backup-policies';
+  const groupName = collectionGroup('backup-policies', selectedTagNames);
   const structuralSharing = useCollectionStructuralSharing(groupName);
   const { data, isLoading, error, refetch, isFetching } = useRead('listBackupPolicies', readArgs, {
+    enabled: filterReady,
     structuralSharing,
   });
   const capabilities = data?.data.capabilities;
-  const matchesActiveFilters = useCallback(
-    (policy: BackupPolicyView) => {
-      if (selectedTagNames.length === 0) return true;
-
-      const tagNames = new Set((policy.tags ?? []).map((tag) => tag.name.trim().toLowerCase()));
-      return selectedTagNames.every((tagName) => tagNames.has(tagName.trim().toLowerCase()));
-    },
-    [selectedTagNames],
-  );
 
   const reload = useCallback(async () => {
     const result = await refetch();
     return result.isSuccess ? result.data.data.policies : undefined;
   }, [refetch]);
-  const [policies, handleBackupPolicyInfoUpdated, onJoinedGroup] = useCollectionRows(
+  const [policies, handleBackupPolicyInfoUpdated, onJoinedGroup, onCollectionSnapshot] = useCollectionRows(
     data?.data.policies,
     JSON.stringify(readArgs ?? {}),
-    matchesActiveFilters,
     reload,
     mergeRun,
   );
@@ -61,8 +53,10 @@ export const useBackupPoliciesGroup = () => {
   );
 
   useRealtimeGroup({
+    enabled: filterReady,
     groupName,
     onJoinedGroup,
+    onCollectionSnapshot,
     setupEventListeners,
     removeEventListeners,
   });

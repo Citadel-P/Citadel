@@ -1,4 +1,5 @@
 //! Swarm services HTTP routes, authorization and local request handling.
+use crate::api::mutation_notifications::affects_tag_usage;
 use crate::api::resource_access::collection_capabilities;
 use crate::{
     api::{
@@ -50,15 +51,15 @@ pub fn router(state: SwarmServicesHttpState) -> Router {
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<SwarmServicesHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list))
-        .normalized_routes(utoipa_axum::routes!(create))
-        .normalized_routes(utoipa_axum::routes!(delete))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(create)))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(delete)))
         .normalized_routes(utoipa_axum::routes!(get))
         .normalized_routes(utoipa_axum::routes!(duplicate_draft))
         .normalized_routes(utoipa_axum::routes!(adoption_draft))
-        .normalized_routes(utoipa_axum::routes!(adopt))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(adopt)))
         .normalized_routes(utoipa_axum::routes!(update))
         .normalized_routes(utoipa_axum::routes!(rename))
-        .normalized_routes(utoipa_axum::routes!(update_metadata))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(update_metadata)))
         .normalized_routes(utoipa_axum::routes!(apply))
         .normalized_routes(utoipa_axum::routes!(scale))
         .normalized_routes(utoipa_axum::routes!(force_update))
@@ -720,7 +721,7 @@ async fn duplicate_draft(
         (status = 200, description = "Success", body = ManagedSwarmServicesView, content_type = "application/json"),
         crate::openapi::errors::ResourceErrors
     ),
-    params(("tags" = Option<Vec<String>>, Query), ("platformId" = Option<uuid::Uuid>, Query)),
+    params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names, case-insensitively. An unknown name matches no resources."), ("platformId" = Option<uuid::Uuid>, Query)),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]

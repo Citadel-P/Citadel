@@ -14,6 +14,25 @@ pub(crate) fn notify_mutations(router: Router, resource_type: &'static str) -> R
     ))
 }
 
+/// Wake active tag catalogs after a committed resource creation, assignment, or deletion.
+pub(crate) fn affects_tag_usage<S: Clone + Send + Sync + 'static>(
+    (schemas, paths, handler): utoipa_axum::router::UtoipaMethodRouter<S>,
+) -> utoipa_axum::router::UtoipaMethodRouter<S> {
+    let handler = handler.route_layer(axum::middleware::from_fn(
+        |request: axum::extract::Request, next: axum::middleware::Next| async move {
+            let hub = request.extensions().get::<RealtimeHub>().cloned();
+            let response = next.run(request).await;
+            if response.status().is_success()
+                && let Some(hub) = hub
+            {
+                hub.publish_resource_change("TagUsage", Uuid::nil(), "tagUsageChanged");
+            }
+            response
+        },
+    ));
+    (schemas, paths, handler)
+}
+
 async fn mutation_notification(
     State(resource_type): State<&'static str>,
     request: axum::extract::Request,

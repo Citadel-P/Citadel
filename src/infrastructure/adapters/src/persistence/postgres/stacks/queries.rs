@@ -85,7 +85,7 @@ impl PostgresStackRepository {
   AND NOT EXISTS (SELECT 1 FROM unnest($4::text[]) requested(name) WHERE NOT EXISTS (
     SELECT 1 FROM resourcetags link JOIN tags tag ON tag.id=link.tagid
     WHERE link.resourcetype='Stack' AND link.resourceid=s.id
-      AND (lower(tag.name)=lower(requested.name) OR tag.id::text=requested.name)))"#;
+      AND tag.normalizedname=lower(requested.name)))"#;
             const ORDER: &str = "s.createdat DESC, s.name, s.id";
             // Bound authorized keys before projecting activity, tags and runtime observations.
             let projection = if filter.catalog { CATALOG } else { PROJECTION };

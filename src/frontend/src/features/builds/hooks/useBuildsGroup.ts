@@ -1,3 +1,4 @@
+import { collectionGroup } from '@/lib/collection-scope';
 import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
 import { useCollectionRows } from '@/hooks/useCollectionRows';
 import { AuthorizedProject } from '@/api/generated/api.types';
@@ -14,35 +15,26 @@ const mergeRun = (incoming: AuthorizedProject, existing: AuthorizedProject) => (
 });
 
 export const useBuildsGroup = () => {
-  const { selectedTagNames } = useResourceTagFilter();
+  const { selectedTagNames, filterReady } = useResourceTagFilter();
   const readArgs = useMemo(
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const groupName = 'build-projects';
+  const groupName = collectionGroup('build-projects', selectedTagNames);
   const structuralSharing = useCollectionStructuralSharing(groupName);
   const { data, isLoading, error, refetch, isFetching } = useRead('listBuildProjects', readArgs, {
+    enabled: filterReady,
     structuralSharing,
   });
   const capabilities = data?.data.capabilities;
-  const matchesActiveFilters = useCallback(
-    (project: AuthorizedProject) => {
-      if (selectedTagNames.length === 0) return true;
-
-      const tagNames = new Set((project.tags ?? []).map((tag) => tag.name.trim().toLowerCase()));
-      return selectedTagNames.every((tagName) => tagNames.has(tagName.trim().toLowerCase()));
-    },
-    [selectedTagNames],
-  );
 
   const reload = useCallback(async () => {
     const result = await refetch();
     return result.isSuccess ? result.data.data.projects : undefined;
   }, [refetch]);
-  const [projects, handleBuildProjectInfoUpdated, onJoinedGroup] = useCollectionRows(
+  const [projects, handleBuildProjectInfoUpdated, onJoinedGroup, onCollectionSnapshot] = useCollectionRows(
     data?.data.projects,
     JSON.stringify(readArgs ?? {}),
-    matchesActiveFilters,
     reload,
     mergeRun,
   );
@@ -62,8 +54,10 @@ export const useBuildsGroup = () => {
   );
 
   useRealtimeGroup({
+    enabled: filterReady,
     groupName,
     onJoinedGroup,
+    onCollectionSnapshot,
     setupEventListeners,
     removeEventListeners,
   });

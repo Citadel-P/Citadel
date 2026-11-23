@@ -315,8 +315,7 @@ AND NOT EXISTS (
         JOIN tags tag ON tag.id = link.tagid
         WHERE link.resourcetype = 'Platform'
           AND link.resourceid = p.id
-          AND (lower(tag.name) = lower(requested.name)
-               OR tag.id::text = requested.name)
+          AND tag.normalizedname=lower(requested.name)
     )
 )
 ORDER BY p.name, p.id

@@ -1689,6 +1689,7 @@ async fn group_wire_acceptance_joins_once_delivers_committed_rows_and_leaves_wit
             .unwrap();
     socket.send(Message::Text(json!({"protocolVersion":1,"kind":"subscribe","clientMode":"groups","accessToken":token(&f, &f.administrator).await}).to_string().into())).await.unwrap();
     assert_eq!(receive(&mut socket).await["kind"], "subscribed");
+    tag_scopes::check_platform_scopes(&f, &mut socket, &hub).await;
     let group = format!("containers:{}", f.platform_id);
     assert!(invoke(&mut socket, "JoinGroup", &group).await["error"].is_null());
     let restricted = super::lookup::subject(&f).await;
@@ -2292,3 +2293,6 @@ async fn workload_capacity_is_reported_before_mapping_rows_beyond_the_bound() {
     ));
     cleanup(f).await;
 }
+
+#[path = "realtime_groups/tag_scopes.rs"]
+mod tag_scopes;

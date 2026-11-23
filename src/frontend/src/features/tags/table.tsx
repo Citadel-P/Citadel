@@ -90,7 +90,7 @@ const columns = (
   },
   {
     accessorKey: 'usageCount',
-    header: ({ column }) => <SortableCell cellName="Usage" column={column} />,
+    header: ({ column }) => <SortableCell cellName="Resources you can access" column={column} />,
     cell: ({ row }) => <span className="text-[13px] tabular-nums">{row.original.usageCount}</span>,
     sortFn: (rowA, rowB) => Number(rowA.original.usageCount) - Number(rowB.original.usageCount),
   },

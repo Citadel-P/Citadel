@@ -65,14 +65,13 @@ pub(crate) const AUTHORIZED_BY_LEVELS_CTE: &str = concat!(
     ", global_access AS (SELECT EXISTS (SELECT 1 FROM role_levels WHERE permissionlevel = ANY($3)) AS allowed)\n"
 );
 
-/// The resource tag key is unique per (type, resource, tag). Count requested
-/// IDs once so duplicate filters have the same meaning as a single tag.
+/// Compare against the complete requested set so an unknown name never broadens the filter.
 pub(super) const ALL_REQUESTED_TAGS: &str = r#"
  AND resource.id IN (
-     SELECT link.resourceid FROM resourcetags link
-     WHERE link.resourcetype=$5 AND link.tagid=ANY($6)
-     GROUP BY link.resourceid
-     HAVING count(*)=(SELECT count(DISTINCT id) FROM unnest($6::uuid[]) AS requested(id))
+     SELECT link.resourceid FROM unnest($6::text[]) WITH ORDINALITY requested(name,n)
+     JOIN tags tag ON tag.normalizedname=lower(requested.name)
+     JOIN resourcetags link ON link.tagid=tag.id AND link.resourcetype=$5
+     GROUP BY link.resourceid HAVING count(*)=cardinality($6::text[])
  )"#;
 
 pub(super) fn authorized_catalog_query(table: &str, extra_columns: &str, filter: &str) -> String {
@@ -88,8 +87,6 @@ ORDER BY resource.name,resource.id"#
     )
 }
 
-/// Build projects, pools and scripts accept both tag names and UUIDs. Resolve
-/// each filter independently, including names that also parse as UUIDs.
 pub(super) async fn tagged_workload_rows(
     pool: &sqlx::PgPool,
     actor: citadel_primitives::ActorId,
@@ -109,9 +106,9 @@ pub(super) async fn tagged_workload_rows(
         r#"
  AND resource.id IN (
      SELECT link.resourceid
-     FROM unnest($5::text[], $6::uuid[]) WITH ORDINALITY AS requested(name,id,n)
-     JOIN tags tag ON tag.id=requested.id OR lower(tag.name COLLATE "C")=lower(requested.name COLLATE "C")
-     JOIN resourcetags link ON link.tagid=tag.id AND link.resourcetype=$7
+     FROM unnest($5::text[]) WITH ORDINALITY AS requested(name,n)
+     JOIN tags tag ON tag.normalizedname=lower(requested.name)
+     JOIN resourcetags link ON link.tagid=tag.id AND link.resourcetype=$6
      GROUP BY link.resourceid HAVING count(DISTINCT requested.n)=cardinality($5)
  )"#
     };
@@ -129,11 +126,7 @@ SELECT resource.* FROM {source}
         .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
         .bind(administrator);
     if !tags.is_empty() {
-        let ids: Vec<_> = tags
-            .iter()
-            .map(|tag| uuid::Uuid::parse_str(tag).ok())
-            .collect();
-        query = query.bind(tags).bind(ids).bind(tag_type);
+        query = query.bind(tags).bind(tag_type);
     }
     query.fetch_all(pool).await
 }

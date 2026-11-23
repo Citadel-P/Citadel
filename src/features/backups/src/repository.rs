@@ -81,12 +81,13 @@ pub trait BackupPersistence: Send + Sync {
         actor: ActorId,
         input: &'a BackupPolicyConfiguration,
     ) -> BoxFuture<'a, Result<BackupPolicy, BackupError>>;
-    fn list_policies(
-        &self,
+    fn list_policies<'a>(
+        &'a self,
         actor: ActorId,
         administrator: bool,
         owner: Option<Uuid>,
-    ) -> BoxFuture<'_, Result<Vec<BackupPolicy>, BackupError>>;
+        tag_names: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<BackupPolicy>, BackupError>>;
     fn get_policy(&self, id: Uuid) -> BoxFuture<'_, Result<BackupPolicy, BackupError>>;
     fn update_policy<'a>(
         &'a self,

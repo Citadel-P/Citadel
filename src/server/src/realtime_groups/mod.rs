@@ -1,3 +1,4 @@
+mod collection_scope;
 mod model;
 mod reader;
 

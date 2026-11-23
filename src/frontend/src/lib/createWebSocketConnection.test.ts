@@ -1,3 +1,4 @@
+import { collectionEventKey, collectionGroup } from './collection-scope';
 import { RealtimeConnectionState } from '@/lib/realtime-connection';
 import { FakeWebSocket } from '@/test/fakes/websocket';
 import { createWebSocketConnection } from './createWebSocketConnection';
@@ -143,5 +144,42 @@ it('backs off across short successful handshakes and resets after sustained conn
     socket.emit('open', new Event('open'));
     socket.message({ protocolVersion: 1, kind: 'subscribed' });
   }
+  await f.connection.stop();
+});
+
+it('isolates scoped events and discards late delivery after leaving and rejoining', async () => {
+  const f = fixture();
+  const socket = await connect(f);
+  const scopes = ['Prod', 'Stage'].map((tag) => collectionGroup('git-repositories', [tag]));
+  const handlers = scopes.map(() => vi.fn());
+  const unfiltered = vi.fn();
+  const event = 'GitRepositoryInfoUpdated';
+  f.connection.on(event, unfiltered);
+  const invoke = async (method: string, key: string) => {
+    const done = f.connection.invoke(method, key);
+    const frame = JSON.parse(socket.send.mock.calls.at(-1)![0]);
+    socket.message({ protocolVersion: 1, kind: 'completion', invocationId: frame.invocationId });
+    await done;
+    return frame.arguments[0];
+  };
+  const ids: string[] = [];
+  for (const [i, key] of scopes.entries()) {
+    f.connection.on(collectionEventKey(key, event), handlers[i]);
+    const arg = await invoke('JoinGroup', key);
+    expect(arg.tags).toEqual([i === 0 ? 'Prod' : 'Stage']);
+    ids.push(arg.subscriptionId);
+  }
+  const emit = (subscriptionId?: string) =>
+    socket.message({ protocolVersion: 1, kind: 'event', target: event, arguments: [{}], subscriptionId });
+  emit(ids[0]);
+  emit(ids[1]);
+  emit();
+  expect(await invoke('LeaveGroup', scopes[0])).toBe(ids[0]);
+  const next = await invoke('JoinGroup', scopes[0]);
+  emit(ids[0]);
+  emit(next.subscriptionId);
+  expect(handlers[0]).toHaveBeenCalledTimes(2);
+  expect(handlers[1]).toHaveBeenCalledOnce();
+  expect(unfiltered).toHaveBeenCalledOnce();
   await f.connection.stop();
 });

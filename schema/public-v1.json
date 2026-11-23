@@ -27729,6 +27729,7 @@
         "operationId": "listBackupPolicies",
         "parameters": [
           {
+            "description": "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.",
             "in": "query",
             "name": "tags",
             "required": false,
@@ -31768,6 +31769,7 @@
         "operationId": "listBuildAgentPools",
         "parameters": [
           {
+            "description": "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.",
             "in": "query",
             "name": "tags",
             "required": false,
@@ -33396,6 +33398,7 @@
         "operationId": "listBuildProjects",
         "parameters": [
           {
+            "description": "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.",
             "in": "query",
             "name": "tags",
             "required": false,
@@ -37353,6 +37356,7 @@
         "operationId": "listDeployments",
         "parameters": [
           {
+            "description": "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.",
             "in": "query",
             "name": "tags",
             "required": false,
@@ -40079,6 +40083,7 @@
         "operationId": "listGitRepositories",
         "parameters": [
           {
+            "description": "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.",
             "in": "query",
             "name": "tags",
             "required": false,
@@ -44291,6 +44296,7 @@
         "operationId": "listPlatforms",
         "parameters": [
           {
+            "description": "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.",
             "in": "query",
             "name": "tags",
             "required": false,
@@ -52129,6 +52135,7 @@
             }
           },
           {
+            "description": "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.",
             "in": "query",
             "name": "tags",
             "required": false,
@@ -55676,6 +55683,7 @@
         "operationId": "listScripts",
         "parameters": [
           {
+            "description": "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.",
             "in": "query",
             "name": "tags",
             "required": false,
@@ -57715,6 +57723,7 @@
         "operationId": "listStacks",
         "parameters": [
           {
+            "description": "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.",
             "in": "query",
             "name": "tags",
             "required": false,
@@ -61123,6 +61132,7 @@
         "operationId": "listManagedSwarmServices",
         "parameters": [
           {
+            "description": "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.",
             "in": "query",
             "name": "tags",
             "required": false,
@@ -63325,6 +63335,115 @@
           }
         ],
         "summary": "Create a resource tag",
+        "tags": [
+          "Tags"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": true,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/tags/_filter": {
+      "get": {
+        "operationId": "resolveTagFilter",
+        "parameters": [
+          {
+            "description": "Repeated literal tag names",
+            "in": "query",
+            "name": "tags",
+            "required": true,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Supplied tag names mapped to their case-insensitive keys"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get comparison keys for tag filter names",
         "tags": [
           "Tags"
         ],

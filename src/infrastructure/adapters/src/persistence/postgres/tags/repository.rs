@@ -10,25 +10,23 @@ impl PostgresTagRepository {
     }
 }
 impl TagRepository for PostgresTagRepository {
+    fn comparison_keys<'a>(
+        &'a self,
+        names: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<String>, TagError>> {
+        Box::pin(async move {
+            sqlx::query_scalar("SELECT lower(name) FROM unnest($1::text[]) WITH ORDINALITY AS input(name, position) ORDER BY position")
+                .bind(names).fetch_all(&self.pool).await.map_err(storage)
+        })
+    }
+
     fn list_tags<'a>(
         &'a self,
         actor_id: ActorId,
         administrator: bool,
     ) -> BoxFuture<'a, Result<Vec<Tag>, TagError>> {
         Box::pin(async move {
-            let query = format!(
-                r#"{AUTHORIZED_BY_LEVELS_CTE}
-SELECT tag.*,
-       (SELECT COUNT(*)::integer FROM resourcetags link WHERE link.tagid = tag.id) AS usage_count
-FROM tags tag
-WHERE ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
-    SELECT 1 FROM actor_scope scope
-    JOIN resourceaccesses access ON access.actorid = scope.actorid
-    WHERE access.resourcetype = $2 AND access.resourceid = tag.id
-      AND access.permissionlevel = ANY($3)
-))
-ORDER BY tag.name, tag.id"#
-            );
+            let query = queries::visible_tags(false);
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(actor_id.value())
                 .bind(ResourceType::Tag as i32)
@@ -71,9 +69,11 @@ RETURNING *, 0::integer AS usage_count
 
     fn update_tag<'a>(
         &'a self,
+        actor: ActorId,
+        administrator: bool,
         id: Uuid,
         patch: &'a TagPatch,
-    ) -> BoxFuture<'a, Result<Tag, TagError>> {
+    ) -> BoxFuture<'a, Result<(Tag, Vec<TaggableResourceType>), TagError>> {
         Box::pin(async move {
             let mut transaction = self.pool.begin().await.map_err(storage)?;
             let current = sqlx::query("SELECT name,color FROM tags WHERE id=$1 FOR UPDATE")
@@ -93,37 +93,52 @@ RETURNING *, 0::integer AS usage_count
                     .unwrap_or(current.try_get("color").map_err(storage)?),
             };
             tag.validate()?;
-            let row = sqlx::query(
-                r#"
-UPDATE tags
-SET name = $2, normalizedname = lower($2), color = $3, updatedat = $4
-WHERE id = $1
-RETURNING *, (SELECT COUNT(*)::integer FROM resourcetags link WHERE link.tagid = tags.id) AS usage_count
-"#,
-            )
-            .bind(id)
-            .bind(&tag.name)
-            .bind(&tag.color)
-            .bind(Utc::now())
-            .fetch_optional(&mut *transaction)
-            .await
-            .map_err(database_error)?
-            .ok_or(TagError::NotFound)?;
+            sqlx::query("UPDATE tags SET name=$2, normalizedname=lower($2), color=$3, updatedat=$4 WHERE id=$1")
+                .bind(id)
+                .bind(&tag.name)
+                .bind(&tag.color)
+                .bind(Utc::now())
+                .execute(&mut *transaction)
+                .await
+                .map_err(database_error)?;
+            let query = queries::visible_tags(true);
+            let row = sqlx::query(AssertSqlSafe(query.as_str()))
+                .bind(actor.value())
+                .bind(ResourceType::Tag as i32)
+                .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
+                .bind(administrator)
+                .bind(id)
+                .fetch_optional(&mut *transaction)
+                .await
+                .map_err(storage)?
+                .ok_or(TagError::NotFound)?;
             let tag = map_tag(row)?;
+            let affected = queries::linked_types(&mut transaction, id).await?;
             transaction.commit().await.map_err(storage)?;
-            Ok(tag)
+            Ok((tag, affected))
         })
     }
 
-    fn delete_tag<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<(), TagError>> {
+    fn delete_tag<'a>(
+        &'a self,
+        id: Uuid,
+    ) -> BoxFuture<'a, Result<Vec<TaggableResourceType>, TagError>> {
         Box::pin(async move {
-            let affected = sqlx::query("DELETE FROM tags WHERE id = $1")
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            sqlx::query("SELECT id FROM tags WHERE id=$1 FOR UPDATE")
                 .bind(id)
-                .execute(&self.pool)
+                .fetch_optional(&mut *tx)
                 .await
-                .map_err(database_error)?
-                .rows_affected();
-            exactly_one(affected)
+                .map_err(storage)?
+                .ok_or(TagError::NotFound)?;
+            let affected = queries::linked_types(&mut tx, id).await?;
+            sqlx::query("DELETE FROM tags WHERE id=$1")
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(database_error)?;
+            tx.commit().await.map_err(storage)?;
+            Ok(affected)
         })
     }
 

@@ -20,7 +20,7 @@ impl TaggableResourceType {
 
 impl NewTag {
     pub fn validate(&mut self) -> Result<(), TagError> {
-        validate_name(&self.name, "Tag")?;
+        validate_tag_name(&self.name)?;
         self.name = self.name.trim().to_owned();
         self.color = normalize_color(&self.color)?;
         Ok(())

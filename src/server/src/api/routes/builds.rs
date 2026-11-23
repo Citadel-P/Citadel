@@ -1,5 +1,6 @@
 //! Builds HTTP routes, authorization and local request handling.
 use crate::api::mutation_notifications::CommittedOwner;
+use crate::api::mutation_notifications::affects_tag_usage;
 use crate::api::resources::builds::authorized::{authorized_pools, authorized_projects};
 use crate::api::resources::builds::patch::typed_patch;
 use crate::{
@@ -62,13 +63,15 @@ pub fn router(state: BuildsHttpState) -> Router {
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<BuildsHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list_projects))
-        .normalized_routes(utoipa_axum::routes!(create_project))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(create_project)))
         .normalized_routes(utoipa_axum::routes!(get_project))
         .normalized_routes(utoipa_axum::routes!(duplicate_draft))
         .normalized_routes(utoipa_axum::routes!(update_project))
         .normalized_routes(utoipa_axum::routes!(rename_project))
-        .normalized_routes(utoipa_axum::routes!(update_project_metadata))
-        .normalized_routes(utoipa_axum::routes!(archive_project))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(
+            update_project_metadata
+        )))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(archive_project)))
         .normalized_routes(utoipa_axum::routes!(queue_run))
         .normalized_routes(utoipa_axum::routes!(list_runs))
         .normalized_routes(utoipa_axum::routes!(get_run))
@@ -81,14 +84,16 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<BuildsHt
 pub(crate) fn documented_pool_routes() -> utoipa_axum::router::OpenApiRouter<BuildsHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list_pools))
-        .normalized_routes(utoipa_axum::routes!(create_pool))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(create_pool)))
         .normalized_routes(utoipa_axum::routes!(get_pool))
         .normalized_routes(utoipa_axum::routes!(pool_agent_setup))
         .normalized_routes(utoipa_axum::routes!(update_pool))
         .normalized_routes(utoipa_axum::routes!(rename_pool))
-        .normalized_routes(utoipa_axum::routes!(update_pool_metadata))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(
+            update_pool_metadata
+        )))
         .normalized_routes(utoipa_axum::routes!(test_pool))
-        .normalized_routes(utoipa_axum::routes!(archive_pool))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(archive_pool)))
         .normalized_routes(utoipa_axum::routes!(enroll_pool))
         .normalized_routes(utoipa_axum::routes!(pool_edge_status))
         .normalized_routes(utoipa_axum::routes!(revoke_pool_edge))
@@ -269,7 +274,7 @@ fn map_error(error: BuildError) -> ApiError {
         (status = 200, description = "Success", body = Pools, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
-    params(("tags" = Option<Vec<String>>, Query)),
+    params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -281,7 +286,7 @@ async fn list_pools(
 ) -> HttpResult {
     let principal = actor(principal, &headers)?;
     let tags = api_result(
-        crate::api::routes::tags::parse_filters(query.as_deref()),
+        crate::api::request_validation::parse_tag_filters(query.as_deref()),
         &headers,
     )?;
     let build_agent_pools = api_result(
@@ -842,7 +847,7 @@ async fn project_response(
         (status = 200, description = "Success", body = Projects, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
-    params(("tags" = Option<Vec<String>>, Query)),
+    params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -854,7 +859,7 @@ async fn list_projects(
 ) -> HttpResult {
     let principal = actor(principal, &headers)?;
     let tags = api_result(
-        crate::api::routes::tags::parse_filters(query.as_deref()),
+        crate::api::request_validation::parse_tag_filters(query.as_deref()),
         &headers,
     )?;
     let projects = api_result(

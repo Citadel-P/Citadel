@@ -11,7 +11,7 @@ Do not put secrets or credentials in tags.
 
 Administrators can manage all tags. Other users need global Tag Write
 permission to create tags, or Write permission on an existing tag to rename,
-recolor, or delete it. The tag catalog is filtered by the user's access.
+recolor, or delete it. The tag catalog shows the tags you can read. **Resources you can access** counts the resources you can open that carry each tag.
 
 Assigning tags requires Write permission on the resource being tagged.
 
@@ -68,16 +68,7 @@ The removed tag is no longer assigned to that resource, but it still exists in t
 Use [global search](/guides/finding-resources) to find a resource by name
 across Citadel, then use Tag filters on its list to narrow related resources.
 
-List pages with a tag filter include:
-
-- Deployments
-- Stacks
-- Platforms
-- Git repositories
-
-Select one or more tags to filter the list.
-
-Filtering uses OR behavior. If you select `Prod` and `Backend`, Citadel shows resources that have either `Prod` or `Backend`.
+Selecting `Prod` and `Backend` shows resources carrying both tag names. Changes to capitalization keep matching. If a name is deleted or renamed, its filter stays selected. You can remove it, replace it, or keep it to match resources tagged with that name again.
 
 The filter is reflected in the page URL, so filtered views can be bookmarked or shared with another user who has access to the same resources.
 

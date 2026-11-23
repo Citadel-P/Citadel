@@ -1,4 +1,5 @@
-import { ResourceHeaderTagsEditor } from './components';
+import { useLocation } from 'react-router';
+import { ResourceHeaderTagsEditor, ResourceTagFilter } from './components';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import { screen, waitFor } from '@testing-library/react';
@@ -47,4 +48,27 @@ describe('ResourceHeaderTagsEditor', () => {
     expect(queryClient.getQueryState(otherService)?.isInvalidated).toBe(false);
     expect(queryClient.getQueryState(unrelated)?.isInvalidated).toBe(false);
   });
+});
+
+it('retains unresolved names and clears only the filter and paging when the catalogue is empty', async () => {
+  server.use(
+    http.get('*/api/v1/tags/_filter', () => HttpResponse.json({ Unknown: 'unknown', Billing: 'billing' })),
+    http.get('http://localhost/api/v1/tags', () => HttpResponse.json({ tags: [] })),
+  );
+  function Location() {
+    return <output>{useLocation().search}</output>;
+  }
+  const { user } = renderCitadel(
+    <>
+      <ResourceTagFilter />
+      <Location />
+    </>,
+    { route: '/scripts?TaGs=Unknown&tags=Billing&page=3&sort=name' },
+  );
+  expect(await screen.findByRole('button', { name: 'Remove Unknown tag filter' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Remove Billing tag filter' }));
+  expect(screen.getByRole('status')).toHaveTextContent('?sort=name&tags=Unknown');
+  await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+  expect(screen.getByRole('status')).toHaveTextContent('?sort=name');
+  expect(screen.getByRole('button', { name: 'Tag Filter' })).toBeVisible();
 });

@@ -55,6 +55,10 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
     .await
     .unwrap();
 
+    let tag_id = Uuid::now_v7();
+    let tag_name = Uuid::now_v7().to_string();
+    sqlx::query("INSERT INTO tags(id,name,normalizedname,color,createdbyactorid) VALUES($1,$2,lower($2),'#112233',$3)")
+        .bind(tag_id).bind(&tag_name).bind(SYSTEM_ACTOR_ID).execute(&pool).await.unwrap();
     let created = store
         .create(
             actor,
@@ -64,12 +68,32 @@ async fn managed_swarm_service_crud_projection_and_operation_state_are_persisted
                 platform_id,
                 description: Some("fixture".to_owned()),
                 spec: spec(registry_id, 1),
-                tag_ids: Vec::new(),
+                tag_ids: vec![tag_id],
                 duplicate_source: None,
             },
         )
         .await
         .unwrap();
+    for (names, expected) in [
+        (vec![tag_name.to_uppercase(), tag_name.clone()], 1),
+        (vec![tag_name.clone(), format!("unknown-{suffix}")], 0),
+        (vec![tag_id.to_string()], 0),
+    ] {
+        let rows = store
+            .list_authorized(
+                actor,
+                true,
+                &SwarmServiceFilter {
+                    platform_id: Some(platform_id),
+                    tags: names,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), expected);
+        assert!(rows.iter().all(|row| row.id == created.id));
+    }
     assert_eq!(
         created.health,
         citadel_swarm_services::SwarmServiceHealth::Created

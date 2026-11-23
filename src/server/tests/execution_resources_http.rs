@@ -350,7 +350,7 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
         (
             format!(
                 "{}&tags={}",
-                pool_tag["id"].as_str().unwrap(),
+                pool_tag["name"].as_str().unwrap(),
                 pool_tag["name"].as_str().unwrap()
             ),
             true,
@@ -360,7 +360,7 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
             false,
         ),
         (format!("absent-{suffix}"), false),
-        ("%00".to_owned(), false),
+        (pool_tag["id"].as_str().unwrap().to_owned(), false),
     ] {
         let response = request(
             &app,

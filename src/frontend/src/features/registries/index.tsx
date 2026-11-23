@@ -1,5 +1,5 @@
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
-import { useRegistryList } from './queries';
+import { useRegistriesGroup } from './useRegistriesGroup';
 import type { AuthorizedRegistryView } from '@/api/generated/api.types';
 import { ActionBar } from '@/components/custom/action-bar';
 import { RegistryDropdownActions, RegistryGroupActions } from './actions';
@@ -26,17 +26,18 @@ export const RegistryComponents: RequiredComponents = {
   },
 
   useData: function (): ResourceDataHookResult<AuthorizedRegistryView> {
-    const { selectedTagNames } = useResourceTagFilter();
-    const { data, isLoading, error, refetch, isFetching } = useRegistryList({
-      query: { includeDisabled: true, ...(selectedTagNames.length > 0 ? { tags: selectedTagNames } : {}) },
-    });
+    const { selectedTagNames, filterReady } = useResourceTagFilter();
+    const { registries, capabilities, isLoading, error, refetch, isFetching } = useRegistriesGroup(
+      selectedTagNames,
+      filterReady,
+    );
     return {
       error,
       refetch,
       isFetching,
-      items: data?.data?.registries ?? EMPTY_REGISTRIES,
+      items: registries ?? EMPTY_REGISTRIES,
       isLoading,
-      capabilities: data?.data?.capabilities,
+      capabilities,
     };
   },
   filterItems: (items, search) => {

@@ -1,3 +1,4 @@
+import { collectionGroup, collectionEventKey } from '@/lib/collection-scope';
 import { act, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
@@ -26,12 +27,16 @@ it('applies scoped repository changes to the filtered list and preserves unrelat
     },
   });
   expect(await screen.findByText('first')).toBeVisible();
-  await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', 'git-repositories'));
-  const emit = (row: object, action: string) => act(() => fake.emit('GitRepositoryInfoUpdated', row, action));
+  const scope = collectionGroup('git-repositories', tags);
+  await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', scope));
+  act(() => fake.emit('GitRepositoryInfoUpdated', incoming, 'create'));
+  expect(screen.getByText('first')).toBeVisible();
+  const emit = (row: object, action: string) =>
+    act(() => fake.emit(collectionEventKey(scope, 'GitRepositoryInfoUpdated'), row, action));
   emit(incoming, 'create');
   emit(incoming, 'update');
   expect(screen.getByText('first second')).toBeVisible();
-  emit({ ...incoming, tags: [] }, 'update');
+  emit({ id: incoming.id }, 'delete');
   expect(screen.getByText('first')).toBeVisible();
   emit(incoming, 'update');
   emit({ id: 'b' }, 'delete');

@@ -1,4 +1,5 @@
 //! Backups HTTP routes, authorization and local request handling.
+use crate::api::mutation_notifications::affects_tag_usage;
 use crate::api::{mutation_notifications::CommittedOwner, resources::backups::patch::typed_patch};
 use crate::{
     api::{
@@ -88,12 +89,14 @@ fn documented_policy_routes() -> utoipa_axum::router::OpenApiRouter<BackupsHttpS
         .normalized_routes(utoipa_axum::routes!(deployment_source_preview))
         .normalized_routes(utoipa_axum::routes!(stack_source_preview))
         .normalized_routes(utoipa_axum::routes!(service_source_preview))
-        .normalized_routes(utoipa_axum::routes!(create_policy))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(create_policy)))
         .normalized_routes(utoipa_axum::routes!(get_policy))
         .normalized_routes(utoipa_axum::routes!(update_policy))
         .normalized_routes(utoipa_axum::routes!(rename_policy))
-        .normalized_routes(utoipa_axum::routes!(update_policy_metadata))
-        .normalized_routes(utoipa_axum::routes!(archive_policy))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(
+            update_policy_metadata
+        )))
+        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(archive_policy)))
         .normalized_routes(utoipa_axum::routes!(queue_backup))
         .normalized_routes(utoipa_axum::routes!(run_backup))
         .normalized_routes(utoipa_axum::routes!(list_runs))
@@ -317,11 +320,12 @@ fn result<T>(r: Result<T, BackupError>, h: &HeaderMap) -> HttpResult<T> {
         (status = 200, description = "Success", body = Policies, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
-    params(("tags" = Option<Vec<String>>, Query)),
+    params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names, case-insensitively. An unknown name matches no resources.")),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
 async fn list_policies(
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
     State(s): State<BackupsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     h: HeaderMap,
@@ -330,7 +334,15 @@ async fn list_policies(
     let records = result(
         s.backups
             .store()
-            .list_policies(p.actor_id, p.is_administrator(), None)
+            .list_policies(
+                p.actor_id,
+                p.is_administrator(),
+                None,
+                &api_result(
+                    crate::api::request_validation::parse_tag_filters(query.as_deref()),
+                    &h,
+                )?,
+            )
             .await,
         &h,
     )?;

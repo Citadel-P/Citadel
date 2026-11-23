@@ -1,5 +1,6 @@
+import { collectionGroup } from '@/lib/collection-scope';
 import { mergePlatformIoSample } from '../platform-io';
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { PlatformView } from '@/api/generated/api.types';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { PlatformStatsBatchView } from '@/api/types';
@@ -21,75 +22,58 @@ export const normalizePlatform = (s: PlatformView): PlatformView => {
   return s;
 };
 
-const normalizeTagName = (name: string) => name.trim().toLowerCase();
-
 type UsePlatformsGroupOptions = {
   useTagFilter?: boolean;
 };
 
 export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOptions = {}) => {
-  const { selectedTagNames: activeTagNames } = useResourceTagFilter();
+  const { selectedTagNames: activeTagNames, filterReady } = useResourceTagFilter(useTagFilter);
   const selectedTagNames = useMemo(() => (useTagFilter ? activeTagNames : []), [activeTagNames, useTagFilter]);
   const readArgs = useMemo(() => {
     if (selectedTagNames.length === 0) return undefined;
     return { query: { tags: selectedTagNames } };
   }, [selectedTagNames]);
-  const { data, isLoading, error, refetch, isFetching } = useRead('listPlatforms', readArgs);
+  const { data, isLoading, error, refetch, isFetching } = useRead('listPlatforms', readArgs, { enabled: filterReady });
   const [platforms, setPlatforms] = useState<PlatformView[] | undefined>();
-  const lastFetchedRef = useRef<PlatformView[]>([]);
-  const capabilities = data?.data?.capabilities;
-
-  useEffect(() => {
-    if (!data?.data) return;
-    const newBase = data.data.platforms;
-    if (newBase !== lastFetchedRef.current) {
-      lastFetchedRef.current = newBase;
-      setPlatforms(newBase.map(normalizePlatform));
-    }
-  }, [data]);
-
-  const matchesActiveFilters = useCallback(
-    (platform: PlatformView) => {
-      if (selectedTagNames.length === 0) return true;
-
-      const tagNames = new Set((platform.tags ?? []).map((tag) => normalizeTagName(tag.name)));
-      return selectedTagNames.every((tagName) => tagNames.has(normalizeTagName(tagName)));
+  const groupName = collectionGroup('platforms', selectedTagNames);
+  const [liveScope, setLiveScope] = useState<string>();
+  const onCollectionSnapshot = useCallback(
+    (active: boolean) => {
+      setLiveScope((current) => (active ? groupName : current === groupName ? undefined : current));
+      if (active) setPlatforms([]);
     },
-    [selectedTagNames],
+    [groupName],
   );
+  const capabilities = data?.data.capabilities;
+  const snapshot = data?.data.platforms;
+  const [baseline, setBaseline] = useState<{ group: string; rows?: PlatformView[] }>();
+  if (baseline?.group !== groupName || baseline?.rows !== snapshot) {
+    setBaseline({ group: groupName, rows: snapshot });
+    if (liveScope !== groupName) setPlatforms(snapshot?.map(normalizePlatform));
+  }
 
-  const handlePlatformsUpdated = useCallback(
-    (platforms: PlatformView[]) => {
-      setPlatforms(platforms.map(normalizePlatform).filter(matchesActiveFilters));
-    },
-    [matchesActiveFilters],
-  );
+  const handlePlatformsUpdated = useCallback((platforms: PlatformView[]) => {
+    setPlatforms(platforms.map(normalizePlatform));
+  }, []);
 
-  const handlePlatformUpdated = useCallback(
-    (platform: PlatformView) => {
-      const normalized = normalizePlatform(platform);
+  const handlePlatformUpdated = useCallback((platform: PlatformView) => {
+    const normalized = normalizePlatform(platform);
 
-      setPlatforms((current) => {
-        if (!current) return current;
+    setPlatforms((current) => {
+      if (!current) return current;
 
-        const existingIndex = current.findIndex((p) => p.id === normalized.id);
+      const existingIndex = current.findIndex((p) => p.id === normalized.id);
 
-        if (!matchesActiveFilters(normalized)) {
-          return existingIndex === -1 ? current : current.filter((p) => p.id !== normalized.id);
-        }
+      if (existingIndex === -1) {
+        return [...current, normalized];
+      }
 
-        if (existingIndex === -1) {
-          return [...current, normalized];
-        }
+      const updated = [...current];
+      updated[existingIndex] = normalized;
 
-        const updated = [...current];
-        updated[existingIndex] = normalized;
-
-        return updated;
-      });
-    },
-    [matchesActiveFilters],
-  );
+      return updated;
+    });
+  }, []);
 
   const handlePlatformDeleted = useCallback((id: string) => {
     setPlatforms((current) => current?.filter((p) => p.id !== id));
@@ -140,8 +124,6 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
     });
   }, []);
 
-  const platformsMessage = useMemo(() => platforms?.filter(matchesActiveFilters), [platforms, matchesActiveFilters]);
-
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
       hubConnection.on('PlatformsUpdated', handlePlatformsUpdated);
@@ -163,10 +145,12 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
   );
 
   useRealtimeGroup({
-    groupName: 'platforms',
+    enabled: filterReady,
+    onCollectionSnapshot,
+    groupName,
     setupEventListeners,
     removeEventListeners,
   });
 
-  return { error, refetch, isFetching, platformsMessage, capabilities, isLoading, selectedTagNames };
+  return { error, refetch, isFetching, platformsMessage: platforms, capabilities, isLoading, selectedTagNames };
 };
