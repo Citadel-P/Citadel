@@ -59,7 +59,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<StacksHt
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list))
         .normalized_routes(affects_tag_usage(utoipa_axum::routes!(create)))
-        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(delete)))
+        .normalized_routes(utoipa_axum::routes!(delete))
         .normalized_routes(utoipa_axum::routes!(rename))
         .normalized_routes(utoipa_axum::routes!(apply))
         .normalized_routes(utoipa_axum::routes!(rollback))

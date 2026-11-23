@@ -16,7 +16,7 @@ struct CollectionJoin {
 
 impl Group {
     /// These catalog readers apply the actor's grants to individual rows in SQL.
-    fn supports_tag_scope(&self) -> bool {
+    pub(super) fn uses_row_authorization(&self) -> bool {
         matches!(
             self.topic(),
             Topic::Platforms
@@ -32,20 +32,13 @@ impl Group {
         )
     }
 
-    pub(super) fn uses_row_authorization(&self) -> bool {
-        matches!(
-            self.topic(),
-            Topic::ManagedSwarmServices | Topic::Registries
-        ) || (self.subscription_id.is_some() && self.supports_tag_scope())
-    }
-
     pub(crate) fn from_argument(argument: &serde_json::Value) -> Option<Self> {
         if let Some(name) = argument.as_str() {
             return Self::parse(name);
         }
         let request: CollectionJoin = serde_json::from_value(argument.clone()).ok()?;
         let mut group = Self::parse(&request.group)?;
-        if !group.supports_tag_scope() && !matches!(group.topic(), Topic::SwarmServices(_)) {
+        if !group.uses_row_authorization() && !matches!(group.topic(), Topic::SwarmServices(_)) {
             return None;
         }
         if request.platform_id.is_some()

@@ -1,6 +1,7 @@
 import { collectionGroup } from '@/lib/collection-scope';
 import { mergePlatformIoSample } from '../platform-io';
-import { useState, useMemo, useCallback } from 'react';
+import { useCollectionRows } from '@/hooks/useCollectionRows';
+import { useMemo, useCallback } from 'react';
 import { PlatformView } from '@/api/generated/api.types';
 import { RealtimeConnection } from '@/lib/realtime-connection';
 import { PlatformStatsBatchView } from '@/api/types';
@@ -34,95 +35,85 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
     return { query: { tags: selectedTagNames } };
   }, [selectedTagNames]);
   const { data, isLoading, error, refetch, isFetching } = useRead('listPlatforms', readArgs, { enabled: filterReady });
-  const [platforms, setPlatforms] = useState<PlatformView[] | undefined>();
   const groupName = collectionGroup('platforms', selectedTagNames);
-  const [liveScope, setLiveScope] = useState<string>();
-  const onCollectionSnapshot = useCallback(
-    (active: boolean) => {
-      setLiveScope((current) => (active ? groupName : current === groupName ? undefined : current));
-      if (active) setPlatforms([]);
-    },
-    [groupName],
-  );
   const capabilities = data?.data.capabilities;
-  const snapshot = data?.data.platforms;
-  const [baseline, setBaseline] = useState<{ group: string; rows?: PlatformView[] }>();
-  if (baseline?.group !== groupName || baseline?.rows !== snapshot) {
-    setBaseline({ group: groupName, rows: snapshot });
-    if (liveScope !== groupName) setPlatforms(snapshot?.map(normalizePlatform));
-  }
+  const snapshot = useMemo(() => data?.data.platforms?.map(normalizePlatform), [data?.data.platforms]);
+  const reload = useCallback(async () => {
+    const result = await refetch();
+    return result.isSuccess ? result.data.data.platforms.map(normalizePlatform) : undefined;
+  }, [refetch]);
+  const [platforms, update, onJoinedGroup, onCollectionSnapshot, setPlatforms] = useCollectionRows(
+    snapshot,
+    groupName,
+    reload,
+  );
+  const handlePlatformsUpdated = useCallback(
+    (rows: PlatformView[]) => {
+      setPlatforms(() => rows.map(normalizePlatform));
+    },
+    [setPlatforms],
+  );
 
-  const handlePlatformsUpdated = useCallback((platforms: PlatformView[]) => {
-    setPlatforms(platforms.map(normalizePlatform));
-  }, []);
+  const handlePlatformUpdated = useCallback(
+    (platform: PlatformView) => {
+      update(normalizePlatform(platform), 'create');
+    },
+    [update],
+  );
+  const handlePlatformDeleted = useCallback(
+    (id: string) => {
+      setPlatforms((rows) => rows?.filter((row) => row.id !== id));
+    },
+    [setPlatforms],
+  );
 
-  const handlePlatformUpdated = useCallback((platform: PlatformView) => {
-    const normalized = normalizePlatform(platform);
+  const handlePlatformStatsUpdated = useCallback(
+    (stats: PlatformStatsBatchView) => {
+      setPlatforms((current) => {
+        if (!current) return current;
+        const existingIndex = current.findIndex((p) => p.id === stats.platformId);
 
-    setPlatforms((current) => {
-      if (!current) return current;
+        if (existingIndex === -1) {
+          return current;
+        }
 
-      const existingIndex = current.findIndex((p) => p.id === normalized.id);
+        const updatedPlatforms = [...current];
+        const target = { ...updatedPlatforms[existingIndex] };
 
-      if (existingIndex === -1) {
-        return [...current, normalized];
-      }
+        const previous = target.stats?.[0];
+        const merged = mergePlatformIoSample(previous, stats.stat, stats.ioOnly ? stats.ioNodeId : undefined);
+        if (merged === previous) return current;
+        target.stats = [merged];
+        if (stats.ioOnly) {
+          updatedPlatforms[existingIndex] = target;
+          return updatedPlatforms;
+        }
+        target.networkCount = stats.networkCount;
+        target.volumeCount = stats.volumeCount;
+        target.imageCount = stats.imageCount;
+        target.memTotal = stats.memTotal;
 
-      const updated = [...current];
-      updated[existingIndex] = normalized;
+        if (target.platformDescriptor?.$type === 'Docker') {
+          const descriptor = {
+            ...target.platformDescriptor,
+            $type: 'Docker' as const,
+          };
 
-      return updated;
-    });
-  }, []);
+          descriptor.containerCount = stats.containerCount;
+          descriptor.containersRunning = stats.containersRunning;
+          descriptor.containersPaused = stats.containersPaused;
+          descriptor.containersStopped = stats.containersStopped;
 
-  const handlePlatformDeleted = useCallback((id: string) => {
-    setPlatforms((current) => current?.filter((p) => p.id !== id));
-  }, []);
+          target.platformDescriptor = descriptor;
+        }
 
-  const handlePlatformStatsUpdated = useCallback((stats: PlatformStatsBatchView) => {
-    setPlatforms((current) => {
-      if (!current) return current;
-      const existingIndex = current.findIndex((p) => p.id === stats.platformId);
-
-      if (existingIndex === -1) {
-        return current;
-      }
-
-      const updatedPlatforms = [...current];
-      const target = { ...updatedPlatforms[existingIndex] };
-
-      const previous = target.stats?.[0];
-      const merged = mergePlatformIoSample(previous, stats.stat, stats.ioOnly ? stats.ioNodeId : undefined);
-      if (merged === previous) return current;
-      target.stats = [merged];
-      if (stats.ioOnly) {
         updatedPlatforms[existingIndex] = target;
+
         return updatedPlatforms;
-      }
-      target.networkCount = stats.networkCount;
-      target.volumeCount = stats.volumeCount;
-      target.imageCount = stats.imageCount;
-      target.memTotal = stats.memTotal;
-
-      if (target.platformDescriptor?.$type === 'Docker') {
-        const descriptor = {
-          ...target.platformDescriptor,
-          $type: 'Docker' as const,
-        };
-
-        descriptor.containerCount = stats.containerCount;
-        descriptor.containersRunning = stats.containersRunning;
-        descriptor.containersPaused = stats.containersPaused;
-        descriptor.containersStopped = stats.containersStopped;
-
-        target.platformDescriptor = descriptor;
-      }
-
-      updatedPlatforms[existingIndex] = target;
-
-      return updatedPlatforms;
-    });
-  }, []);
+      });
+    },
+    [setPlatforms],
+  );
 
   const setupEventListeners = useCallback(
     (hubConnection: RealtimeConnection) => {
@@ -146,11 +137,21 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
 
   useRealtimeGroup({
     enabled: filterReady,
+    onJoinedGroup,
     onCollectionSnapshot,
     groupName,
     setupEventListeners,
     removeEventListeners,
   });
 
-  return { error, refetch, isFetching, platformsMessage: platforms, capabilities, isLoading, selectedTagNames };
+  return {
+    groupName,
+    error,
+    refetch,
+    isFetching,
+    platformsMessage: platforms,
+    capabilities,
+    isLoading,
+    selectedTagNames,
+  };
 };

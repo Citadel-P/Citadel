@@ -336,14 +336,23 @@ ORDER BY p.name, p.id
         })
     }
 
-    fn get_platform(
-        &self,
+    fn get_matching_platform<'a>(
+        &'a self,
         id: Uuid,
-    ) -> BoxFuture<'_, Result<Option<PlatformDetails>, AuthorizedReadError>> {
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Option<PlatformDetails>, AuthorizedReadError>> {
         Box::pin(async move {
-            let query = format!("{PLATFORM_SELECT} WHERE p.id = $1");
-            sqlx::query(AssertSqlSafe(query.as_str()))
-                .bind(id)
+            let predicate = if tags.is_empty() {
+                ""
+            } else {
+                crate::persistence::postgres::authorization::OWNER_TAG_FILTER
+            };
+            let sql = format!("{PLATFORM_SELECT} WHERE p.id = $1{predicate}");
+            let mut query = sqlx::query(AssertSqlSafe(sql.as_str())).bind(id);
+            if !tags.is_empty() {
+                query = query.bind("Platform").bind(tags);
+            }
+            query
                 .fetch_optional(&self.pool)
                 .await
                 .map_err(storage)?

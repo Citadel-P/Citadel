@@ -6,6 +6,7 @@ type ResourceContentProps<T = any> = {
   actions: Record<string, DropdownActionComponent<T>>;
   isLoading: boolean;
   isFiltered?: boolean;
+  realtimeGroup?: string;
 };
 
 interface BaseResourceComponents<T = any> {
@@ -127,6 +128,7 @@ export interface RequiredDockerInfoComponents<T = any> {
 export type RequiredSwarmInfoComponents<T = any> = RequiredDockerInfoComponents<T>;
 
 export interface ResourceDataHookResult<T> extends ResourceReadState {
+  realtimeGroup?: string;
   items: T[];
   isLoading: boolean;
   capabilities?: ResourceCapabilitiesView;

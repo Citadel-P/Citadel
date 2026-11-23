@@ -661,9 +661,12 @@ impl ApplicationGroupReader {
                     };
                     return event("PlatformStatsUpdated", payload);
                 }
-                if let Some(platform_id) =
-                    e.and_then(|e| e.platform_id).filter(|_| g.tags.is_empty())
-                {
+                if let Some(platform_id) = e.and_then(|e| {
+                    e.platform_id.or_else(|| {
+                        (e.resource_type == "Platform" && !e.resource_id.is_nil())
+                            .then_some(e.resource_id)
+                    })
+                }) {
                     let allowed = match self
                         .permission_with_lease(p, Platform, Some(platform_id), None, lease)
                         .await
@@ -672,13 +675,18 @@ impl ApplicationGroupReader {
                         Err(RealtimeReadError::Authorization) => false,
                         Err(error) => return Err(error),
                     };
-                    let platform = if allowed {
+                    let platform = if !allowed {
+                        None
+                    } else if !g.tags.is_empty() {
+                        self.platforms
+                            .get_matching_platform(platform_id, &g.tags)
+                            .await
+                            .map_err(failure)?
+                    } else {
                         crate::realtime::shared_reads::platform(&self.platforms, platform_id, e)
                             .await
                             .map_err(failure)?
                             .into_owned()
-                    } else {
-                        None
                     };
                     return rows(
                         "PlatformUpdated",
@@ -1405,11 +1413,9 @@ impl ApplicationGroupReader {
                 RowStyle::Update,
             ),
             Topic::BuildProjects
-                if g.tags.is_empty()
-                    && let Some(project) =
-                        e.and_then(PublishedRuntimeEvent::changed_build_project) =>
+                if let Some(project) = e.and_then(PublishedRuntimeEvent::changed_build_project) =>
             {
-                self.build_project_patch(p, project, lease).await
+                self.build_project_patch(p, project, &g.tags, lease).await
             }
             Topic::BuildProjects => rows(
                 "BuildProjectInfoUpdated",

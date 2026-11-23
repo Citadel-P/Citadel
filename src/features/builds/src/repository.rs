@@ -74,7 +74,14 @@ pub trait BuildRepository: Send + Sync {
         administrator: bool,
         tags: &'a [String],
     ) -> BoxFuture<'a, Result<Vec<BuildProject>, BuildError>>;
-    fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildProject, BuildError>>;
+    fn get<'a>(&'a self, id: Uuid) -> BoxFuture<'a, Result<BuildProject, BuildError>> {
+        self.get_matching_project(id, &[])
+    }
+    fn get_matching_project<'a>(
+        &'a self,
+        id: Uuid,
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<BuildProject, BuildError>>;
     fn update<'a>(
         &'a self,
         current: &'a BuildProject,

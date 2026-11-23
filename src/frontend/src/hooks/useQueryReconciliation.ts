@@ -1,4 +1,5 @@
-import { replaceEqualDeep, useQueryClient } from '@tanstack/react-query';
+import { collectionGroup } from '@/lib/collection-scope';
+import { replaceEqualDeep, useQueryClient, type Query } from '@tanstack/react-query';
 import { useCallback, useContext } from 'react';
 import { RealtimeContext } from '@/lib/context/realtime-context';
 import type { KnownResourceName } from '@/api/types';
@@ -19,10 +20,16 @@ export function useQueryReconciliation() {
   const isGroupLive = useContext(RealtimeContext)?.groups?.isGroupLive;
   return useCallback(
     async (group: string, operation: KnownResourceName, args?: object) => {
-      if (isGroupLive?.(group)) return;
       const queryKey = args ? [operation, args] : [operation];
-      await client.cancelQueries({ queryKey, fetchStatus: 'fetching' });
-      await client.invalidateQueries({ queryKey });
+      const predicate = (query: Query) => {
+        const identity = query.queryKey[1] as
+          { query?: { tags?: string[]; platformId?: string; includeDisabled?: boolean } } | undefined;
+        const scope = identity?.query;
+        const name = collectionGroup(group, scope?.tags ?? [], scope?.platformId, scope?.includeDisabled);
+        return !isGroupLive?.(name);
+      };
+      await client.cancelQueries({ queryKey, predicate, fetchStatus: 'fetching' });
+      await client.invalidateQueries({ queryKey, predicate });
     },
     [client, isGroupLive],
   );

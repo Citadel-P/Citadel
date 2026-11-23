@@ -180,6 +180,7 @@ export function createWebSocketConnection(
         return Promise.reject(new Error('Realtime connection is not ready'));
       if (pending.size >= 128) return Promise.reject(new Error('Too many pending realtime invocations'));
       const scope = args[0];
+      let ambiguousJoin: string | undefined;
       let release: (() => void) | undefined;
       if ((target === 'JoinGroup' || target === 'LeaveGroup') && typeof scope === 'string' && scope.startsWith('{')) {
         let id = subscriptionIds.get(scope);
@@ -187,6 +188,7 @@ export function createWebSocketConnection(
           id ??= randomUuid();
           subscriptionIds.set(scope, id);
           subscriptionScopes.set(id, scope);
+          ambiguousJoin = id;
           args = [{ ...JSON.parse(scope), subscriptionId: id }];
         } else {
           if (!id) return Promise.resolve();
@@ -200,11 +202,19 @@ export function createWebSocketConnection(
           subscriptionScopes.delete(joinedId);
         };
       }
+      const invokingSocket = socket;
       const invocationId = String(++nextId);
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
           pending.delete(invocationId);
           release?.();
+          // A completion may be queued behind our timeout. Retire the event route
+          // immediately and put a leave for the original UUID ahead of any retry.
+          if (ambiguousJoin && socket === invokingSocket) {
+            void adapter.invoke('LeaveGroup', ambiguousJoin).catch(() => {
+              if (socket === invokingSocket) invokingSocket.close();
+            });
+          }
           reject(new Error('Realtime invocation timed out'));
         }, 15_000);
         pending.set(invocationId, {

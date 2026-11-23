@@ -65,6 +65,16 @@ pub(crate) const AUTHORIZED_BY_LEVELS_CTE: &str = concat!(
     ", global_access AS (SELECT EXISTS (SELECT 1 FROM role_levels WHERE permissionlevel = ANY($3)) AS allowed)\n"
 );
 
+/// Match every requested name on the single owner selected by the outer query ($1).
+pub(super) const OWNER_TAG_FILTER: &str = r#"
+ AND NOT EXISTS (
+    SELECT FROM unnest($3::text[]) requested(name)
+    WHERE NOT EXISTS (
+        SELECT FROM resourcetags link JOIN tags t ON t.id=link.tagid
+        WHERE link.resourceid=$1 AND link.resourcetype=$2 AND t.normalizedname=lower(requested.name)
+    )
+ )"#;
+
 /// Compare against the complete requested set so an unknown name never broadens the filter.
 pub(super) const ALL_REQUESTED_TAGS: &str = r#"
  AND resource.id IN (

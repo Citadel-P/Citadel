@@ -25,7 +25,15 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
   const [search, setSearch] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
-  const { items, capabilities, isLoading = false, error, refetch, isFetching } = Components.useData?.(platformId) ?? {};
+  const {
+    items,
+    capabilities,
+    isLoading = false,
+    error,
+    refetch,
+    isFetching,
+    realtimeGroup,
+  } = Components.useData?.(platformId) ?? {};
   const headerCfg = Components.header ?? { showSearch: true, showAdd: true };
   const AddDialog = headerCfg.AddDialog;
 
@@ -88,6 +96,7 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
           <Content
             key={Components.GroupActions ? String(updatesFilter) : undefined}
             items={filtered}
+            realtimeGroup={realtimeGroup}
             actions={Components.DropdownActions ?? {}}
             isLoading={isLoading}
             isFiltered={Boolean(search.trim()) || hasActiveUrlFilters}

@@ -13,10 +13,12 @@ export const Platforms = ({
   actions,
   isLoading,
   isFiltered,
+  groupName = 'platforms',
 }: {
   items: PlatformView[];
   isLoading: boolean;
   isFiltered?: boolean;
+  groupName?: string;
   actions: Record<
     string,
     React.FC<{ resource: PlatformView; onAction?: (actionKey: string, actionData?: ActionData) => void }>
@@ -29,7 +31,7 @@ export const Platforms = ({
     if (!groups) return;
     setRetrying(true);
     try {
-      await groups.retryGroup('platforms');
+      await groups.retryGroup(groupName);
     } finally {
       setRetrying(false);
     }
@@ -37,7 +39,7 @@ export const Platforms = ({
 
   return (
     <>
-      {groups?.capacityGroups.has('platforms') && (
+      {groups?.capacityGroups.has(groupName) && (
         <AlertMessage
           type="warning"
           action={

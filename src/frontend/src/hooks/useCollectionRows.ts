@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 
 type Row = { id: string };
 const markerLimit = 256;
@@ -6,13 +6,15 @@ type Collection<T> = {
   rows?: T[];
   deleted: ReadonlySet<string>;
   liveSnapshot?: boolean;
+  generation?: number;
+  recovering?: boolean;
   saturated?: boolean;
   refreshAttempt?: number;
 };
 
 // An ordinary query result can overlap a live deletion or come from a filter's cache.
 export function collectionSnapshot<T extends Row>(previous: Collection<T>, snapshot?: T[]): Collection<T> {
-  if (previous.liveSnapshot) return previous;
+  if (previous.liveSnapshot || previous.recovering) return previous;
   if (!snapshot) return { ...previous, rows: undefined };
   const known = previous.saturated ? new Set(previous.rows?.map((row) => row.id)) : undefined;
   const rows =
@@ -88,22 +90,41 @@ export function useCollectionRows<T extends Row>(
   }, []);
   const deletes = useRef(0);
   const refresh = !!state.saturated || state.deleted.size >= markerLimit || !!state.refreshAttempt;
+  const missingHttpBaseline = useEffectEvent(() => snapshot === undefined);
   useEffect(() => {
     if (!refresh) return;
     let active = true;
     const fence = deletes.current;
-    void reload().then((rows) => {
-      if (!active || !rows) return;
+    const reconcile = async () => {
+      // React Query can reuse a pending initial GET even for an explicit refetch.
+      // Wait it out before reading a baseline newer than the released subscription.
+      if (state.recovering && missingHttpBaseline()) {
+        await reload();
+        if (!active) return;
+      }
+      const rows = await reload();
+      if (!active) return;
+      if (!rows) {
+        setState((current) =>
+          current.generation === state.generation
+            ? { ...current, recovering: false, refreshAttempt: undefined }
+            : current,
+        );
+        return;
+      }
       setState((current) =>
-        fence === deletes.current
-          ? { ...current, rows, deleted: new Set(), saturated: false, refreshAttempt: undefined }
-          : { ...current, refreshAttempt: (current.refreshAttempt ?? 0) + 1 },
+        current.liveSnapshot || current.generation !== state.generation
+          ? current
+          : fence === deletes.current
+            ? { ...current, rows, deleted: new Set(), recovering: false, saturated: false, refreshAttempt: undefined }
+            : { ...current, refreshAttempt: (current.refreshAttempt ?? 0) + 1 },
       );
-    });
+    };
+    void reconcile();
     return () => {
       active = false;
     };
-  }, [refresh, reload, scope, state.refreshAttempt]);
+  }, [refresh, reload, scope, state.refreshAttempt, state.recovering, state.generation]);
 
   const onEvent = useCallback(
     (row: T, action: string) => {
@@ -115,11 +136,17 @@ export function useCollectionRows<T extends Row>(
   const onCollectionSnapshot = useCallback((active: boolean) => {
     setState((current) =>
       active
-        ? { rows: [], deleted: new Set(), liveSnapshot: true }
+        ? { rows: [], deleted: new Set(), liveSnapshot: true, generation: (current.generation ?? 0) + 1 }
         : current.liveSnapshot
-          ? { ...current, liveSnapshot: false }
+          ? { ...current, liveSnapshot: false, recovering: true, refreshAttempt: (current.refreshAttempt ?? 0) + 1 }
           : current,
     );
   }, []);
-  return [state.rows, onEvent, onJoinedGroup, onCollectionSnapshot] as const;
+  const transformRows = useCallback((transform: (rows: T[] | undefined) => T[] | undefined) => {
+    setState((current) => {
+      const rows = transform(current.rows);
+      return rows === current.rows ? current : { ...current, rows };
+    });
+  }, []);
+  return [state.rows, onEvent, onJoinedGroup, onCollectionSnapshot, transformRows] as const;
 }
