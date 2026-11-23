@@ -340,7 +340,7 @@ async fn delete_tag(
 }
 
 macro_rules! resource_tag_handlers {
-    ($(#[$get_attr:meta])* $get:ident, $(#[$replace_attr:meta])* $replace:ident, $tag_type:expr, $resource_type:expr) => {
+    ($(#[$get_attr:meta])* $get:ident, $(#[$replace_attr:meta])* $replace:ident, $tag_type:expr) => {
         $(#[$get_attr])*
         async fn $get(
             State(state): State<TagsHttpState>,
@@ -348,7 +348,7 @@ macro_rules! resource_tag_handlers {
             path: Result<Path<Uuid>, PathRejection>,
             headers: HeaderMap,
         ) -> HttpResult {
-            resource_tags(state, principal, path, headers, $tag_type, $resource_type).await
+            resource_tags(state, principal, path, headers, $tag_type).await
         }
 
         $(#[$replace_attr])*
@@ -367,7 +367,6 @@ macro_rules! resource_tag_handlers {
                 headers,
                 input,
                 $tag_type,
-                $resource_type,
             )
             .await
         }
@@ -406,8 +405,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_platform_tags,
-    TaggableResourceType::Platform,
-    ResourceType::Platform
+    TaggableResourceType::Platform
 );
 
 resource_tag_handlers!(
@@ -442,8 +440,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_registry_tags,
-    TaggableResourceType::Registry,
-    ResourceType::Registry
+    TaggableResourceType::Registry
 );
 
 resource_tag_handlers!(
@@ -478,8 +475,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_git_repository_tags,
-    TaggableResourceType::GitRepository,
-    ResourceType::GitRepository
+    TaggableResourceType::GitRepository
 );
 
 resource_tag_handlers!(
@@ -514,8 +510,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_action_tags,
-    TaggableResourceType::Script,
-    ResourceType::Script
+    TaggableResourceType::Script
 );
 
 resource_tag_handlers!(
@@ -550,8 +545,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_build_tags,
-    TaggableResourceType::Build,
-    ResourceType::Build
+    TaggableResourceType::Build
 );
 
 resource_tag_handlers!(
@@ -586,8 +580,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_pool_tags,
-    TaggableResourceType::BuildAgentPool,
-    ResourceType::BuildAgentPool
+    TaggableResourceType::BuildAgentPool
 );
 
 resource_tag_handlers!(
@@ -622,8 +615,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_policy_tags,
-    TaggableResourceType::BackupPolicy,
-    ResourceType::BackupPolicy
+    TaggableResourceType::BackupPolicy
 );
 
 resource_tag_handlers!(
@@ -658,8 +650,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_deployment_tags,
-    TaggableResourceType::Deployment,
-    ResourceType::Deployment
+    TaggableResourceType::Deployment
 );
 
 resource_tag_handlers!(
@@ -694,8 +685,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_stack_tags,
-    TaggableResourceType::Stack,
-    ResourceType::Stack
+    TaggableResourceType::Stack
 );
 
 resource_tag_handlers!(
@@ -730,8 +720,7 @@ resource_tag_handlers!(
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
     replace_service_tags,
-    TaggableResourceType::SwarmService,
-    ResourceType::SwarmService
+    TaggableResourceType::SwarmService
 );
 
 async fn resource_tags(
@@ -740,7 +729,6 @@ async fn resource_tags(
     path: Result<Path<Uuid>, PathRejection>,
     headers: HeaderMap,
     tag_type: TaggableResourceType,
-    resource_type: ResourceType,
 ) -> HttpResult {
     let principal = api_result(require_actor(principal), &headers)?;
     let Path(id) = api_result(
@@ -750,7 +738,7 @@ async fn resource_tags(
     authorize_resource(
         &state.identity,
         &principal,
-        resource_type,
+        tag_type.permission_type(),
         id,
         PermissionLevel::Read,
         None,
@@ -780,7 +768,6 @@ async fn replace_resource_tags(
     headers: HeaderMap,
     input: ReplaceResourceTagsInput,
     tag_type: TaggableResourceType,
-    resource_type: ResourceType,
 ) -> HttpResult {
     let principal = api_result(require_actor(principal), &headers)?;
     let Path(id) = api_result(
@@ -790,7 +777,7 @@ async fn replace_resource_tags(
     authorize_resource(
         &state.identity,
         &principal,
-        resource_type,
+        tag_type.permission_type(),
         id,
         PermissionLevel::Write,
         None,

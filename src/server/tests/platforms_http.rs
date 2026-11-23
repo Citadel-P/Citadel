@@ -113,6 +113,9 @@ mod volume_content;
 #[path = "platforms_http/volume_coverage.rs"]
 mod volume_coverage;
 
+#[path = "support/tag_filters.rs"]
+mod tag_filters;
+
 struct Fixture {
     docker: DockerClient,
     edge: citadel_adapters::connectors::edge::EdgeRegistry,

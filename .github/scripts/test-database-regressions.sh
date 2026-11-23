@@ -86,6 +86,10 @@ docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_resource_
 )
 # These ignored fixtures exercise real completion transactions and fault injection.
 for selection in \
+  'swarm_services_http managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle' \
+  'swarm_service_persistence authoritative_swarm_observation_completes_or_fails_operations_once' \
+  'resources_http metadata_endpoints_enforce_authorization_and_persist_complete_lifecycles' \
+  'execution_resources_http resource_endpoints_authorize_validate_and_persist_lifecycles' \
   'resource_schedules catalog_changes_require_commit_and_failed_admission_can_retry' \
   'idle_worker_queries concurrent_automation_admissions_share_only_reads_that_have_yet_to_start' \
   'script_execution script_claim_is_exclusive_and_interrupted_runs_recover' \
@@ -98,6 +102,13 @@ for selection in \
   docker exec "$container" createdb -h 127.0.0.1 -U citadel_test "citadel_$target"
   (
     export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_$target"
+    case "$target" in
+      resources_http) export CITADEL_METADATA_DATABASE_URL="$CITADEL_EXECUTION_DATABASE_URL" ;;
+      swarm_services_http|swarm_service_persistence) export CITADEL_WORKLOAD_DATABASE_URL="$CITADEL_EXECUTION_DATABASE_URL" ;;
+    esac
+    if [[ "$target" == swarm_services_http ]]; then
+      docker exec "$container" psql -h 127.0.0.1 -U citadel_test -d "citadel_$target" -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION pg_stat_statements'
+    fi
     run_cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
     run_cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --test-threads=1
   )
@@ -164,6 +175,9 @@ docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_runtime_p
     run_cargo test --locked --workspace --lib "$test_name" -- --ignored --exact --test-threads=1
   done
 )
+test_name=workers::notifications::postgres_tests::every_fixed_topic_obeys_commit_and_rollback
+run_cargo test --locked -p citadel-server --lib "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
+run_cargo test --locked -p citadel-server --lib "$test_name" -- --ignored --exact --test-threads=1
 cancellation_test=persistence::postgres::identity::authorization_cache::tests::cancelled_commits_preserve_acl_fencing_and_session_notifications
 run_cargo test --locked -p citadel-adapters --lib "$cancellation_test" -- --ignored --exact --list | grep -F "$cancellation_test: test"
 run_cargo test --locked -p citadel-adapters --lib "$cancellation_test" -- --ignored --exact --test-threads=1

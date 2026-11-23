@@ -70,6 +70,13 @@ async fn platform_tags_survive_fresh_detail_list_and_realtime_reads() {
 #[ignore = "requires CITADEL_PLATFORM_DATABASE_URL"]
 async fn platform_tag_filters_accept_names_and_require_all_selected_tags() {
     let fixture = fixture().await;
+    tag_filters::verify(
+        &fixture.app,
+        &fixture.pool,
+        citadel_tags::TaggableResourceType::Platform,
+        fixture.platform_id,
+    )
+    .await;
     sqlx::query("UPDATE tags SET name='Prod & Europe', normalizedname='prod & europe' WHERE id=$1")
         .bind(fixture.tag_id)
         .execute(&fixture.pool)

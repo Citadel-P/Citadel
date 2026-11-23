@@ -128,6 +128,13 @@ impl PostgresStackRepository {
                     .execute(&mut *tx)
                     .await
                     .map_err(storage)?;
+                crate::persistence::postgres::tags::links::remove_for_deleted_resource(
+                    &mut tx,
+                    citadel_tags::TaggableResourceType::Stack,
+                    claim.stack_id,
+                )
+                .await
+                .map_err(storage)?;
             }
             tx.commit().await.map_err(storage)?;
             Ok(())

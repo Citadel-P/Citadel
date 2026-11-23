@@ -232,14 +232,6 @@ async fn filtered_owner_changes_read_and_emit_only_the_matching_platform_or_proj
             invoke(&mut socket, "LeaveGroup", &subscription.to_string()).await["error"].is_null()
         );
     }
-    // Normal batch deletion and crash recovery both publish this committed change.
-    use citadel_stacks::StackChangeNotifier;
-    citadel_server::realtime::notifiers::StacksRealtimeNotifier::new(Some(hub.clone()))
-        .changed(Uuid::now_v7(), "deleted");
-    barrier(&hub);
-    let events = read_until_barrier(&mut socket).await;
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0]["target"], "TagCatalogChanged");
     socket.close(None).await.unwrap();
     cancel.cancel();
     server.await.unwrap();

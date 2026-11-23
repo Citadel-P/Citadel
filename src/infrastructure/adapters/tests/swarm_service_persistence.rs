@@ -467,6 +467,51 @@ async fn authoritative_swarm_observation_completes_or_fails_operations_once() {
     );
     let count:i64=sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype='SwarmServiceOperationFailed'").bind(created.id).fetch_one(&pool).await.unwrap();
     assert_eq!(count, 1);
+    use citadel_adapters::persistence::postgres::{
+        notifications::PostgresNotifications,
+        tags::{PostgresTagRepository, links::USAGE_CHANGED_CHANNEL},
+    };
+    use citadel_runtime::notifications::{NotificationSource, RuntimeNotification};
+    use citadel_tags::{NewTag, TagRepository, TaggableResourceType};
+    let tags = PostgresTagRepository::new(pool.clone());
+    let tag = tags
+        .create_tag(
+            actor,
+            &NewTag {
+                name: format!("usage-{platform}"),
+                color: "#445566".into(),
+            },
+        )
+        .await
+        .unwrap();
+    tags.replace_resource_tags(
+        actor,
+        TaggableResourceType::SwarmService,
+        created.id,
+        &[tag.id],
+    )
+    .await
+    .unwrap();
+    let count_usage = || async {
+        tags.list_tags(actor, true)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|t| t.id == tag.id)
+            .unwrap()
+            .usage_count
+    };
+    assert_eq!(count_usage().await, 1);
+    let mut listener = PostgresNotifications::connect(&pool, USAGE_CHANGED_CHANNEL)
+        .await
+        .unwrap();
+    snapshot.observed_at = chrono::Utc::now();
+    inventory.persist(&snapshot).await.unwrap();
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), listener.recv())
+            .await
+            .is_err()
+    );
     let deletion = store.delete(actor, true, &[created.id]).await.unwrap();
     store.mark_delete_attempted(&deletion[0]).await.unwrap();
     sqlx::query("UPDATE swarmservices SET preparedat=now()-interval '3 minutes' WHERE id=$1")
@@ -486,7 +531,22 @@ async fn authoritative_swarm_observation_completes_or_fails_operations_once() {
         !exists,
         "authoritative absence completes dispatched delete without replaying it"
     );
+    assert!(matches!(
+        tokio::time::timeout(std::time::Duration::from_secs(3), listener.recv())
+            .await
+            .unwrap()
+            .unwrap(),
+        RuntimeNotification::TagUsageChanged
+    ));
+    assert_eq!(count_usage().await, 0);
     store.complete_delete(actor, &deletion).await.unwrap();
+    snapshot.observed_at = chrono::Utc::now();
+    inventory.persist(&snapshot).await.unwrap();
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), listener.recv())
+            .await
+            .is_err()
+    );
     let count:i64=sqlx::query_scalar("SELECT count(*) FROM activityevents WHERE resourceid=$1 AND eventtype='SwarmServiceDeleted'").bind(created.id).fetch_one(&pool).await.unwrap();
     assert_eq!(count, 1);
     pool.close().await;

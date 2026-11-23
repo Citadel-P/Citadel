@@ -101,8 +101,7 @@ pub(super) async fn tagged_workload_rows(
     pool: &sqlx::PgPool,
     actor: citadel_primitives::ActorId,
     administrator: bool,
-    kind: citadel_primitives::ResourceType,
-    tag_type: &'static str,
+    kind: citadel_tags::TaggableResourceType,
     source: &'static str,
     tags: &[String],
 ) -> Result<Vec<sqlx::postgres::PgRow>, sqlx::Error> {
@@ -113,14 +112,7 @@ pub(super) async fn tagged_workload_rows(
     let filter = if tags.is_empty() {
         ""
     } else {
-        r#"
- AND resource.id IN (
-     SELECT link.resourceid
-     FROM unnest($5::text[]) WITH ORDINALITY AS requested(name,n)
-     JOIN tags tag ON tag.normalizedname=lower(requested.name)
-     JOIN resourcetags link ON link.tagid=tag.id AND link.resourcetype=$6
-     GROUP BY link.resourceid HAVING count(DISTINCT requested.n)=cardinality($5)
- )"#
+        ALL_REQUESTED_TAGS
     };
     let sql = format!(
         r#"{AUTHORIZED_BY_LEVELS_CTE}
@@ -132,11 +124,11 @@ SELECT resource.* FROM {source}
     );
     let mut query = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
         .bind(actor.value())
-        .bind(kind as i32)
+        .bind(kind.permission_type() as i32)
         .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
         .bind(administrator);
     if !tags.is_empty() {
-        query = query.bind(tags).bind(tag_type);
+        query = query.bind(kind.as_database_str()).bind(tags);
     }
     query.fetch_all(pool).await
 }

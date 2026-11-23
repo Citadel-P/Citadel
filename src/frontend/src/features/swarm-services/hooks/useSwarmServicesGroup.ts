@@ -1,8 +1,6 @@
-import { useCallback, useMemo } from 'react';
-import type { RealtimeConnection } from '@/lib/realtime-connection';
+import { useMemo } from 'react';
 import type { ManagedSwarmServiceView } from '@/api/generated/api.types';
-import { useCollectionRows } from '@/hooks/useCollectionRows';
-import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
+import { useCollectionSubscription } from '@/hooks/useCollectionSubscription';
 import { collectionGroup } from '@/lib/collection-scope';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
@@ -23,30 +21,14 @@ export const useSwarmServicesGroup = (platformIdOverride?: string) => {
     const query = { ...(tags.length ? { tags } : {}), ...(platformId ? { platformId } : {}) };
     return Object.keys(query).length ? { query } : undefined;
   }, [platformId, tags]);
-  const { data, refetch, ...query } = useRead('listManagedSwarmServices', args, { enabled: filterReady });
-  const reload = useCallback(async () => {
-    const result = await refetch();
-    return result.isSuccess ? result.data.data.swarmServices : undefined;
-  }, [refetch]);
-  const [services, update, onJoinedGroup, onCollectionSnapshot] = useCollectionRows(
-    data?.data.swarmServices,
-    scope,
-    reload,
-    merge,
-  );
-  useRealtimeGroup({
-    enabled: filterReady,
+  const query = useRead('listManagedSwarmServices', args, { enabled: filterReady });
+  const services = useCollectionSubscription({
     groupName: scope,
-    setupEventListeners: useCallback(
-      (hub: RealtimeConnection) => hub.on('ManagedSwarmServiceUpdated', update),
-      [update],
-    ),
-    removeEventListeners: useCallback(
-      (hub: RealtimeConnection) => hub.off('ManagedSwarmServiceUpdated', update),
-      [update],
-    ),
-    onJoinedGroup,
-    onCollectionSnapshot,
+    eventName: 'ManagedSwarmServiceUpdated',
+    enabled: filterReady,
+    field: 'swarmServices',
+    query,
+    merge,
   });
-  return { ...query, refetch, services, capabilities: data?.data.capabilities };
+  return { ...query, services, capabilities: query.data?.data.capabilities };
 };

@@ -15,6 +15,17 @@ pub(super) async fn verify(
         ("registries", registry_id),
         ("gitRepositories", repository_id),
     ] {
+        tag_filters::verify(
+            app,
+            pool,
+            if collection == "registries" {
+                citadel_tags::TaggableResourceType::Registry
+            } else {
+                citadel_tags::TaggableResourceType::GitRepository
+            },
+            Uuid::parse_str(id).unwrap(),
+        )
+        .await;
         let name = tag["name"].as_str().unwrap();
         for (second_tag, expected) in [(name, true), (tag_id, false), (unassigned_name, false)] {
             let response = request(

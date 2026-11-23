@@ -1,12 +1,10 @@
 import { collectionGroup } from '@/lib/collection-scope';
 import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
-import { useCollectionRows } from '@/hooks/useCollectionRows';
+import { useCollectionSubscription } from '@/hooks/useCollectionSubscription';
 import { BackupPolicyView } from '@/api/generated/api.types';
 import { useResourceTagFilter } from '@/features/tags/components';
-import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
-import { RealtimeConnection } from '@/lib/realtime-connection';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 
 const mergeRun = (incoming: BackupPolicyView, existing: BackupPolicyView) => ({
   ...incoming,
@@ -21,45 +19,20 @@ export const useBackupPoliciesGroup = () => {
   );
   const groupName = collectionGroup('backup-policies', selectedTagNames);
   const structuralSharing = useCollectionStructuralSharing(groupName);
-  const { data, isLoading, error, refetch, isFetching } = useRead('listBackupPolicies', readArgs, {
+  const query = useRead('listBackupPolicies', readArgs, {
     enabled: filterReady,
     structuralSharing,
   });
-  const capabilities = data?.data.capabilities;
+  const { error, refetch, isFetching, isLoading } = query;
+  const capabilities = query.data?.data.capabilities;
 
-  const reload = useCallback(async () => {
-    const result = await refetch();
-    return result.isSuccess ? result.data.data.policies : undefined;
-  }, [refetch]);
-  const [policies, handleBackupPolicyInfoUpdated, onJoinedGroup, onCollectionSnapshot] = useCollectionRows(
-    data?.data.policies,
-    JSON.stringify(readArgs ?? {}),
-    reload,
-    mergeRun,
-  );
-
-  const setupEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.on('BackupPolicyInfoUpdated', handleBackupPolicyInfoUpdated);
-    },
-    [handleBackupPolicyInfoUpdated],
-  );
-
-  const removeEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.off('BackupPolicyInfoUpdated', handleBackupPolicyInfoUpdated);
-    },
-    [handleBackupPolicyInfoUpdated],
-  );
-
-  useRealtimeGroup({
-    enabled: filterReady,
+  const policies = useCollectionSubscription({
     groupName,
-    onJoinedGroup,
-    onCollectionSnapshot,
-    setupEventListeners,
-    removeEventListeners,
+    eventName: 'BackupPolicyInfoUpdated',
+    enabled: filterReady,
+    field: 'policies',
+    query,
+    merge: mergeRun,
   });
-
   return { error, refetch, isFetching, policies: policies ?? [], isLoading, capabilities, selectedTagNames };
 };

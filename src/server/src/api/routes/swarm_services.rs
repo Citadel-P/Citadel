@@ -52,7 +52,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<SwarmSer
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(list))
         .normalized_routes(affects_tag_usage(utoipa_axum::routes!(create)))
-        .normalized_routes(affects_tag_usage(utoipa_axum::routes!(delete)))
+        .normalized_routes(utoipa_axum::routes!(delete))
         .normalized_routes(utoipa_axum::routes!(get))
         .normalized_routes(utoipa_axum::routes!(duplicate_draft))
         .normalized_routes(utoipa_axum::routes!(adoption_draft))

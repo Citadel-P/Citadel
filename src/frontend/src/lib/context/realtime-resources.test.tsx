@@ -439,45 +439,61 @@ it.each(['list', 'detail'] as const)(
   },
 );
 
-it('repairs a capacity-limited platform filter and retries that exact subscription', async () => {
-  const fake = new FakeRealtimeConnection();
-  const scope = collectionGroup('platforms', ['prod']);
-  let name = 'Initial';
-  const read = vi.fn(() => HttpResponse.json({ platforms: [{ id: 'p', name }], capabilities: {} }));
-  server.use(
-    http.get('*/api/v1/platforms', read),
-    http.get('*/api/v1/tags/_filter', () => HttpResponse.json({ prod: 'prod' })),
-  );
-  function Page() {
-    const { platformsMessage, groupName, refetch } = usePlatformsGroup();
-    return (
-      <>
-        <output>{platformsMessage?.[0]?.name}</output>
-        <button onClick={() => void refetch()}>Read list</button>
-        <Platforms items={[]} actions={{}} isLoading={false} isFiltered groupName={groupName} />
-      </>
+it.each([false, true])(
+  'repairs a capacity-limited platform filter (first recovery fails: %s)',
+  async (failRecovery) => {
+    const fake = new FakeRealtimeConnection();
+    const scope = collectionGroup('platforms', ['prod']);
+    let name = 'Initial';
+    let failed = false;
+    const read = vi.fn(() => {
+      if (failRecovery && !failed && read.mock.calls.length === 3) {
+        failed = true;
+        return new HttpResponse(null, { status: 500 });
+      }
+      return HttpResponse.json({ platforms: [{ id: 'p', name }], capabilities: {} });
+    });
+    server.use(
+      http.get('*/api/v1/platforms', read),
+      http.get('*/api/v1/tags/_filter', () => HttpResponse.json({ prod: 'prod' })),
     );
-  }
-  const { user } = renderCitadel(<Page />, {
-    route: '/?tags=prod',
-    groups: { connectionFactory: () => fake, startConnection: (c) => c.start() },
-  });
-  expect(await screen.findByText('Initial')).toBeVisible();
-  await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', scope));
-  act(() => {
-    fake.emit(collectionEventKey(scope, 'CollectionSnapshotStarted'));
-    fake.emit(collectionEventKey(scope, 'PlatformUpdated'), { id: 'p', name: 'Live' });
-  });
-  name = 'Fallback';
-  await user.click(screen.getByText('Read list'));
-  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
-  expect(screen.getByText('Live')).toBeVisible();
-  act(() => fake.emit('RealtimeGroupCapacity', scope));
-  expect(await screen.findByText('Fallback')).toBeVisible();
-  expect(read).toHaveBeenCalledTimes(3);
-  await user.click(screen.getByRole('button', { name: 'Retry live updates' }));
-  expect(fake.invoke.mock.calls.filter(([method, key]) => method === 'JoinGroup' && key === scope)).toHaveLength(2);
-});
+    function Page() {
+      const { platformsMessage, groupName, refetch, error } = usePlatformsGroup();
+      return (
+        <>
+          {error && <span>Read failed</span>}
+          <output>{platformsMessage?.[0]?.name}</output>
+          <button onClick={() => void refetch()}>Read list</button>
+          <Platforms items={[]} actions={{}} isLoading={false} isFiltered groupName={groupName} />
+        </>
+      );
+    }
+    const { user } = renderCitadel(<Page />, {
+      route: '/?tags=prod',
+      groups: { connectionFactory: () => fake, startConnection: (c) => c.start() },
+    });
+    expect(await screen.findByText('Initial')).toBeVisible();
+    await waitFor(() => expect(fake.invoke).toHaveBeenCalledWith('JoinGroup', scope));
+    act(() => {
+      fake.emit(collectionEventKey(scope, 'CollectionSnapshotStarted'));
+      fake.emit(collectionEventKey(scope, 'PlatformUpdated'), { id: 'p', name: 'Live' });
+    });
+    name = 'Fallback';
+    await user.click(screen.getByText('Read list'));
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Live')).toBeVisible();
+    act(() => fake.emit('RealtimeGroupCapacity', scope));
+    if (failRecovery) {
+      expect(await screen.findByText('Read failed')).toBeVisible();
+      expect(screen.getByText('Live')).toBeVisible();
+      await user.click(screen.getByText('Read list'));
+    }
+    expect(await screen.findByText('Fallback')).toBeVisible();
+    expect(read).toHaveBeenCalledTimes(failRecovery ? 4 : 3);
+    await user.click(screen.getByRole('button', { name: 'Retry live updates' }));
+    expect(fake.invoke.mock.calls.filter(([method, key]) => method === 'JoinGroup' && key === scope)).toHaveLength(2);
+  },
+);
 
 it('reconciles each cached mutation result according to its own live collection scope', async () => {
   const fake = new FakeRealtimeConnection();
@@ -505,4 +521,20 @@ it('reconciles each cached mutation result according to its own live collection 
   await waitFor(() => expect(queryClient.getQueryState(all)?.isInvalidated).toBe(true));
   expect(queryClient.getQueryState(stage)?.isInvalidated).toBe(true);
   expect(queryClient.getQueryState(prod)?.isInvalidated).toBe(false);
+});
+
+it('refreshes an open tag usage count from the viewer’s authorized list on a committed change', async () => {
+  const fake = new FakeRealtimeConnection();
+  let count = 2;
+  server.use(http.get('*/api/v1/tags', () => HttpResponse.json({ tags: [{ id: 'tag', usageCount: count }] })));
+  function Catalogue() {
+    const { data } = useRead('listTags');
+    return <output>{data?.data.tags[0]?.usageCount} resources</output>;
+  }
+  renderCitadel(<Catalogue />, { groups: { connectionFactory: () => fake, startConnection: (c) => c.start() } });
+  expect(await screen.findByText('2 resources')).toBeVisible();
+  await waitFor(() => expect(fake.listenerCount('TagCatalogChanged')).toBe(1));
+  count = 1;
+  act(() => fake.emit('TagCatalogChanged'));
+  expect(await screen.findByText('1 resources')).toBeVisible();
 });

@@ -88,7 +88,7 @@ pub(super) async fn run_group_connection(
                     "InstallationSettings" => Some("InstallationSettingsChanged"),
                     _ => None,
                 }.filter(|_| subscription.principal.is_administrator());
-                let tag_catalog_changed = matches!(event.event_kind, "tagChanged" | "resourceTagsChanged" | "tagUsageChanged") || (event.resource_type == "Stack" && event.event_kind == "deleted");
+                let tag_catalog_changed = matches!(event.event_kind, "tagChanged" | "resourceTagsChanged" | "tagUsageChanged");
                 if !tag_catalog_changed && event.resource_type!="License" && administrator_event.is_none() && !state.groups.values().any(|g|g.expects_event(&event, &subscription.lease)) {
                     continue;
                 }

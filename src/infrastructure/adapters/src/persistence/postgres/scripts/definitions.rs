@@ -107,8 +107,7 @@ impl PostgresScriptRepository {
                 &self.pool,
                 actor,
                 administrator,
-                ResourceType::Script,
-                "Script",
+                citadel_tags::TaggableResourceType::Script,
                 "(SELECT id,name,description,enabled,controlstate,scheduleenabled,schedulecron FROM scripts) resource WHERE TRUE",
                 tags,
             )

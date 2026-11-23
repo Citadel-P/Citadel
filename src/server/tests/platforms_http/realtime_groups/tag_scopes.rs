@@ -57,4 +57,8 @@ pub(super) async fn check_platform_scopes(
     for name in [prod.to_string(), stage.to_string(), "platforms".into()] {
         assert!(invoke(socket, "LeaveGroup", &name).await["error"].is_null());
     }
+    hub.publish_tag_usage_changed();
+    let hint = receive(socket).await;
+    assert_eq!(hint["target"], "TagCatalogChanged");
+    assert_eq!(hint["arguments"], json!([]));
 }

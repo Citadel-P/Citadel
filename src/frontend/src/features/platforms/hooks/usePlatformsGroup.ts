@@ -34,7 +34,9 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
     if (selectedTagNames.length === 0) return undefined;
     return { query: { tags: selectedTagNames } };
   }, [selectedTagNames]);
-  const { data, isLoading, error, refetch, isFetching } = useRead('listPlatforms', readArgs, { enabled: filterReady });
+  const { data, isSuccess, dataUpdatedAt, isLoading, error, refetch, isFetching } = useRead('listPlatforms', readArgs, {
+    enabled: filterReady,
+  });
   const groupName = collectionGroup('platforms', selectedTagNames);
   const capabilities = data?.data.capabilities;
   const snapshot = useMemo(() => data?.data.platforms?.map(normalizePlatform), [data?.data.platforms]);
@@ -42,11 +44,13 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
     const result = await refetch();
     return result.isSuccess ? result.data.data.platforms.map(normalizePlatform) : undefined;
   }, [refetch]);
-  const [platforms, update, onJoinedGroup, onCollectionSnapshot, setPlatforms] = useCollectionRows(
-    snapshot,
-    groupName,
-    reload,
-  );
+  const {
+    rows: platforms,
+    onEvent: update,
+    onJoinedGroup,
+    onCollectionSnapshot,
+    transformRows: setPlatforms,
+  } = useCollectionRows(snapshot, groupName, reload, isSuccess ? dataUpdatedAt : undefined);
   const handlePlatformsUpdated = useCallback(
     (rows: PlatformView[]) => {
       setPlatforms(() => rows.map(normalizePlatform));

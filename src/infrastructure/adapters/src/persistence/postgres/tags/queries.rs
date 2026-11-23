@@ -160,3 +160,34 @@ pub(super) async fn linked_types(
         .map(|kind| serde_json::from_value(serde_json::Value::String(kind)).map_err(storage))
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn usage_targets_match_each_taggable_resources_permission() {
+        let expected: BTreeMap<_, _> = ResourceType::ALL
+            .into_iter()
+            .filter_map(|permission| {
+                let kind: TaggableResourceType =
+                    serde_json::from_value(serde_json::to_value(permission).unwrap()).ok()?;
+                assert_eq!(kind.permission_type(), permission);
+                Some((kind.as_database_str(), permission as i32))
+            })
+            .collect();
+        let actual: BTreeMap<_, _> = include_str!("usage_targets.sql")
+            .lines()
+            .filter_map(|line| {
+                let columns = line.trim().strip_prefix("SELECT ")?;
+                let mut fields = columns.split(',');
+                Some((
+                    fields.next().unwrap().trim_matches('\''),
+                    fields.next().unwrap().trim().parse::<i32>().unwrap(),
+                ))
+            })
+            .collect();
+        assert_eq!(actual, expected);
+    }
+}

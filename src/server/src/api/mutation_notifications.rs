@@ -25,7 +25,7 @@ pub(crate) fn affects_tag_usage<S: Clone + Send + Sync + 'static>(
             if response.status().is_success()
                 && let Some(hub) = hub
             {
-                hub.publish_resource_change("TagUsage", Uuid::nil(), "tagUsageChanged");
+                hub.publish_tag_usage_changed();
             }
             response
         },

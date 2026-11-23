@@ -1,8 +1,6 @@
 import { collectionGroup } from '@/lib/collection-scope';
-import { useCollectionRows } from '@/hooks/useCollectionRows';
-import { useCallback, useMemo } from 'react';
-import { RealtimeConnection } from '@/lib/realtime-connection';
-import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
+import { useCollectionSubscription } from '@/hooks/useCollectionSubscription';
+import { useMemo } from 'react';
 import { useRead } from '@/lib/hooks';
 import { useResourceTagFilter } from '@/features/tags/components';
 import { useResourcePlatformFilter } from '@/features/platforms/platform-filter';
@@ -16,41 +14,18 @@ export const useStacksGroup = () => {
     if (selectedPlatformId) query.platformId = selectedPlatformId;
     return { query };
   }, [selectedPlatformId, selectedTagNames]);
-  const { data, isLoading, error, refetch, isFetching } = useRead('listStacks', readArgs, { enabled: filterReady });
-  const capabilities = data?.data.capabilities;
-
-  const reload = useCallback(async () => {
-    const result = await refetch();
-    return result.isSuccess ? result.data.data.stacks : undefined;
-  }, [refetch]);
-  const [stacks, handleStackCatalogUpdated, onJoinedGroup, onCollectionSnapshot] = useCollectionRows(
-    data?.data.stacks,
-    JSON.stringify(readArgs ?? {}),
-    reload,
-  );
-
-  const setupEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.on('StackCatalogUpdated', handleStackCatalogUpdated);
-    },
-    [handleStackCatalogUpdated],
-  );
-
-  const removeEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.off('StackCatalogUpdated', handleStackCatalogUpdated);
-    },
-    [handleStackCatalogUpdated],
-  );
-
-  useRealtimeGroup({
+  const query = useRead('listStacks', readArgs, {
     enabled: filterReady,
-    groupName: collectionGroup('stacks', selectedTagNames, selectedPlatformId || undefined),
-    onJoinedGroup,
-    onCollectionSnapshot,
-    setupEventListeners,
-    removeEventListeners,
   });
+  const { error, refetch, isFetching, isLoading } = query;
+  const capabilities = query.data?.data.capabilities;
 
+  const stacks = useCollectionSubscription({
+    groupName: collectionGroup('stacks', selectedTagNames, selectedPlatformId || undefined),
+    eventName: 'StackCatalogUpdated',
+    enabled: filterReady,
+    field: 'stacks',
+    query,
+  });
   return { error, refetch, isFetching, stacks, isLoading, capabilities, selectedTagNames, selectedPlatformId };
 };

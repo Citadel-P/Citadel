@@ -66,18 +66,29 @@ export function useCollectionRows<T extends Row>(
   snapshot: T[] | undefined,
   scope: string,
   reload: () => Promise<T[] | undefined>,
+  successfulRead?: number,
   merge?: (incoming: T, existing: T) => T,
 ) {
   const [state, setState] = useState<Collection<T>>({ rows: snapshot, deleted: new Set() });
-  const [baseline, setBaseline] = useState(snapshot);
-  const [previousScope, setPreviousScope] = useState(scope);
-  if (scope !== previousScope) {
-    setPreviousScope(scope);
-    setBaseline(snapshot);
+  const [baseline, setBaseline] = useState({ scope, snapshot, successfulRead });
+  if (baseline.scope !== scope) {
+    setBaseline({ scope, snapshot, successfulRead });
     setState({ rows: snapshot, deleted: new Set() });
-  } else if (baseline !== snapshot) {
-    setBaseline(snapshot);
-    setState((current) => collectionSnapshot(current, snapshot));
+  } else if (baseline.snapshot !== snapshot || baseline.successfulRead !== successfulRead) {
+    setBaseline({ scope, snapshot, successfulRead });
+    setState((current) => {
+      // An explicit refresh or query invalidation can return the previously ignored
+      // array. Its successful completion is the evidence that it is fresh.
+      if (
+        current.recovering &&
+        !current.refreshAttempt &&
+        successfulRead !== undefined &&
+        successfulRead !== baseline.successfulRead
+      ) {
+        return collectionSnapshot({ ...current, recovering: false }, snapshot);
+      }
+      return baseline.snapshot !== snapshot ? collectionSnapshot(current, snapshot) : current;
+    });
   }
 
   // A scoped HTTP read started after these deletes can retire the markers. If a
@@ -89,7 +100,8 @@ export function useCollectionRows<T extends Row>(
     );
   }, []);
   const deletes = useRef(0);
-  const refresh = !!state.saturated || state.deleted.size >= markerLimit || !!state.refreshAttempt;
+  const refresh =
+    !!state.refreshAttempt || (!state.recovering && (!!state.saturated || state.deleted.size >= markerLimit));
   const missingHttpBaseline = useEffectEvent(() => snapshot === undefined);
   useEffect(() => {
     if (!refresh) return;
@@ -106,9 +118,7 @@ export function useCollectionRows<T extends Row>(
       if (!active) return;
       if (!rows) {
         setState((current) =>
-          current.generation === state.generation
-            ? { ...current, recovering: false, refreshAttempt: undefined }
-            : current,
+          current.generation === state.generation ? { ...current, refreshAttempt: undefined } : current,
         );
         return;
       }
@@ -148,5 +158,5 @@ export function useCollectionRows<T extends Row>(
       return rows === current.rows ? current : { ...current, rows };
     });
   }, []);
-  return [state.rows, onEvent, onJoinedGroup, onCollectionSnapshot, transformRows] as const;
+  return { rows: state.rows, onEvent, onJoinedGroup, onCollectionSnapshot, transformRows };
 }

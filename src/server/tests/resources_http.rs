@@ -1,3 +1,5 @@
+#[path = "support/tag_filters.rs"]
+mod tag_filters;
 use axum::{
     Router,
     body::{Body, to_bytes},
@@ -376,6 +378,13 @@ async fn metadata_endpoints_enforce_authorization_and_persist_complete_lifecycle
         .await
         .unwrap();
     assert!(!schedule);
+    tag_filters::verify(
+        &app,
+        &pool,
+        citadel_tags::TaggableResourceType::Script,
+        script_uuid,
+    )
+    .await;
     for (index, expected) in [(0, 1), (1, 0)] {
         let response = request(
             &app,

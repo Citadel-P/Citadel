@@ -1,5 +1,7 @@
 #[path = "swarm_services_http/contracts.rs"]
 mod contracts;
+#[path = "support/tag_filters.rs"]
+mod tag_filters;
 use citadel_server::api::routes::swarm_services as swarm_services_http;
 use std::sync::Arc;
 
@@ -73,10 +75,17 @@ impl SwarmServiceRuntime for CompletingRuntime {
     fn delete<'a>(
         &'a self,
         _platform_id: Uuid,
-        _docker_service_id: &'a str,
+        docker_service_id: &'a str,
         _cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<(), SwarmServiceError>> {
-        Box::pin(async { Ok(()) })
+        Box::pin(async move {
+            if docker_service_id == "reject-delete" {
+                return Err(SwarmServiceError::Conflict(
+                    "fixture rejected deletion".into(),
+                ));
+            }
+            Ok(())
+        })
     }
     fn observe<'a>(
         &'a self,
@@ -102,6 +111,9 @@ fn completed(claim: &ServiceOperationClaim) -> RuntimeServiceResult {
         warnings: Vec::new(),
     }
 }
+
+#[path = "swarm_services_http/tag_usage.rs"]
+mod tag_usage;
 
 #[path = "swarm_services_http/task_ownership.rs"]
 mod task_ownership;
@@ -212,6 +224,13 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
     let created = response_json(created_response).await;
     assert_eq!(status, StatusCode::OK, "{created}");
     let id = Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
+    tag_filters::verify(
+        &app,
+        &pool,
+        citadel_tags::TaggableResourceType::SwarmService,
+        id,
+    )
+    .await;
     contracts::verify(&app, &admin, id).await;
     let mut invalid_spec = created["spec"].clone();
     invalid_spec["replicas"] = json!(-1);
@@ -291,12 +310,13 @@ async fn managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle() {
     webhooks::verify(&pool, identity, &admin, id).await;
 
     task_ownership::verify(&pool, admin.actor_id, id).await;
+    let remaining = tag_usage::partial_deletion(&app, &pool, &admin, platform_id, id, &spec).await;
     let deleted = request(
         &app,
         Method::DELETE,
         "/api/v1/swarmServices",
         Some(admin),
-        Some(json!([id])),
+        Some(json!([remaining])),
     )
     .await;
     assert_eq!(deleted.status(), StatusCode::NO_CONTENT);

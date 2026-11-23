@@ -37,6 +37,7 @@ pub enum RuntimeNotification {
     Connection(ConnectionEvent),
     /// Invalid connection payload; resync connection subscribers without treating it as a transport reconnect.
     ConnectionResync,
+    TagUsageChanged,
     BackupRecovery,
     GitRecovery,
     ContainerCreated(ContainerCreated),

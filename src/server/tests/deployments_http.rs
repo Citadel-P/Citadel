@@ -1,3 +1,5 @@
+#[path = "support/tag_filters.rs"]
+mod tag_filters;
 use axum::{
     Router,
     body::{Body, to_bytes},
@@ -260,6 +262,13 @@ async fn deployment_endpoints_enforce_auth_and_persist_the_crud_lifecycle() {
     let created = response_json(created_response).await;
     assert_eq!(created_status, StatusCode::OK, "{created}");
     let deployment_id = Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
+    tag_filters::verify(
+        &app,
+        &pool,
+        citadel_tags::TaggableResourceType::Deployment,
+        deployment_id,
+    )
+    .await;
     assert_eq!(created["status"], "Created");
     assert!(created["spec"].get("lifeCycleSpec").is_none());
     assert!(created.get("containerId").is_none());

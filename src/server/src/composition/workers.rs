@@ -89,6 +89,7 @@ pub async fn register(
         .listen(citadel_adapters::persistence::postgres::connection_events::CHANNEL)
         .await?;
     for channel in [
+        citadel_adapters::persistence::postgres::tags::links::USAGE_CHANGED_CHANNEL,
         "citadel_backup_coverage",
         "citadel_resource_recovery",
         "citadel_resource_copies",

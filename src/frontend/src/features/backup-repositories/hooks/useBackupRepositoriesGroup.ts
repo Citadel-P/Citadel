@@ -1,46 +1,19 @@
 import { useCollectionStructuralSharing } from '@/hooks/useQueryReconciliation';
-import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
-import { RealtimeConnection } from '@/lib/realtime-connection';
-import { useCallback } from 'react';
-import { useCollectionRows } from '@/hooks/useCollectionRows';
+import { useCollectionSubscription } from '@/hooks/useCollectionSubscription';
 
 export const useBackupRepositoriesGroup = () => {
   const groupName = 'backup-repositories';
   const structuralSharing = useCollectionStructuralSharing(groupName);
-  const { data, isLoading, error, refetch, isFetching } = useRead('listBackupRepositories', undefined, {
+  const query = useRead('listBackupRepositories', undefined, {
     structuralSharing,
   });
-  const reload = useCallback(async () => {
-    const result = await refetch();
-    return result.isSuccess ? result.data.data.repositories : undefined;
-  }, [refetch]);
-  const [repositories, handleBackupRepositoryInfoUpdated, onJoinedGroup] = useCollectionRows(
-    data?.data.repositories,
-    'backup-repositories',
-    reload,
-  );
-
-  const setupEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.on('BackupRepositoryInfoUpdated', handleBackupRepositoryInfoUpdated);
-    },
-    [handleBackupRepositoryInfoUpdated],
-  );
-
-  const removeEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.off('BackupRepositoryInfoUpdated', handleBackupRepositoryInfoUpdated);
-    },
-    [handleBackupRepositoryInfoUpdated],
-  );
-
-  useRealtimeGroup({
+  const repositories = useCollectionSubscription({
     groupName,
-    onJoinedGroup,
-    setupEventListeners,
-    removeEventListeners,
+    eventName: 'BackupRepositoryInfoUpdated',
+    field: 'repositories',
+    query,
   });
-
+  const { data, error, refetch, isFetching, isLoading } = query;
   return { error, refetch, isFetching, repositories, isLoading, capabilities: data?.data.capabilities };
 };

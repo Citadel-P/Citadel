@@ -419,6 +419,10 @@ impl RealtimeHub {
         )
     }
 
+    pub fn publish_tag_usage_changed(&self) {
+        self.publish_resource_change("TagUsage", Uuid::nil(), "tagUsageChanged");
+    }
+
     pub fn publish_tag_change(&self, kinds: &[citadel_tags::TaggableResourceType]) -> u64 {
         if self.inner.sender.receiver_count() == 0 {
             return self.current_revision();

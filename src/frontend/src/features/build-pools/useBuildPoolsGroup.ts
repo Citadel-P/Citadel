@@ -1,10 +1,8 @@
-import { useCollectionRows } from '@/hooks/useCollectionRows';
+import { useCollectionSubscription } from '@/hooks/useCollectionSubscription';
 import { collectionGroup } from '@/lib/collection-scope';
 import { useResourceTagFilter } from '@/features/tags/components';
-import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import { useRead } from '@/lib/hooks';
-import { RealtimeConnection } from '@/lib/realtime-connection';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 
 export const useBuildPoolsGroup = () => {
   const { selectedTagNames, filterReady } = useResourceTagFilter();
@@ -12,43 +10,18 @@ export const useBuildPoolsGroup = () => {
     () => (selectedTagNames.length > 0 ? { query: { tags: selectedTagNames } } : undefined),
     [selectedTagNames],
   );
-  const { data, isLoading, error, refetch, isFetching } = useRead('listBuildAgentPools', readArgs, {
+  const query = useRead('listBuildAgentPools', readArgs, {
     enabled: filterReady,
   });
   const groupName = collectionGroup('build-agent-pools', selectedTagNames);
-  const capabilities = data?.data.capabilities;
-  const reload = useCallback(async () => {
-    const result = await refetch();
-    return result.isSuccess ? result.data.data.pools : undefined;
-  }, [refetch]);
-  const [pools, handleBuildAgentPoolInfoUpdated, onJoinedGroup, onCollectionSnapshot] = useCollectionRows(
-    data?.data.pools,
+  const { error, refetch, isFetching, isLoading } = query;
+  const capabilities = query.data?.data.capabilities;
+  const pools = useCollectionSubscription({
     groupName,
-    reload,
-  );
-
-  const setupEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.on('BuildAgentPoolInfoUpdated', handleBuildAgentPoolInfoUpdated);
-    },
-    [handleBuildAgentPoolInfoUpdated],
-  );
-
-  const removeEventListeners = useCallback(
-    (hubConnection: RealtimeConnection) => {
-      hubConnection.off('BuildAgentPoolInfoUpdated', handleBuildAgentPoolInfoUpdated);
-    },
-    [handleBuildAgentPoolInfoUpdated],
-  );
-
-  useRealtimeGroup({
+    eventName: 'BuildAgentPoolInfoUpdated',
     enabled: filterReady,
-    groupName,
-    onJoinedGroup,
-    onCollectionSnapshot,
-    setupEventListeners,
-    removeEventListeners,
+    field: 'pools',
+    query,
   });
-
   return { error, refetch, isFetching, pools: pools ?? [], isLoading, capabilities };
 };

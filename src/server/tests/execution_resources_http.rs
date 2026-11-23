@@ -1,5 +1,7 @@
 #[path = "execution_resources_http/system_backup_authorization.rs"]
 mod system_backup_authorization;
+#[path = "support/tag_filters.rs"]
+mod tag_filters;
 #[path = "execution_resources_http/update_alerts.rs"]
 mod update_alerts;
 use axum::{
@@ -301,6 +303,13 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
     assert_eq!(build_pool_response.status(), StatusCode::OK);
     let build_pool = response_json(build_pool_response).await;
     let pool_id = build_pool["id"].as_str().unwrap();
+    tag_filters::verify(
+        &app,
+        &pool,
+        citadel_tags::TaggableResourceType::BuildAgentPool,
+        Uuid::parse_str(pool_id).unwrap(),
+    )
+    .await;
     // Port the BuildAgentPool endpoint lifecycle's tag persistence, and cover
     // the existing table's positive/negative tag-name filters.
     let pool_tag_response = request(
@@ -600,6 +609,13 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
     )
     .await;
     let project_id = project["id"].as_str().unwrap();
+    tag_filters::verify(
+        &app,
+        &pool,
+        citadel_tags::TaggableResourceType::Build,
+        Uuid::parse_str(project_id).unwrap(),
+    )
+    .await;
     assert_eq!(project["capabilities"]["canWrite"], true);
     build_entitlement.set_enabled(true);
     build_pools::verify_unsupported_admission(
@@ -850,6 +866,13 @@ async fn resource_endpoints_authorize_validate_and_persist_lifecycles() {
     let policy_id = policy["id"].as_str().unwrap();
     validation::verify_policy(&app, &principal, &policy).await;
     backup_policy_metadata::verify(&app, &pool, &principal, &policy).await;
+    tag_filters::verify(
+        &app,
+        &pool,
+        citadel_tags::TaggableResourceType::BackupPolicy,
+        Uuid::parse_str(policy["id"].as_str().unwrap()).unwrap(),
+    )
+    .await;
     backup_contract::verify(&pool, &principal, &policy).await;
     backup_summaries::verify(&app, &pool, &principal, &policy).await;
     backup_completion::verify_policy(&app, &pool, &principal, &policy).await;
