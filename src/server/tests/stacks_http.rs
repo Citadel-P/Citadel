@@ -75,6 +75,7 @@ struct CompletingStackRuntime {
     group_checks: std::sync::atomic::AtomicUsize,
     snapshot_barrier: Mutex<Option<Arc<tokio::sync::Barrier>>>,
     unavailable_group: Mutex<Option<Uuid>>,
+    blocked_project: Option<drift::BlockedProject>,
     apply_calls: Mutex<Vec<ApplyCall>>,
     import_claim: Mutex<Option<StackImportClaim>>,
     import_reads: std::sync::atomic::AtomicUsize,
@@ -225,6 +226,9 @@ impl StackRuntime for CompletingStackRuntime {
             if *self.unavailable_group.lock().unwrap() == Some(platform) {
                 return Err(StackError::Runtime("fixture platform offline".into()));
             }
+            if self.blocked_project.is_some() {
+                return Ok(None); // Exercise the individual-read fallback.
+            }
             let mut out = std::collections::BTreeMap::new();
             for p in projects {
                 out.insert(
@@ -244,11 +248,17 @@ impl StackRuntime for CompletingStackRuntime {
     fn runtime_snapshot<'a>(
         &'a self,
         _platform_id: Uuid,
-        _project_name: &'a str,
+        project_name: &'a str,
         _orchestration: StackOrchestrationMode,
         _cancellation: &'a CancellationToken,
     ) -> BoxFuture<'a, Result<StackRuntimeSnapshot, StackError>> {
         Box::pin(async move {
+            if let Some(block) = &self.blocked_project
+                && block.name == project_name
+            {
+                block.started.notify_one();
+                block.release.notified().await;
+            }
             let barrier = self.snapshot_barrier.lock().unwrap().clone();
             if let Some(barrier) = barrier {
                 barrier.wait().await;

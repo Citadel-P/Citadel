@@ -1,5 +1,9 @@
 //! Docker storage totals are expensive; share one refresh per minute per daemon client.
-use super::{DockerClient, projection::DockerInfo};
+use super::{
+    DockerClient,
+    projection::{DockerInfo, DockerVolume},
+};
+use chrono::{DateTime, TimeDelta, Utc};
 use citadel_platforms::{RuntimeCapabilityError, RuntimePlatformStats};
 use futures_util::{
     FutureExt,
@@ -40,11 +44,12 @@ struct DataUsage {
 struct VolumeUsage {
     #[serde(default)]
     name: String,
+    created_at: Option<String>,
     usage_data: Option<VolumeSize>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
-pub(super) struct VolumeSize {
+struct VolumeSize {
     #[serde(skip_serializing_if = "Option::is_none")]
     ref_count: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -63,37 +68,102 @@ impl DataUsage {
     }
 }
 
-pub(super) struct StorageSnapshot {
+struct StorageSnapshot {
     totals: Usage,
-    volumes: HashMap<String, VolumeSize>,
+    started: Instant,
+    daemon_start_lower_bound: Option<DateTime<Utc>>,
+    volumes: HashMap<String, VolumeEvidence>,
 }
 impl StorageSnapshot {
-    pub(super) fn volume(&self, name: &str) -> Option<serde_json::Value> {
-        self.volumes.get(name).map(|v| serde_json::json!(v))
+    fn covers_creation(&self, volume: &DockerVolume) -> bool {
+        if self
+            .volumes
+            .get(&volume.name)
+            .and_then(|e| e.same_creation(volume))
+            != Some(true)
+        {
+            return false;
+        }
+        // Docker can truncate CreatedAt to seconds. A matching timestamp in the
+        // scan's own second could identify either creation of a reused name.
+        self.daemon_start_lower_bound.is_some_and(|start| {
+            DateTime::parse_from_rfc3339(&volume.created_at)
+                .is_ok_and(|created| created.timestamp() < start.timestamp())
+        })
+    }
+}
+
+struct VolumeEvidence {
+    created_at: Option<String>,
+    usage: VolumeSize,
+}
+impl VolumeEvidence {
+    fn same_creation(&self, volume: &DockerVolume) -> Option<bool> {
+        let created_at = self.created_at.as_deref().filter(|at| !at.is_empty())?;
+        (!volume.created_at.is_empty()).then(|| volume.created_at == created_at)
     }
 }
 type Scan = BoxFuture<'static, Result<Arc<StorageSnapshot>, Arc<super::DockerError>>>;
 #[derive(Default)]
 struct UsageFlights {
-    all: Option<(u64, WeakShared<Scan>)>,
-    volumes: Option<(u64, WeakShared<Scan>)>,
+    all: Option<UsageFlight>,
+    volumes: Option<UsageFlight>,
+}
+struct UsageFlight {
+    generation: u64,
+    started: Instant,
+    scan: WeakShared<Scan>,
 }
 impl DockerClient {
-    pub(super) async fn fresh_usage(
+    pub(super) fn invalidate_volume_usage(&self) {
+        *self.storage_usage.flights.lock().unwrap() = UsageFlights::default();
+    }
+
+    pub(super) async fn fill_volume_usage<'a>(
+        &self,
+        volumes: impl IntoIterator<Item = &'a mut DockerVolume>,
+        lifecycle: bool,
+    ) -> Result<(), super::DockerError> {
+        let volumes: Vec<_> = volumes
+            .into_iter()
+            .filter(|v| v.usage_data.is_none())
+            .collect();
+        if volumes.is_empty() {
+            return Ok(());
+        }
+        let requested = Instant::now();
+        let mut scan = self
+            .fresh_usage(false, lifecycle.then_some(requested))
+            .await?;
+        // External mutations can precede their event. If an older shared scan
+        // cannot identify a current volume, read again after the metadata lookup.
+        if scan.started < requested && volumes.iter().any(|volume| !scan.covers_creation(volume)) {
+            scan = self.fresh_usage(false, Some(requested)).await?;
+        }
+        for volume in volumes {
+            volume.usage_data = scan
+                .volumes
+                .get(&volume.name)
+                .filter(|e| e.same_creation(volume) != Some(false))
+                .map(|e| serde_json::json!(e.usage));
+        }
+        Ok(())
+    }
+
+    async fn fresh_usage(
         &self,
         all: bool,
-        lifecycle: bool,
+        since: Option<Instant>,
     ) -> Result<Arc<StorageSnapshot>, super::DockerError> {
         let generation = self.daemon_generation();
         let flight = {
             let mut flights = self.storage_usage.flights.lock().unwrap();
-            if lifecycle {
-                *flights = Default::default();
-            }
-            let active = |slot: &Option<(u64, WeakShared<Scan>)>| {
+            let active = |slot: &Option<UsageFlight>| {
                 slot.as_ref()
-                    .filter(|(g, _)| *g == generation)
-                    .and_then(|(_, w)| w.upgrade())
+                    .filter(|f| {
+                        f.generation == generation && since.is_none_or(|at| f.started >= at)
+                    })
+                    .and_then(|f| f.scan.upgrade())
                     .filter(|f| f.peek().is_none())
             };
             if let Some(existing) =
@@ -102,6 +172,7 @@ impl DockerClient {
                 existing
             } else {
                 let docker = self.clone();
+                let started = Instant::now();
                 let flight = async move {
                     let _timer =
                         citadel_runtime::runtime_metrics::RuntimeWork::DockerStorage.start();
@@ -110,7 +181,13 @@ impl DockerClient {
                     } else {
                         "/system/df?type=volume"
                     };
-                    let bytes = docker.bounded_json_bytes(path).await.map_err(Arc::new)?;
+                    let (bytes, daemon_date) =
+                        docker.dated_json_bytes(path).await.map_err(Arc::new)?;
+                    // Bound the scan start on the daemon's clock even for remote Docker
+                    // endpoints or a response delayed in transit.
+                    let daemon_start_lower_bound = daemon_date.and_then(|date| {
+                        date.checked_sub_signed(TimeDelta::from_std(started.elapsed()).ok()?)
+                    });
                     let data: DataUsage = serde_json::from_slice(&bytes)
                         .map_err(|e| Arc::new(super::DockerError::from(e)))?;
                     if docker.daemon_generation() != generation {
@@ -125,9 +202,22 @@ impl DockerClient {
                         .volumes
                         .unwrap_or_default()
                         .into_iter()
-                        .filter_map(|v| v.usage_data.map(|s| (v.name, s)))
+                        .filter_map(|v| {
+                            Some((
+                                v.name,
+                                VolumeEvidence {
+                                    created_at: v.created_at,
+                                    usage: v.usage_data?,
+                                },
+                            ))
+                        })
                         .collect();
-                    Ok(Arc::new(StorageSnapshot { totals, volumes }))
+                    Ok(Arc::new(StorageSnapshot {
+                        totals,
+                        started,
+                        daemon_start_lower_bound,
+                        volumes,
+                    }))
                 }
                 .boxed()
                 .shared();
@@ -136,7 +226,11 @@ impl DockerClient {
                 } else {
                     &mut flights.volumes
                 };
-                *slot = flight.downgrade().map(|weak| (generation, weak));
+                *slot = flight.downgrade().map(|scan| UsageFlight {
+                    generation,
+                    started,
+                    scan,
+                });
                 flight
             }
         };
@@ -154,7 +248,7 @@ impl DockerClient {
         {
             // Preserve the last successful totals on a transient error.
             // Cancellation drops this future before advancing the retry deadline.
-            match self.fresh_usage(true, false).await {
+            match self.fresh_usage(true, None).await {
                 Ok(usage) => {
                     cache.usage = usage.totals;
                     cache.succeeded = Some(Instant::now());
@@ -419,7 +513,7 @@ mod flight_tests {
         let client = DockerClient::new(&path, Duration::from_secs(8)).unwrap();
         let start = |all| {
             let c = client.clone();
-            tokio::spawn(async move { c.fresh_usage(all, false).await })
+            tokio::spawn(async move { c.fresh_usage(all, None).await })
         };
         let owner = start(true);
         assert!(
@@ -429,12 +523,12 @@ mod flight_tests {
                 .unwrap()
                 .contains("type=image&type=volume")
         );
-        let mut waiter = Box::pin(client.fresh_usage(false, false));
+        let mut waiter = Box::pin(client.fresh_usage(false, None));
         assert!(futures_util::poll!(&mut waiter).is_pending());
         owner.abort();
         let _ = owner.await;
         releases[0].notify_one();
-        assert_eq!(waiter.await.unwrap().volume("v").unwrap()["Size"], 1);
+        assert_eq!(waiter.await.unwrap().volumes["v"].usage.size, Some(1));
 
         let abandoned = start(false);
         assert!(requests.recv().await.unwrap().contains("df?type=volume "));
@@ -445,20 +539,23 @@ mod flight_tests {
         assert!(requests.recv().await.unwrap().contains("df?type=volume "));
         let mutation = {
             let c = client.clone();
-            tokio::spawn(async move { c.fresh_usage(false, true).await })
+            tokio::spawn(async move { c.fresh_usage(false, Some(Instant::now())).await })
         };
         assert!(requests.recv().await.unwrap().contains("df?type=volume "));
         releases[3].notify_one();
         releases[2].notify_one();
         assert_eq!(
-            mutation.await.unwrap().unwrap().volume("v").unwrap()["Size"],
-            4
+            mutation.await.unwrap().unwrap().volumes["v"].usage.size,
+            Some(4)
         );
         assert_eq!(
-            older.await.unwrap().unwrap().volume("v").unwrap()["Size"],
-            3
+            older.await.unwrap().unwrap().volumes["v"].usage.size,
+            Some(3)
         );
         server.await.unwrap();
         std::fs::remove_file(path).unwrap();
     }
 }
+
+#[cfg(all(test, unix))]
+mod volume_lifecycle_tests;

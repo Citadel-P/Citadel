@@ -437,9 +437,70 @@ async fn verify_monitor_pagination(
         assert_eq!(page.next_cursor, Some(ids[99]));
     }
     *runtime.unavailable_group.lock().unwrap() = None;
+    verify_blocked_fallback_preserves_newer_incident(pool, ids[0], ids[1]).await;
     sqlx::query("DELETE FROM stacks WHERE id=ANY($1)")
         .bind(&ids)
         .execute(pool)
         .await
         .unwrap();
+}
+
+pub(super) struct BlockedProject {
+    pub name: String,
+    pub started: tokio::sync::Notify,
+    pub release: tokio::sync::Notify,
+}
+
+// Read two consecutive Stacks from the fixture page. An event for the first
+// arrives while the second project's individual Docker read is still pending.
+async fn verify_blocked_fallback_preserves_newer_incident(
+    pool: &sqlx::PgPool,
+    cursor: Uuid,
+    first: Uuid,
+) {
+    use citadel_adapters::persistence::postgres::alerts::PostgresAlertRepository;
+    let runtime = Arc::new(CompletingStackRuntime {
+        blocked_project: Some(BlockedProject {
+            name: "drift-page-3".into(),
+            started: Default::default(),
+            release: Default::default(),
+        }),
+        ..Default::default()
+    });
+    let service = StackService::new(
+        Arc::new(citadel_server::tasks::stacks::TrackedStackTasks::new(
+            citadel_runtime::DynamicTasks::new(CancellationToken::new()),
+        )),
+        Arc::new(PostgresStackRepository::new(pool.clone())),
+        runtime.clone(),
+        Arc::new(FixtureBindings),
+        Arc::new(NoopStackChangeNotifier),
+        CancellationToken::new(),
+    )
+    .with_alerts(Arc::new(PostgresAlertRepository::new(pool.clone())));
+    let pending_incident = || {
+        sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM alertevents WHERE resourceid=$1 AND type='StackDriftDetected' AND resolvedat IS NULL"
+    ).bind(first).fetch_one(pool)
+    };
+    runtime.runtime_state.store(2, Ordering::Relaxed);
+    let event = async {
+        let gate = runtime.blocked_project.as_ref().unwrap();
+        gate.started.notified().await;
+        runtime.runtime_state.store(1, Ordering::Relaxed);
+        service.monitor_container_event(first).await.unwrap();
+        let incident = pending_incident().await.unwrap();
+        runtime.runtime_state.store(2, Ordering::Relaxed);
+        gate.release.notify_one();
+        incident
+    };
+    let (periodic, incident) = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        tokio::join!(service.monitor_drift(Some(cursor), 2), event)
+    })
+    .await
+    .expect("event should finish while the second Docker read is paused");
+    let periodic = periodic.unwrap();
+    assert!(periodic.failures.is_empty(), "{:?}", periodic.failures);
+    assert_eq!(periodic.checked, 2);
+    assert_eq!(pending_incident().await.unwrap(), incident);
 }

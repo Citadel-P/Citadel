@@ -40,7 +40,6 @@ impl StackService {
             groups.entry(stack.platform_id).or_default().push(stack);
         }
 
-        let mut healthy = Vec::new();
         for (platform, group) in groups {
             let mut prepared = Vec::new();
             for stack in group {
@@ -112,12 +111,34 @@ impl StackService {
                 })
                 .collect::<Vec<_>>();
             drop(snapshots);
+            if self.shutdown.is_cancelled() {
+                break;
+            }
+            // Submit healthy results from this snapshot together, before any individual
+            // read, repair, or status write can delay them behind a newer container event.
+            if let Some(alerts) = &self.alerts {
+                let healthy: Vec<_> = reports
+                    .iter()
+                    .filter_map(|(_, stack, _, report)| {
+                        report
+                            .as_ref()
+                            .filter(|r| !r.has_drift && stack.drift_policy.alert_on_drift)
+                            .map(|r| stack_drift_observation(stack, r, "StackDriftDetected"))
+                    })
+                    .collect();
+                if !healthy.is_empty()
+                    && let Err(error) = alerts.observe_healthy_stack_drift(&healthy).await
+                {
+                    tracing::warn!(%error, count=healthy.len(), "Stack drift Alert evaluation failed");
+                }
+            }
             for (project, stack, names, report) in reports {
                 if self.shutdown.is_cancelled() {
                     break;
                 }
                 let outcome = async {
                     let platform = platform.ok_or(StackError::NotFound)?;
+                    let already_evaluated = report.as_ref().is_some_and(|r| !r.has_drift);
                     let report = if let Some(report) = report {
                         report
                     } else {
@@ -132,21 +153,13 @@ impl StackService {
                             .await?;
                         compare_names(stack.id, platform, &stack.drift_policy, &runtime, &names)
                     };
-                    let report = if report.has_drift {
-                        self.flush_healthy_drift(&mut healthy).await;
+                    let report = if already_evaluated {
+                        report
+                    } else {
                         let (report, repaired) = self
                             .finish_drift_observation(&stack, actor, can_fix, report)
                             .await?;
                         result.reconciled += usize::from(repaired);
-                        report
-                    } else {
-                        if stack.drift_policy.alert_on_drift && self.alerts.is_some() {
-                            healthy.push(stack_drift_observation(
-                                &stack,
-                                &report,
-                                "StackDriftDetected",
-                            ));
-                        }
                         report
                     };
                     self.record_monitor_result(&stack, &report).await
@@ -157,7 +170,6 @@ impl StackService {
                     Err(e) => failure(&mut result, stack.id, e),
                 }
             }
-            self.flush_healthy_drift(&mut healthy).await;
         }
         if self.shutdown.is_cancelled() {
             result.next_cursor = None;
@@ -176,15 +188,6 @@ impl StackService {
             self.notifier.changed(stack.id, "driftChanged");
         }
         Ok(())
-    }
-    async fn flush_healthy_drift(&self, healthy: &mut Vec<AlertObservation>) {
-        if !healthy.is_empty()
-            && let Some(alerts) = &self.alerts
-            && let Err(error) = alerts.observe_healthy_stack_drift(healthy).await
-        {
-            tracing::warn!(%error,count=healthy.len(),"Stack drift Alert evaluation failed");
-        }
-        healthy.clear();
     }
 }
 

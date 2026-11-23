@@ -559,7 +559,20 @@ impl DockerClient {
         }
         let query = (!parts.is_empty()).then(|| parts.join("&"));
         let response = self.send_stream("/events", query.as_deref()).await?;
-        Ok(json_lines(response, MAX_STREAM_ITEM_BYTES))
+        let docker = self.clone();
+        Ok(Box::pin(
+            json_lines::<DockerEvent>(response, MAX_STREAM_ITEM_BYTES).inspect(move |item| {
+                if let Ok(event) = item
+                    && event.resource_type == "volume"
+                    && matches!(
+                        super::events::normalize(event),
+                        Some(super::events::RuntimeEventKind::Volume(_))
+                    )
+                {
+                    docker.invalidate_volume_usage();
+                }
+            }),
+        ))
     }
 
     pub async fn container_stats(

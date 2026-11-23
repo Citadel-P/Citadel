@@ -11,9 +11,8 @@ impl DockerClient {
         let generation = self.daemon_generation();
         let inspect = async {
             let mut volume = self.volume_metadata(name).await?;
-            if volume.usage_data.is_none() {
-                volume.usage_data = self.fresh_usage(false, false).await?.volume(name);
-            }
+            self.fill_volume_usage(std::iter::once(&mut volume), false)
+                .await?;
             Ok(volume)
         };
         let (mut volume, containers) = tokio::try_join!(
@@ -65,17 +64,11 @@ impl DockerClient {
         let containers = self
             .list_container_models(Some(true), None, Some(false), None)
             .await?;
-        let usage = if metadata.iter().flatten().any(|v| v.usage_data.is_none()) {
-            Some(self.fresh_usage(false, true).await?)
-        } else {
-            None
-        };
+        self.fill_volume_usage(metadata.iter_mut().flatten(), true)
+            .await?;
         let policy = super::volume_content_policy::StorageProtection::from_containers(&containers);
         for volume in metadata.iter_mut().flatten() {
             policy.apply(volume);
-            if volume.usage_data.is_none() {
-                volume.usage_data = usage.as_ref().and_then(|u| u.volume(&volume.name));
-            }
         }
         self.check_volume_generation(generation)?;
         Ok(metadata)

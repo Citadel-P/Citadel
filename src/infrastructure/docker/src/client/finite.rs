@@ -370,10 +370,19 @@ impl DockerClient {
         use citadel_platforms::prune::PruneResource::*;
         let config = self.configuration().await?;
         match resource {
-            Volume => document(
-                self.api_result(VolumeApiClient::new(config).volume_prune(Some("{}")).await)
-                    .await?,
-            ),
+            Volume => {
+                let report = self
+                    .api_result(VolumeApiClient::new(config).volume_prune(Some("{}")).await)
+                    .await?;
+                if report
+                    .volumes_deleted
+                    .as_ref()
+                    .is_some_and(|names| !names.is_empty())
+                {
+                    self.invalidate_volume_usage();
+                }
+                document(report)
+            }
             Network => document(
                 self.api_result(
                     NetworkApiClient::new(config)
@@ -574,14 +583,7 @@ impl DockerClient {
                 .volumes
                 .unwrap_or_default(),
         )?;
-        if volumes.iter().any(|v| v.usage_data.is_none()) {
-            let usage = self.fresh_usage(false, false).await?;
-            for volume in &mut volumes {
-                if volume.usage_data.is_none() {
-                    volume.usage_data = usage.volume(&volume.name);
-                }
-            }
-        }
+        self.fill_volume_usage(&mut volumes, false).await?;
         self.apply_volume_content_policy(&mut volumes).await?;
         Ok(volumes)
     }
@@ -609,8 +611,9 @@ impl DockerClient {
         if observation == VolumeObservation::Metadata {
             return Ok(volume);
         }
-        if observation == VolumeObservation::Details && volume.usage_data.is_none() {
-            volume.usage_data = self.fresh_usage(false, false).await?.volume(&volume.name);
+        if observation == VolumeObservation::Details {
+            self.fill_volume_usage(std::iter::once(&mut volume), false)
+                .await?;
         }
         self.apply_volume_content_policy(std::slice::from_mut(&mut volume))
             .await?;
@@ -630,13 +633,15 @@ impl DockerClient {
         &self,
         request: &VolumeCreateOptions,
     ) -> Result<DockerVolume, DockerError> {
-        self.api_result(
-            VolumeApiClient::new(self.configuration().await?)
-                .volume_create(body(request)?)
-                .await,
-        )
-        .await?
-        .try_into()
+        let volume = self
+            .api_result(
+                VolumeApiClient::new(self.configuration().await?)
+                    .volume_create(body(request)?)
+                    .await,
+            )
+            .await?;
+        self.invalidate_volume_usage();
+        volume.try_into()
     }
     pub async fn delete_volume(&self, name: &str, force: bool) -> Result<(), DockerError> {
         validate_identifier(name)?;
@@ -645,7 +650,9 @@ impl DockerClient {
                 .volume_delete(name, Some(force))
                 .await,
         )
-        .await
+        .await?;
+        self.invalidate_volume_usage();
+        Ok(())
     }
     pub async fn list_networks(&self) -> Result<Vec<DockerNetwork>, DockerError> {
         self.list_networks_filtered(None).await

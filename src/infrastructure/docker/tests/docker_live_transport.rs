@@ -167,3 +167,6 @@ async fn reads_real_health_without_executing_or_mutating_container() {
     assert_eq!(health.status(&observed.state, false), HealthStatus::Unknown);
     assert!(!serde_json::to_string(&health).unwrap().contains("output"));
 }
+
+#[path = "docker_live_transport/volume_recreation.rs"]
+mod volume_recreation;
