@@ -66,6 +66,7 @@ WITH resource_lookup(resourceid, resourcetype, resourcename) AS (
     UNION ALL SELECT id, 18, name FROM buildprojects
     UNION ALL SELECT id, 19, name FROM buildagentpools
     UNION ALL SELECT id, 20, name FROM swarmservices
+    UNION ALL SELECT id, 22, name FROM dashboards WHERE visibility IN ('InstanceShared', 'Restricted')
 )
 SELECT u.id, u.name, u.email, u.actorid, actor.isenabled,
        teams.value AS teams, roles.value AS roles,
