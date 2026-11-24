@@ -3,6 +3,11 @@ import { OVERRIDE_RESOURCE_CONFIG, OVERRIDE_RESOURCE_TYPES } from './overrides/r
 import { RESOURCE_ICONS, ROLE_PERMISSION_RESOURCES } from './roles';
 
 describe('access resource metadata', () => {
+  it('includes dashboards in the custom role permission editor', () => {
+    expect(ROLE_PERMISSION_RESOURCES).toContain(ResourceType.Dashboard);
+    expect(RESOURCE_ICONS[ResourceType.Dashboard]).toBeDefined();
+  });
+
   it('makes managed Swarm Services configurable in roles', () => {
     expect(ROLE_PERMISSION_RESOURCES).toContain(ResourceType.SwarmService);
     expect(RESOURCE_ICONS[ResourceType.SwarmService]).toBeDefined();

@@ -125,7 +125,8 @@ enum_schema!(
         Build,
         BuildAgentPool,
         SwarmService,
-        ServiceAccount
+        ServiceAccount,
+        Dashboard
     ]
 );
 

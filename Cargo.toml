@@ -24,6 +24,7 @@ members = [
     "src/features/stacks",
     "src/features/swarm-services",
     "src/features/tags",
+    "src/features/dashboards",
     "src/infrastructure/adapters",
     "src/infrastructure/scripts",
     "src/infrastructure/contracts",

@@ -7,6 +7,7 @@ pub mod bindings;
 pub mod builds;
 pub mod capabilities;
 pub mod common;
+pub mod dashboards;
 pub mod deployments;
 pub mod git_accounts;
 pub mod git_repositories;

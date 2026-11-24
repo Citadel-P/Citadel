@@ -17,6 +17,7 @@ citadel-discovery = { path = "../features/discovery" }
 citadel-bindings = { path = "../features/bindings" }
 citadel-registries = { path = "../features/registries" }
 citadel-tags = { path = "../features/tags" }
+citadel-dashboards = { path = "../features/dashboards" }
 citadel-primitives = { path = "../features/primitives" }
 citadel-licensing = { path = "../features/licensing" }
 citadel-activities = { path = "../features/activities" }

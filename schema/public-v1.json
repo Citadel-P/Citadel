@@ -17863,7 +17863,8 @@
           "Build",
           "BuildAgentPool",
           "SwarmService",
-          "ServiceAccount"
+          "ServiceAccount",
+          "Dashboard"
         ],
         "type": "string"
       },

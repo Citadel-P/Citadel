@@ -6,6 +6,7 @@ mod build_attempts;
 mod build_spec_references;
 mod coarse_history;
 mod container_io;
+mod dashboards;
 mod health_retention;
 mod instance_settings;
 mod job_history;

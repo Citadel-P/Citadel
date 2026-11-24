@@ -1,0 +1,109 @@
+use super::schema_models::dashboards::{DashboardConfigurationSchema, DashboardVisibilitySchema};
+use citadel_dashboards::{DashboardContent, DashboardVisibility};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateDashboard {
+    pub id: Uuid,
+    #[schema(value_type = DashboardVisibilitySchema)]
+    pub visibility: DashboardVisibility,
+    pub name: String,
+    #[schema(value_type = DashboardConfigurationSchema)]
+    pub configuration: citadel_dashboards::DashboardConfiguration,
+}
+
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateDashboard {
+    pub revision: i64,
+    pub name: String,
+    #[schema(value_type = DashboardConfigurationSchema)]
+    pub configuration: citadel_dashboards::DashboardConfiguration,
+}
+
+impl From<UpdateDashboard> for DashboardContent {
+    fn from(value: UpdateDashboard) -> Self {
+        Self {
+            name: value.name,
+            configuration: value.configuration,
+        }
+    }
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardSummaryView {
+    pub id: Uuid,
+    pub name: String,
+    #[schema(value_type = DashboardVisibilitySchema)]
+    pub visibility: DashboardVisibility,
+    pub revision: i64,
+    pub can_edit: bool,
+    pub can_delete: bool,
+}
+
+impl From<citadel_dashboards::DashboardSummary> for DashboardSummaryView {
+    fn from(value: citadel_dashboards::DashboardSummary) -> Self {
+        let citadel_dashboards::DashboardSummary {
+            id,
+            name,
+            visibility,
+            revision,
+            can_edit,
+            can_delete,
+        } = value;
+        Self {
+            id,
+            name,
+            visibility,
+            revision,
+            can_edit,
+            can_delete,
+        }
+    }
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedDashboardView {
+    pub summary: DashboardSummaryView,
+    /// Preserve unknown stored versions for read-only clients.
+    pub configuration: serde_json::Value,
+}
+
+impl From<citadel_dashboards::SavedDashboard> for SavedDashboardView {
+    fn from(value: citadel_dashboards::SavedDashboard) -> Self {
+        Self {
+            summary: value.summary.into(),
+            configuration: value.configuration,
+        }
+    }
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct DashboardList {
+    pub dashboards: Vec<DashboardSummaryView>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DashboardDefault {
+    pub dashboard_id: Option<Uuid>,
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct DashboardListQuery {
+    pub search: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct DashboardRevision {
+    pub revision: i64,
+}

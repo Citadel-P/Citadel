@@ -6,6 +6,8 @@ import {
   RolePermissionInput,
   PermissionMatrixViewItem,
   LicenseCapability,
+  DashboardVisibility,
+  type DashboardList,
 } from '@/api/generated/api.types';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Button } from '@/components/ui/button';
@@ -18,13 +20,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SelectField } from '@/components/custom/common';
+import { SearchField } from '@/components/custom/search-field';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useRead } from '@/lib/hooks';
 import { useAppContext } from '@/lib/context/app-context';
 import { CitadelIcons } from '@/lib/icons';
 import { Link } from 'react-router';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { useMemo, useState, type ComponentType } from 'react';
+import { LayoutDashboard, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useMemo, useState, type ComponentType } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { KnownResourceName } from '@/api/types';
 import { useLicenseEntitlements } from '@/features/license/use-license-entitlements';
@@ -50,6 +53,7 @@ export type OverrideResourceType =
   | ResourceType.BackupRepository
   | ResourceType.Script
   | ResourceType.Build
+  | ResourceType.Dashboard
   | ResourceType.BuildAgentPool;
 
 type DisplayResourceItem = ResourceItem & {
@@ -70,8 +74,10 @@ type OverrideResourceConfig = {
   icon: ComponentType<{ className?: string }>;
   listQuery: KnownResourceName;
   readItems: (data: unknown) => ResourceItem[];
-  getEditPath: (resourceId: string) => string;
+  getEditPath: (resourceId: string) => string | null;
 };
+
+const DASHBOARD_PAGE_SIZE = 50;
 
 export const OVERRIDE_RESOURCE_TYPES: OverrideResourceType[] = [
   ResourceType.Platform,
@@ -88,6 +94,7 @@ export const OVERRIDE_RESOURCE_TYPES: OverrideResourceType[] = [
   ResourceType.Script,
   ResourceType.Build,
   ResourceType.BuildAgentPool,
+  ResourceType.Dashboard,
 ];
 
 const readItemsFrom =
@@ -97,7 +104,16 @@ const readItemsFrom =
     return (Array.isArray(raw) ? raw : []) as ResourceItem[];
   };
 
-export const OVERRIDE_RESOURCE_CONFIG: Record<OverrideResourceType, OverrideResourceConfig> = {
+export const OVERRIDE_RESOURCE_CONFIG = {
+  [ResourceType.Dashboard]: {
+    icon: LayoutDashboard,
+    listQuery: 'listDashboards',
+    readItems: (data) =>
+      ((data as DashboardList | undefined)?.dashboards ?? [])
+        .slice(0, DASHBOARD_PAGE_SIZE)
+        .filter((dashboard) => dashboard.visibility !== DashboardVisibility.Private),
+    getEditPath: () => null,
+  },
   [ResourceType.Platform]: {
     icon: CitadelIcons.Platform,
     listQuery: 'listPlatforms',
@@ -182,7 +198,7 @@ export const OVERRIDE_RESOURCE_CONFIG: Record<OverrideResourceType, OverrideReso
     readItems: readItemsFrom('pools'),
     getEditPath: (resourceId) => `/build-pools/edit/${resourceId}`,
   },
-};
+} as const satisfies Record<OverrideResourceType, OverrideResourceConfig>;
 
 const isOverrideResourceType = (resourceType: ResourceType): resourceType is OverrideResourceType =>
   OVERRIDE_RESOURCE_TYPES.includes(resourceType as OverrideResourceType);
@@ -236,16 +252,25 @@ const ResourceLinkCell = ({
   resourceName: string;
 }) => {
   const Icon = OVERRIDE_RESOURCE_CONFIG[resourceType].icon;
+  const path = getResourceEditPath(resourceType, resourceId);
+  const content = (
+    <>
+      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+      <span className="truncate">{resourceName}</span>
+    </>
+  );
 
   return (
     <TableCell>
-      <Link
-        to={getResourceEditPath(resourceType, resourceId)}
-        className="table-link flex gap-2 items-center max-w-48 sm:max-w-72"
-        title={resourceName}>
-        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="truncate">{resourceName}</span>
-      </Link>
+      {path ? (
+        <Link to={path} className="table-link flex gap-2 items-center max-w-48 sm:max-w-72" title={resourceName}>
+          {content}
+        </Link>
+      ) : (
+        <span className="flex gap-2 items-center max-w-48 sm:max-w-72" title={resourceName}>
+          {content}
+        </span>
+      )}
     </TableCell>
   );
 };
@@ -253,10 +278,10 @@ const ResourceLinkCell = ({
 const ResourceActionsCell = ({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) => (
   <TableCell className="w-px pr-6 text-right">
     <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="icon" onClick={onEdit}>
+      <Button variant="ghost" size="icon" aria-label="Edit override" onClick={onEdit}>
         <Pencil className="size-4 text-muted-foreground" />
       </Button>
-      <Button variant="ghost" size="icon" onClick={onDelete}>
+      <Button variant="ghost" size="icon" aria-label="Remove override" onClick={onDelete}>
         <Trash2 className="size-4 text-muted-foreground" />
       </Button>
     </div>
@@ -266,14 +291,22 @@ const ResourceActionsCell = ({ onEdit, onDelete }: { onEdit: () => void; onDelet
 export const ResourceOverridesField = ({
   value,
   onChange,
+  serviceAccount = false,
 }: {
   value: ResourceAccessEntry[] | null;
   onChange: (next: ResourceAccessEntry[]) => void;
+  serviceAccount?: boolean;
 }) => {
   const { platforms } = useAppContext();
   const { hasCapability } = useLicenseEntitlements();
   const canExpandAccess = hasCapability(LicenseCapability.CustomAccessControl);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dashboardPage, setDashboardPage] = useState(0);
+  const [dashboardSearch, setDashboardSearch] = useState('');
+  const searchDashboards = useCallback((value: string) => {
+    setDashboardSearch(value);
+    setDashboardPage(0);
+  }, [setDashboardSearch, setDashboardPage]);
   const [selectedType, setSelectedType] = useState<OverrideResourceType>(ResourceType.Platform);
   const [draftSelectionsByType, setDraftSelectionsByType] = useState<ResourceDraftSelections>(() =>
     createEmptyDraftSelections(),
@@ -289,12 +322,15 @@ export const ResourceOverridesField = ({
 
   const resourceTypeOptions = useMemo(
     () =>
-      OVERRIDE_RESOURCE_TYPES.filter((resourceType) => permissionMatrix[resourceType]).map((resourceType) => ({
+      OVERRIDE_RESOURCE_TYPES.filter(
+        (resourceType) =>
+          permissionMatrix[resourceType] && !(serviceAccount && resourceType === ResourceType.Dashboard),
+      ).map((resourceType) => ({
         value: resourceType,
         label: permissionMatrix[resourceType]?.label ?? resourceType,
         icon: OVERRIDE_RESOURCE_CONFIG[resourceType].icon,
       })),
-    [permissionMatrix],
+    [permissionMatrix, serviceAccount],
   );
 
   const effectiveSelectedType = useMemo<OverrideResourceType>(() => {
@@ -304,7 +340,23 @@ export const ResourceOverridesField = ({
   }, [resourceTypeOptions, selectedType]);
 
   const selectedTypeConfig = OVERRIDE_RESOURCE_CONFIG[effectiveSelectedType];
-  const selectedTypeRead = useRead(selectedTypeConfig.listQuery as any, undefined, { enabled: dialogOpen });
+  const selectingDashboards = effectiveSelectedType === ResourceType.Dashboard;
+  const selectedTypeRead = useRead(
+    selectedTypeConfig.listQuery,
+    selectingDashboards
+      ? {
+          query: {
+            search: dashboardSearch,
+            limit: DASHBOARD_PAGE_SIZE + 1,
+            offset: dashboardPage * DASHBOARD_PAGE_SIZE,
+          },
+        }
+      : undefined,
+    { enabled: dialogOpen },
+  );
+  const hasNextDashboardPage =
+    selectingDashboards &&
+    ((selectedTypeRead.data?.data as DashboardList | undefined)?.dashboards?.length ?? 0) > DASHBOARD_PAGE_SIZE;
 
   const resources = useMemo<DisplayResourceItem[]>(
     () =>
@@ -324,6 +376,7 @@ export const ResourceOverridesField = ({
   const selectedByResourceKey = draftSelectionsByType[effectiveSelectedType];
 
   const openDialogWithDraft = (resourceType: OverrideResourceType) => {
+    searchDashboards('');
     setSelectedType(resourceType);
     setDraftSelectionsByType(buildDraftSelections(entries));
     setDialogOpen(true);
@@ -513,6 +566,7 @@ export const ResourceOverridesField = ({
               />
             </div>
 
+            {selectingDashboards && <SearchField onSearch={searchDashboards} placeholder="Search dashboards…" />}
             <div className="overflow-auto flex-1 min-h-0 max-h-[55vh]">
               <Table>
                 <TableHeader>
@@ -613,6 +667,27 @@ export const ResourceOverridesField = ({
                 </TableBody>
               </Table>
             </div>
+            {selectingDashboards && (dashboardPage > 0 || hasNextDashboardPage) && (
+              <div className="flex items-center justify-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={dashboardPage === 0}
+                  onClick={() => setDashboardPage(dashboardPage - 1)}>
+                  Previous
+                </Button>
+                <span className="text-sm">Page {dashboardPage + 1}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!hasNextDashboardPage}
+                  onClick={() => setDashboardPage(dashboardPage + 1)}>
+                  Next
+                </Button>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="shrink-0 px-6 py-4">

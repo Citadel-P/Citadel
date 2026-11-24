@@ -8,7 +8,8 @@ fn resource_values_match_the_accepted_database_contract() {
     for (index, resource) in ResourceType::ALL.into_iter().enumerate() {
         assert_eq!(ResourceType::from_i32(index as i32), Some(resource));
     }
-    assert_eq!(ResourceType::from_i32(22), None);
+    assert_eq!(ResourceType::Dashboard as i32, 22);
+    assert_eq!(ResourceType::from_i32(23), None);
 }
 
 #[test]

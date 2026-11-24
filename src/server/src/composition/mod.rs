@@ -97,6 +97,7 @@ pub struct ServerComponents {
     pub profiles: Arc<ProfileService>,
     pub activities: Arc<ActivityService>,
     pub secrets: Arc<SecretService>,
+    pub dashboards: Arc<dyn citadel_dashboards::DashboardRepository>,
     pub tags: Arc<dyn citadel_tags::TagRepository>,
     pub registries: Arc<dyn citadel_registries::RegistryRepository>,
     pub registry_connections: Arc<dyn citadel_registries::RegistryConnectionChecker>,
@@ -183,6 +184,7 @@ impl ServerComponents {
         } = identity::build(config, &pool, &entitlements)?;
         let catalog::CatalogComponents {
             activities,
+            dashboards,
             tags,
             registries,
             registry_connections,
@@ -388,6 +390,7 @@ impl ServerComponents {
                 profiles,
                 activities,
                 secrets,
+                dashboards,
                 tags,
                 registries,
                 registry_connections,

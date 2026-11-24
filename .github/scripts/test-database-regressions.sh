@@ -86,6 +86,7 @@ docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_resource_
 )
 # These ignored fixtures exercise real completion transactions and fault injection.
 for selection in \
+  'dashboards_http dashboard_visibility_revisions_and_defaults_follow_the_viewer' \
   'swarm_services_http managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle' \
   'swarm_service_persistence authoritative_swarm_observation_completes_or_fails_operations_once' \
   'resources_http metadata_endpoints_enforce_authorization_and_persist_complete_lifecycles' \
@@ -103,6 +104,7 @@ for selection in \
   (
     export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_$target"
     case "$target" in
+      dashboards_http) export CITADEL_DASHBOARD_DATABASE_URL="$CITADEL_EXECUTION_DATABASE_URL" ;;
       resources_http) export CITADEL_METADATA_DATABASE_URL="$CITADEL_EXECUTION_DATABASE_URL" ;;
       swarm_services_http|swarm_service_persistence) export CITADEL_WORKLOAD_DATABASE_URL="$CITADEL_EXECUTION_DATABASE_URL" ;;
     esac

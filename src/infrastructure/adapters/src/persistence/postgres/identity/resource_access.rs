@@ -46,11 +46,12 @@ pub(super) fn expands_resource_access(
     proposed: &[ResourceAccessInput],
 ) -> bool {
     proposed.iter().any(|access| {
+        let specifics = specific_mask(&access.specific_permissions);
         !current.iter().any(|existing| {
             existing.resource_type == access.resource_type
                 && existing.resource_id == access.resource_id
-                && existing.permission_level == access.permission_level
-                && existing.specific_permissions == specific_mask(&access.specific_permissions)
+                && existing.permission_level.grants(access.permission_level)
+                && existing.specific_permissions & specifics == specifics
         })
     })
 }
@@ -70,4 +71,33 @@ struct PersistedAccess {
     resource_name: Option<String>,
     permission_level: i32,
     specific_permissions: i32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn narrowing_retained_grants_is_allowed_but_granting_new_access_is_an_expansion() {
+        let board = Uuid::now_v7();
+        let retained = IdentityResourceAccessSnapshot {
+            resource_type: ResourceType::Dashboard,
+            resource_id: board,
+            permission_level: PermissionLevel::Write,
+            specific_permissions: 0,
+        };
+        let mut proposed = ResourceAccessInput {
+            resource_type: ResourceType::Dashboard,
+            resource_id: board,
+            permission_level: PermissionLevel::Read,
+            specific_permissions: vec![],
+        };
+        let current = [retained];
+        assert!(!expands_resource_access(
+            &current,
+            std::slice::from_ref(&proposed)
+        ));
+        proposed.resource_id = Uuid::now_v7();
+        assert!(expands_resource_access(&current, &[proposed]));
+    }
 }

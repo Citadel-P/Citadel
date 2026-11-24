@@ -376,6 +376,7 @@ const fn resource_name(resource: ResourceType) -> &'static str {
         ResourceType::BuildAgentPool => "BuildAgentPool",
         ResourceType::SwarmService => "SwarmService",
         ResourceType::ServiceAccount => "ServiceAccount",
+        ResourceType::Dashboard => "Dashboard",
     }
 }
 

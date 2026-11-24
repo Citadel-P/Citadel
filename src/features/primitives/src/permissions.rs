@@ -24,10 +24,11 @@ pub enum ResourceType {
     BuildAgentPool = 19,
     SwarmService = 20,
     ServiceAccount = 21,
+    Dashboard = 22,
 }
 
 impl ResourceType {
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 23] = [
         Self::Platform,
         Self::Deployment,
         Self::Stack,
@@ -50,6 +51,7 @@ impl ResourceType {
         Self::BuildAgentPool,
         Self::SwarmService,
         Self::ServiceAccount,
+        Self::Dashboard,
     ];
 
     #[must_use]

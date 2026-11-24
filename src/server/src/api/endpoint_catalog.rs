@@ -35,6 +35,7 @@ pub(crate) fn visit_documents(mut visit: impl FnMut(OpenApi)) {
     visit(crate::api::routes::instance::documented_routes().into_openapi());
     visit(crate::api::routes::platforms::documented_routes().into_openapi());
     visit(crate::api::routes::git_accounts::documented_routes().into_openapi());
+    visit(crate::api::routes::dashboards::documented_routes().into_openapi());
     visit(crate::api::routes::tags::documented_routes().into_openapi());
     visit(crate::api::routes::bindings::documented_routes().into_openapi());
     visit(crate::api::routes::registries::documented_routes().into_openapi());
