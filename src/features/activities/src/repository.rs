@@ -21,6 +21,14 @@ pub trait ActivityQueryStore: Send + Sync {
         id: Uuid,
     ) -> BoxFuture<'a, Result<Option<ActivityRecord>, ActivityError>>;
 
+    fn recent_authorized<'a>(
+        &'a self,
+        principal: &'a ActivityAccess,
+        event_type: Option<crate::ActivityEventType>,
+        limit: i32,
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<RecentActivity>, ActivityError>>;
+
     fn list_authorized<'a>(
         &'a self,
         principal: &'a ActivityAccess,

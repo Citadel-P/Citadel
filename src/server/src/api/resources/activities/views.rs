@@ -47,6 +47,30 @@ pub(crate) struct ActivitiesView {
     pub(crate) paged_result: PagedActivityView,
 }
 
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RecentActivityView {
+    id: Uuid,
+    resource_name: String,
+    #[schema(value_type = crate::api::resources::vocabulary::ActivityEventTypeSchema)]
+    event_type: ActivityEventType,
+    #[schema(value_type = crate::api::resources::vocabulary::ActivityStatusSchema)]
+    status: ActivityStatus,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<citadel_activities::RecentActivity> for RecentActivityView {
+    fn from(row: citadel_activities::RecentActivity) -> Self {
+        Self {
+            id: row.id,
+            resource_name: row.resource_name,
+            event_type: row.event_type,
+            status: row.status,
+            created_at: row.created_at,
+        }
+    }
+}
+
 pub(crate) fn map_activity(record: ActivityRecord) -> Result<ActivityView, ApiError> {
     let info = serde_json::from_str::<Value>(&record.info_json).map_err(ApiError::internal)?;
     Ok(ActivityView {

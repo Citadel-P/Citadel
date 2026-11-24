@@ -29,6 +29,7 @@ import {
   Boxes,
   FileCode2,
   ListChecks,
+  LayoutDashboard,
 } from 'lucide-react';
 
 export const DockerIcon = createLucideIcon('DockerIcon', [
@@ -47,6 +48,7 @@ export const DockerIcon = createLucideIcon('DockerIcon', [
 ]);
 
 export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ className?: string }>> = {
+  Dashboard: LayoutDashboard,
   ['Updates']: RefreshCw,
   ['Instance']: ServerCog,
   ['Deployment']: Rocket,

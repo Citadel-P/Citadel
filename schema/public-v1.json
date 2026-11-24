@@ -25606,6 +25606,18 @@
         "operationId": "listAlertEvents",
         "parameters": [
           {
+            "description": "Repeat to match all tag names on the readable event owner.",
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
             "in": "query",
             "name": "ResourceId",
             "required": false,

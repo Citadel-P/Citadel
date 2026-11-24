@@ -65,6 +65,27 @@ pub(crate) const AUTHORIZED_BY_LEVELS_CTE: &str = concat!(
     ", global_access AS (SELECT EXISTS (SELECT 1 FROM role_levels WHERE permissionlevel = ANY($3)) AS allowed)\n"
 );
 
+/// Scope event history to currently tagged, readable owners, using the same targets as tag usage counts.
+pub(super) fn tagged_event_owners(tags: &'static str, admin: &'static str) -> String {
+    let targets = include_str!("tags/usage_targets.sql");
+    format!("{targets}, tagged_event_owners AS (
+        SELECT target.kind, target.id FROM targets target
+        JOIN (
+            SELECT link.resourcetype, link.resourceid FROM unnest({tags}::text[]) requested(name)
+            JOIN tags tag ON tag.normalizedname=lower(requested.name)
+            JOIN resourcetags link ON link.tagid=tag.id
+            GROUP BY link.resourcetype, link.resourceid HAVING count(*)=cardinality({tags}::text[])
+        ) matching ON matching.resourcetype=target.kind AND matching.resourceid=target.id
+        WHERE {admin} OR target.permission_type IN (
+            SELECT p.resourcetype FROM actor_scope s JOIN actorroles ar ON ar.actorid=s.actorid
+            JOIN permissions p ON p.roleid=ar.roleid WHERE (p.permissionlevel & 7) <> 0
+        ) OR EXISTS (
+            SELECT FROM actor_scope s JOIN resourceaccesses a ON a.actorid=s.actorid
+            WHERE a.resourcetype=target.permission_type AND a.resourceid=target.id AND (a.permissionlevel & 7) <> 0
+        )
+    )")
+}
+
 /// Match every requested name on the single owner selected by the outer query ($1).
 pub(super) const OWNER_TAG_FILTER: &str = r#"
  AND NOT EXISTS (

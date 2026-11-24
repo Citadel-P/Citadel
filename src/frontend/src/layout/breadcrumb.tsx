@@ -32,7 +32,7 @@ export function useBreadcrumbItems() {
 
   const segments = useMemo(() => {
     const pathSegments = pathname.split('/').filter(Boolean);
-    return pathSegments.length === 0 ? ['platforms'] : pathSegments;
+    return pathSegments.length === 0 ? ['home'] : pathSegments;
   }, [pathname]);
 
   const { platformId, type, resourceId, id } = params;

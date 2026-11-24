@@ -1,3 +1,4 @@
+import { initialRuntimeTab } from '@/lib/monitoring-link';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { WorkloadNetworkAction } from '@/features/docker-resources/networks/workload-network-action';
 import { WorkloadHealthCard, WorkloadContainerHealthCard } from '@/features/workload-health/card';
@@ -430,7 +431,7 @@ const RuntimeTabs = ({
   const canInspect = liveAvailable && hasCapability(deployment, 'canInspect');
   const terminalDisabled = disabled || !hasCapability(deployment, 'canOpenTerminal');
   const defaultValue = canViewLogs ? 'logs' : canInspect ? 'inspect' : terminalDisabled ? 'stats' : 'terminal';
-  const [selected, setSelected] = useState(defaultValue);
+  const [selected, setSelected] = useState(() => initialRuntimeTab(defaultValue, canViewLogs));
   const allowed = { logs: canViewLogs, inspect: canInspect, terminal: !terminalDisabled, stats: true };
   const activeTab = allowed[selected as keyof typeof allowed] ? selected : defaultValue;
 

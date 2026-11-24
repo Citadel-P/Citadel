@@ -750,6 +750,11 @@ export enum DashboardVisibility {
   Restricted = "Restricted",
 }
 
+export enum DashboardSharingMode {
+  InstanceShared = "InstanceShared",
+  Restricted = "Restricted",
+}
+
 export enum DashboardMetric {
   Cpu = "Cpu",
   Memory = "Memory",
@@ -3170,6 +3175,20 @@ export type DashboardMetricSource =
 export interface DashboardNoteLink {
   href: string;
   label: string;
+}
+
+export interface DashboardSourceView {
+  /** @format uuid */
+  containerProjectionId?: string | null;
+  dockerServiceId?: string | null;
+  exceedsChartSeriesLimit: boolean;
+  /** @format uuid */
+  id: string;
+  matchesTags: boolean;
+  name: string;
+  /** @format uuid */
+  platformId?: string | null;
+  status: string;
 }
 
 export interface DashboardSummaryView {
@@ -6779,6 +6798,16 @@ export interface ReadinessResponse {
   status: string;
 }
 
+export interface RecentActivityView {
+  /** @format date-time */
+  createdAt: string;
+  eventType: ActivityEventType;
+  /** @format uuid */
+  id: string;
+  resourceName: string;
+  status: ActivityStatus;
+}
+
 export interface RecreateStackOnNewCommitState {
   currentCommitSha: string;
   /** @format date-time */
@@ -7851,6 +7880,12 @@ export interface ServiceStatistics {
   /** @format date-time */
   oldestSampleAt?: string | null;
   stats: ContainerStatSnapshot[];
+}
+
+export interface SetDashboardVisibility {
+  /** @format int64 */
+  revision: number;
+  visibility: DashboardSharingMode;
 }
 
 export interface SetupStatusView {
@@ -9826,6 +9861,45 @@ export class Api<
      * No description
      *
      * @tags Activities
+     * @name ListRecentActivities
+     * @summary List recent authorized activity summaries
+     * @request GET:/api/v1/activities/recent
+     * @secure
+     * @response `200` `(RecentActivityView)[]` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    listRecentActivities: (
+      query?: {
+        /** Repeat to match all tag names on the readable event owner. */
+        tags?: string[];
+        eventType?: ActivityEventType;
+        /**
+         * @format int32
+         * @min 1
+         * @max 10
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<RecentActivityView[], ProblemDetails>({
+        path: `/api/v1/activities/recent`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Activities
      * @name GetActivity
      * @summary Get an authorized activity
      * @request GET:/api/v1/activities/{id}
@@ -9924,6 +9998,8 @@ export class Api<
      */
     listAlertEvents: (
       query?: {
+        /** Repeat to match all tag names on the readable event owner. */
+        tags?: string[];
         /** @format uuid */
         ResourceId?: string;
         AlertType?: string;
@@ -13208,6 +13284,47 @@ export class Api<
      * No description
      *
      * @tags Dashboards
+     * @name ListDashboardSources
+     * @summary Find readable monitoring sources and check pinned resource tag membership
+     * @request GET:/api/v1/dashboards/sources
+     * @secure
+     * @response `200` `(DashboardSourceView)[]` Bounded resource metadata
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    listDashboardSources: (
+      query: {
+        kind: string;
+        search?: string;
+        /** Comma-separated pinned resource IDs of the selected kind. */
+        ids?: string;
+        /**
+         * @format int32
+         * @min 0
+         */
+        limit?: number;
+        /** Match all resource tag names */
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<DashboardSourceView[], ProblemDetails>({
+        path: `/api/v1/dashboards/sources`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
      * @name DeleteDashboard
      * @summary Delete a saved dashboard
      * @request DELETE:/api/v1/dashboards/{id}
@@ -13288,6 +13405,39 @@ export class Api<
     ) =>
       this.request<SavedDashboardView, ProblemDetails>({
         path: `/api/v1/dashboards/${id}`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
+     * @name SetDashboardVisibility
+     * @summary Change a dashboard’s sharing mode
+     * @request PUT:/api/v1/dashboards/{id}/visibility
+     * @secure
+     * @response `200` `DashboardSummaryView` Saved
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    setDashboardVisibility: (
+      id: string,
+      data: SetDashboardVisibility,
+      params: RequestParams = {},
+    ) =>
+      this.request<DashboardSummaryView, ProblemDetails>({
+        path: `/api/v1/dashboards/${id}/visibility`,
         method: "PUT",
         body: data,
         secure: true,
@@ -15354,6 +15504,43 @@ export class Api<
     ) =>
       this.request<SchedulePurposeCount[], ProblemDetails>({
         path: `/api/v1/instance/schedules/groups`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name GetUpcomingSchedules
+     * @summary Next enabled resource schedule occurrences (administrator)
+     * @request GET:/api/v1/instance/schedules/upcoming
+     * @secure
+     * @response `200` `SchedulePage` Ordered upcoming occurrences
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getUpcomingSchedules: (
+      query?: {
+        /**
+         * @format int32
+         * @min 0
+         */
+        limit?: number | null;
+        /** Match all owner tag names */
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<SchedulePage, ProblemDetails>({
+        path: `/api/v1/instance/schedules/upcoming`,
         method: "GET",
         query: query,
         secure: true,

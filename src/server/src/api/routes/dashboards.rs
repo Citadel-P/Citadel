@@ -30,6 +30,7 @@ impl From<DashboardError> for ApiError {
             DashboardError::Invalid(message) => Self::Validation(message),
             DashboardError::Unavailable => Self::NotFound,
             DashboardError::Forbidden => Self::Forbidden,
+            DashboardError::CustomAccessRequired => Self::LicenseRequired("custom-access-control"),
             DashboardError::Conflict => Self::Conflict(error.to_string()),
             DashboardError::Storage(message) => Self::Storage(message),
         }
@@ -53,10 +54,12 @@ pub fn router(state: DashboardsHttpState) -> Router {
 
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<DashboardsHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(sources))
         .normalized_routes(utoipa_axum::routes!(list))
         .normalized_routes(utoipa_axum::routes!(get))
         .normalized_routes(utoipa_axum::routes!(create))
         .normalized_routes(utoipa_axum::routes!(update))
+        .normalized_routes(utoipa_axum::routes!(set_visibility))
         .normalized_routes(utoipa_axum::routes!(delete))
         .normalized_routes(utoipa_axum::routes!(get_default))
         .normalized_routes(utoipa_axum::routes!(set_personal_default))
@@ -181,6 +184,39 @@ async fn update(
     ))
 }
 
+#[utoipa::path(put, path = "/api/v1/dashboards/{id}/visibility", operation_id = "setDashboardVisibility", tag = "Dashboards", summary = "Change a dashboard’s sharing mode",
+    params(("id" = Uuid, Path)), request_body = SetDashboardVisibility,
+    responses((status = 200, description = "Saved", body = DashboardSummaryView, content_type = "application/json"), crate::openapi::errors::ResourceMutationErrors),
+    security(("Bearer" = [])), extensions(("x-citadel-principal" = json!("administrator")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn set_visibility(
+    State(state): State<DashboardsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    ApiPath(id): ApiPath<Uuid>,
+    ValidatedJson(input): ValidatedJson<SetDashboardVisibility>,
+) -> HttpResult {
+    let actor = viewer(principal, &headers)?;
+    if !actor.administrator {
+        return api_result(Err(ApiError::Forbidden), &headers);
+    }
+    let custom_access = input.visibility == citadel_dashboards::DashboardSharingMode::Restricted
+        && api_result(
+            state.entitlements.custom_access_control_enabled().await,
+            &headers,
+        )?;
+    let board = api_result(
+        state
+            .dashboards
+            .set_visibility(actor, id, input.revision, input.visibility, custom_access)
+            .await,
+        &headers,
+    )?;
+    Ok(no_store(
+        Json(DashboardSummaryView::from(board)).into_response(),
+    ))
+}
+
 #[utoipa::path(delete, path = "/api/v1/dashboards/{id}", operation_id = "deleteDashboard", tag = "Dashboards", summary = "Delete a saved dashboard",
     params(("id" = Uuid, Path), DashboardRevision),
     responses((status = 204, description = "Saved"), crate::openapi::errors::ResourceMutationErrors), security(("Bearer" = [])),
@@ -259,4 +295,62 @@ async fn set_instance_default(
         &headers,
     )?;
     Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+#[utoipa::path(get, path="/api/v1/dashboards/sources", operation_id="listDashboardSources", tag="Dashboards",
+    summary="Find readable monitoring sources and check pinned resource tag membership",
+    params(DashboardSourceQuery, ("tags"=Option<Vec<String>>, Query, description="Match all resource tag names")),
+    responses((status=200,description="Bounded resource metadata",body=Vec<DashboardSourceView>),crate::openapi::errors::AccessErrors),
+    security(("Bearer"=[])), extensions(("x-citadel-principal"=json!("human")),("x-citadel-public"=json!(false)),("x-citadel-setup-exempt"=json!(false))))]
+async fn sources(
+    State(state): State<DashboardsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    ApiQuery(query): ApiQuery<DashboardSourceQuery>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> HttpResult {
+    let actor = viewer(principal, &headers)?;
+    let tags = api_result(
+        crate::api::request_validation::parse_tag_filters(raw.as_deref()),
+        &headers,
+    )?;
+    let ids = query
+        .ids
+        .as_deref()
+        .into_iter()
+        .flat_map(|ids| ids.split(','))
+        .take(9)
+        .map(Uuid::parse_str)
+        .collect::<Result<Vec<_>, _>>();
+    let ids = api_result(
+        ids.map_err(|_| ApiError::Validation("Invalid pinned resource ID.".into())),
+        &headers,
+    )?;
+    let search = query.search.unwrap_or_default();
+    let limit = query.limit.unwrap_or(10);
+    if ids.len() > 8 || search.chars().count() > 128 || !(1..=25).contains(&limit) {
+        return api_result(
+            Err(ApiError::Validation(
+                "Search up to 128 characters, select up to eight IDs, and request 1–25 results."
+                    .into(),
+            )),
+            &headers,
+        );
+    }
+    let filter = citadel_dashboards::SourceFilter {
+        kind: query.kind,
+        search,
+        ids,
+        tags,
+        limit: i64::from(limit),
+    };
+    let rows = api_result(state.dashboards.sources(actor, filter).await, &headers)?;
+    Ok(no_store(
+        Json(
+            rows.into_iter()
+                .map(DashboardSourceView::from)
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
+    ))
 }

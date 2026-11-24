@@ -1,0 +1,14 @@
+.dashboard-editor-grid .react-grid-placeholder {
+  display: grid;
+  place-content: center;
+  background: var(--muted);
+  color: var(--foreground);
+  border: 1px dashed var(--primary);
+  opacity: .85;
+}
+.dashboard-editor-grid .react-grid-placeholder::after {
+  content: var(--dashboard-ghost);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-editor-grid .react-grid-item { transition: none; }
+}

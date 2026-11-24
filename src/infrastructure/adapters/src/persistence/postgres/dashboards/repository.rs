@@ -1,6 +1,6 @@
 use citadel_dashboards::{
-    DashboardContent, DashboardError as Error, DashboardRepository, DashboardSummary,
-    DashboardViewer, DashboardVisibility, SavedDashboard,
+    DashboardContent, DashboardError as Error, DashboardRepository, DashboardSharingMode,
+    DashboardSummary, DashboardViewer, DashboardVisibility, SavedDashboard,
 };
 use futures_util::future::BoxFuture;
 use sqlx::{PgConnection, PgPool, Row, postgres::PgRow};
@@ -25,6 +25,14 @@ impl PostgresDashboardRepository {
 
 fn storage(error: sqlx::Error) -> Error {
     Error::Storage(error.to_string())
+}
+
+fn visibility_name(visibility: DashboardVisibility) -> &'static str {
+    match visibility {
+        DashboardVisibility::Private => "Private",
+        DashboardVisibility::InstanceShared => "InstanceShared",
+        DashboardVisibility::Restricted => "Restricted",
+    }
 }
 
 fn summary(row: &PgRow) -> Result<DashboardSummary, Error> {
@@ -77,6 +85,13 @@ async fn read(
 }
 
 impl DashboardRepository for PostgresDashboardRepository {
+    fn sources(
+        &self,
+        viewer: DashboardViewer,
+        filter: citadel_dashboards::SourceFilter,
+    ) -> ResultFuture<'_, Vec<citadel_dashboards::DashboardSource>> {
+        Box::pin(super::sources::read(&self.pool, viewer, filter))
+    }
     fn list<'a>(
         &'a self,
         viewer: DashboardViewer,
@@ -123,11 +138,7 @@ impl DashboardRepository for PostgresDashboardRepository {
             if visibility != DashboardVisibility::Private && !viewer.administrator {
                 return Err(Error::Forbidden);
             }
-            let mode = match visibility {
-                DashboardVisibility::Private => "Private",
-                DashboardVisibility::InstanceShared => "InstanceShared",
-                DashboardVisibility::Restricted => "Restricted",
-            };
+            let mode = visibility_name(visibility);
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let config = serde_json::to_value(content.configuration)
                 .map_err(|e| Error::Invalid(e.to_string()))?;
@@ -189,6 +200,52 @@ impl DashboardRepository for PostgresDashboardRepository {
             let saved = read(&mut tx, viewer, id, false).await?;
             tx.commit().await.map_err(storage)?;
             Ok(saved)
+        })
+    }
+    fn set_visibility(
+        &self,
+        viewer: DashboardViewer,
+        id: Uuid,
+        revision: i64,
+        mode: DashboardSharingMode,
+        custom_access: bool,
+    ) -> ResultFuture<'_, DashboardSummary> {
+        Box::pin(async move {
+            if !viewer.administrator {
+                return Err(Error::Forbidden);
+            }
+            let mut tx = self.pool.begin().await.map_err(storage)?;
+            let row = sqlx::query(
+                "SELECT id,name,revision,visibility,true AS can_edit,true AS can_delete
+                FROM dashboards WHERE id=$1 AND (visibility<>'Private' OR owneractorid=$2)
+                AND EXISTS (SELECT FROM actors WHERE id=$2 AND isenabled) FOR UPDATE",
+            )
+            .bind(id)
+            .bind(viewer.actor.value())
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(storage)?
+            .ok_or(Error::Unavailable)?;
+            let mut board = summary(&row)?;
+            if board.visibility == DashboardVisibility::Private {
+                return Err(Error::Invalid(
+                    "Personal dashboards cannot change sharing mode.".into(),
+                ));
+            }
+            if board.revision != revision {
+                return Err(Error::Conflict);
+            }
+            let visibility = DashboardVisibility::from(mode);
+            if board.visibility != visibility {
+                if visibility == DashboardVisibility::Restricted && !custom_access {
+                    return Err(Error::CustomAccessRequired);
+                }
+                board.revision = sqlx::query_scalar("UPDATE dashboards SET visibility=$2, revision=revision+1, updatedat=now() WHERE id=$1 RETURNING revision")
+                    .bind(id).bind(visibility_name(visibility)).fetch_one(&mut *tx).await.map_err(storage)?;
+                board.visibility = visibility;
+            }
+            tx.commit().await.map_err(storage)?;
+            Ok(board)
         })
     }
     fn delete(&self, viewer: DashboardViewer, id: Uuid, revision: i64) -> ResultFuture<'_, ()> {

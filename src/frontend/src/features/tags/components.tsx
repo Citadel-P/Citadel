@@ -27,6 +27,23 @@ export const useResourceTagFilter = (active = true) => {
         : [],
     [active, searchParams],
   );
+  const filter = useResolvedTagFilter(tokens);
+
+  const setSelectedTagNames = (tagNames: string[]) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      for (const key of [...next.keys()]) if (key.toLowerCase() === TAG_QUERY_KEY) next.delete(key);
+      next.delete('page');
+      next.delete('cursor');
+      tagNames.forEach((tagName) => next.append(TAG_QUERY_KEY, tagName));
+      return next;
+    });
+  };
+
+  return { ...filter, setSelectedTagNames };
+};
+
+export const useResolvedTagFilter = (tokens: string[]) => {
   const resolution = useRead(
     'resolveTagFilter',
     { query: { tags: tokens } },
@@ -57,23 +74,22 @@ export const useResourceTagFilter = (active = true) => {
   }, [keys, selection, tokens]);
   const filterReady = !tokens.length || !!keys || resolution.isError;
 
-  const setSelectedTagNames = (tagNames: string[]) => {
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      for (const key of [...next.keys()]) if (key.toLowerCase() === TAG_QUERY_KEY) next.delete(key);
-      next.delete('page');
-      next.delete('cursor');
-      tagNames.forEach((tagName) => next.append(TAG_QUERY_KEY, tagName));
-      return next;
-    });
-  };
-
-  return { selectedTagNames, setSelectedTagNames, selection, filterReady };
+  return { selectedTagNames, selection, filterReady };
 };
 
 export const ResourceTagFilter = () => {
-  const [open, setOpen] = useState(false);
   const { selection, setSelectedTagNames } = useResourceTagFilter();
+  return <TagNameFilter selection={selection} setSelectedTagNames={setSelectedTagNames} />;
+};
+
+export const TagNameFilter = ({
+  selection,
+  setSelectedTagNames,
+}: {
+  selection: Map<string, string>;
+  setSelectedTagNames: (names: string[]) => void;
+}) => {
+  const [open, setOpen] = useState(false);
   const { data, isLoading } = useRead('listTags');
   const tags = useMemo(() => data?.data.tags ?? [], [data?.data.tags]);
   const availableTags = useMemo(() => tags.filter((tag) => !selection.has(tag.normalizedName)), [selection, tags]);

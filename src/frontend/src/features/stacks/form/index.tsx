@@ -1,3 +1,4 @@
+import { initialRuntimeTab } from '@/lib/monitoring-link';
 import { WorkloadNetworkAction } from '@/features/docker-resources/networks/workload-network-action';
 import { WorkloadHealthCard, WorkloadContainerHealthCard } from '@/features/workload-health/card';
 import { DuplicateWorkload } from '@/components/custom/resource-copies/duplicate-workload';
@@ -374,7 +375,7 @@ const SwarmStackRuntime = ({ stack }: { stack: StackView }) => {
         }}
       />
       {services.length > 0 && (
-        <Tabs defaultValue={defaultTab} className="w-full">
+        <Tabs defaultValue={initialRuntimeTab(defaultTab, canViewLogs)} className="w-full">
           <div className="flex min-w-0 items-center gap-2 border-b">
             <TabsList className="min-w-0 flex-1 overflow-x-auto border-0">
               <TabsTrigger value="logs" disabled={!canViewLogs}>
@@ -885,7 +886,7 @@ const StackRuntimeTabs = ({ stack, containers }: { stack: StackView; containers:
         : 'stats';
 
   return (
-    <Tabs defaultValue={defaultValue} className="w-full">
+    <Tabs defaultValue={initialRuntimeTab(defaultValue, canViewLogs)} className="w-full">
       <div className="flex min-w-0 items-center gap-2 border-b">
         <TabsList className="min-w-0 flex-1 overflow-x-auto border-0">
           <TabsTrigger value="logs" disabled={!canViewLogs}>

@@ -10,6 +10,22 @@ pub enum DashboardVisibility {
     Restricted,
 }
 
+/// Audiences an administrator can select for a non-private dashboard.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub enum DashboardSharingMode {
+    InstanceShared,
+    Restricted,
+}
+
+impl From<DashboardSharingMode> for DashboardVisibility {
+    fn from(mode: DashboardSharingMode) -> Self {
+        match mode {
+            DashboardSharingMode::InstanceShared => Self::InstanceShared,
+            DashboardSharingMode::Restricted => Self::Restricted,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct DashboardViewer {
     pub actor: ActorId,
@@ -50,6 +66,8 @@ pub enum DashboardError {
     Unavailable,
     #[error("You do not have permission to change this dashboard.")]
     Forbidden,
+    #[error("Restricted dashboards require custom access control.")]
+    CustomAccessRequired,
     #[error("This dashboard changed. Your edits are still available.")]
     Conflict,
     #[error("Dashboard storage failed: {0}")]

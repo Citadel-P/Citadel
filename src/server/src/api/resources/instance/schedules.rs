@@ -67,7 +67,11 @@ pub struct SchedulePage {
 }
 impl From<Vec<ScheduleDefinition>> for SchedulePage {
     fn from(rows: Vec<ScheduleDefinition>) -> Self {
-        let now = chrono::Utc::now();
+        Self::at(rows, chrono::Utc::now())
+    }
+}
+impl SchedulePage {
+    pub fn at(rows: Vec<ScheduleDefinition>, now: chrono::DateTime<chrono::Utc>) -> Self {
         let items = rows
             .into_iter()
             .map(|d| {

@@ -128,6 +128,59 @@ impl ActivityQueryStore for PostgresActivityStore {
         })
     }
 
+    fn recent_authorized<'a>(
+        &'a self,
+        principal: &'a ActivityAccess,
+        event_type: Option<ActivityEventType>,
+        limit: i32,
+        tags: &'a [String],
+    ) -> BoxFuture<'a, Result<Vec<citadel_activities::RecentActivity>, ActivityError>> {
+        Box::pin(async move {
+            let (owners, predicate) = if tags.is_empty() {
+                (String::new(), "")
+            } else {
+                (crate::persistence::postgres::authorization::tagged_event_owners("$8", "$5"),
+                 "WHERE (CASE WHEN resourcetype='Volume' THEN 'Platform' ELSE resourcetype END, resourceid)
+                     IN (SELECT kind,id FROM tagged_event_owners)")
+            };
+            let query = format!(
+                "{AUTHORIZED_ACTIVITY_CTES}{owners} SELECT id, resourcename, eventtype, status, createdat
+                FROM filtered_activities {predicate} ORDER BY createdat DESC, id DESC LIMIT $7"
+            );
+            let mut read = sqlx::query(AssertSqlSafe(query.as_str()))
+                .bind(principal.actor_id.value())
+                .bind(Option::<Uuid>::None)
+                .bind(event_type.map(|event| event.resource_type().as_database_str()))
+                .bind(event_type.map(|event| event.as_database_str()))
+                .bind(principal.administrator)
+                .bind(Option::<String>::None)
+                .bind(limit);
+            if !tags.is_empty() {
+                read = read.bind(tags);
+            }
+            let rows = read.fetch_all(&self.pool).await.map_err(activity_storage)?;
+            rows.into_iter()
+                .map(|row| {
+                    Ok(citadel_activities::RecentActivity {
+                        id: row.try_get("id").map_err(activity_storage)?,
+                        resource_name: row.try_get("resourcename").map_err(activity_storage)?,
+                        event_type: ActivityEventType::from_database_str(
+                            row.try_get("eventtype").map_err(activity_storage)?,
+                        )
+                        .ok_or_else(|| {
+                            ActivityError::Storage("Unknown activity event type.".into())
+                        })?,
+                        status: ActivityStatus::from_database_str(
+                            row.try_get("status").map_err(activity_storage)?,
+                        )
+                        .ok_or_else(|| ActivityError::Storage("Unknown activity status.".into()))?,
+                        created_at: row.try_get("createdat").map_err(activity_storage)?,
+                    })
+                })
+                .collect()
+        })
+    }
+
     fn list_authorized<'a>(
         &'a self,
         principal: &'a ActivityAccess,

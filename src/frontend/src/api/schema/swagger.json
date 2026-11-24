@@ -7610,6 +7610,61 @@
         ],
         "type": "object"
       },
+      "DashboardSharingMode": {
+        "enum": [
+          "InstanceShared",
+          "Restricted"
+        ],
+        "type": "string"
+      },
+      "DashboardSourceView": {
+        "properties": {
+          "containerProjectionId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dockerServiceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exceedsChartSeriesLimit": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "matchesTags": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "matchesTags",
+          "exceedsChartSeriesLimit"
+        ],
+        "type": "object"
+      },
       "DashboardSummaryView": {
         "properties": {
           "canDelete": {
@@ -21299,6 +21354,35 @@
         ],
         "type": "object"
       },
+      "RecentActivityView": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/ActivityEventType"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceName": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivityStatus"
+          }
+        },
+        "required": [
+          "id",
+          "resourceName",
+          "eventType",
+          "status",
+          "createdAt"
+        ],
+        "type": "object"
+      },
       "RecreateStackOnNewCommitState": {
         "properties": {
           "currentCommitSha": {
@@ -25370,6 +25454,23 @@
           "observedContainerProjectionIds",
           "missingDockerNodeIds",
           "stats"
+        ],
+        "type": "object"
+      },
+      "SetDashboardVisibility": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/DashboardSharingMode"
+          }
+        },
+        "required": [
+          "revision",
+          "visibility"
         ],
         "type": "object"
       },
@@ -32364,6 +32465,131 @@
         "x-citadel-setup-exempt": false
       }
     },
+    "/api/v1/activities/recent": {
+      "get": {
+        "operationId": "listRecentActivities",
+        "parameters": [
+          {
+            "description": "Repeat to match all tag names on the readable event owner.",
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "eventType",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ActivityEventType"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RecentActivityView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List recent authorized activity summaries",
+        "tags": [
+          "Activities"
+        ],
+        "x-citadel-principal": "actor",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
     "/api/v1/activities/{id}": {
       "get": {
         "operationId": "getActivity",
@@ -32708,6 +32934,18 @@
       "get": {
         "operationId": "listAlertEvents",
         "parameters": [
+          {
+            "description": "Repeat to match all tag names on the readable event owner.",
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
           {
             "in": "query",
             "name": "ResourceId",
@@ -45764,6 +46002,147 @@
         "x-citadel-setup-exempt": false
       }
     },
+    "/api/v1/dashboards/sources": {
+      "get": {
+        "operationId": "listDashboardSources",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated pinned resource IDs of the selected kind.",
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Match all resource tag names",
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DashboardSourceView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Bounded resource metadata"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Find readable monitoring sources and check pinned resource tag membership",
+        "tags": [
+          "Dashboards"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
     "/api/v1/dashboards/{id}": {
       "delete": {
         "operationId": "deleteDashboard",
@@ -46108,6 +46487,136 @@
           "Dashboards"
         ],
         "x-citadel-principal": "human",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/dashboards/{id}/visibility": {
+      "put": {
+        "operationId": "setDashboardVisibility",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDashboardVisibility"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummaryView"
+                }
+              }
+            },
+            "description": "Saved"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Change a dashboard’s sharing mode",
+        "tags": [
+          "Dashboards"
+        ],
+        "x-citadel-principal": "administrator",
         "x-citadel-public": false,
         "x-citadel-setup-exempt": false
       }
@@ -54245,6 +54754,122 @@
         ],
         "x-citadel-principal": "human",
         "x-citadel-public": false
+      }
+    },
+    "/api/v1/instance/schedules/upcoming": {
+      "get": {
+        "operationId": "getUpcomingSchedules",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Match all owner tag names",
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchedulePage"
+                }
+              }
+            },
+            "description": "Ordered upcoming occurrences"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Next enabled resource schedule occurrences (administrator)",
+        "tags": [
+          "Instance"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
       }
     },
     "/api/v1/license": {

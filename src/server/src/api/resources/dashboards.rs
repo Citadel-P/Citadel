@@ -107,3 +107,50 @@ pub struct DashboardListQuery {
 pub struct DashboardRevision {
     pub revision: i64,
 }
+
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetDashboardVisibility {
+    pub revision: i64,
+    #[schema(value_type = super::schema_models::dashboards::DashboardSharingModeSchema)]
+    pub visibility: citadel_dashboards::DashboardSharingMode,
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct DashboardSourceQuery {
+    #[param(value_type=String)]
+    pub kind: citadel_dashboards::SourceKind,
+    pub search: Option<String>,
+    /// Comma-separated pinned resource IDs of the selected kind.
+    pub ids: Option<String>,
+    pub limit: Option<u8>,
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardSourceView {
+    pub id: Uuid,
+    pub name: String,
+    pub status: String,
+    pub platform_id: Option<Uuid>,
+    pub container_projection_id: Option<Uuid>,
+    pub docker_service_id: Option<String>,
+    pub matches_tags: bool,
+    pub exceeds_chart_series_limit: bool,
+}
+
+impl From<citadel_dashboards::DashboardSource> for DashboardSourceView {
+    fn from(row: citadel_dashboards::DashboardSource) -> Self {
+        Self {
+            id: row.id,
+            name: row.name,
+            status: row.status,
+            platform_id: row.platform_id,
+            container_projection_id: row.container_projection_id,
+            docker_service_id: row.docker_service_id,
+            matches_tags: row.matches_tags,
+            exceeds_chart_series_limit: row.exceeds_chart_series_limit,
+        }
+    }
+}

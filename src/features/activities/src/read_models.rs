@@ -73,6 +73,15 @@ pub struct ActivityRecord {
 }
 
 #[derive(Debug, Clone)]
+pub struct RecentActivity {
+    pub id: Uuid,
+    pub resource_name: String,
+    pub event_type: ActivityEventType,
+    pub status: ActivityStatus,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
 pub struct PagedActivityRecords {
     pub items: Vec<ActivityRecord>,
     pub total_count: i64,

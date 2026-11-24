@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, RenderOptions } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PropsWithChildren, ReactElement } from 'react';
-import { MemoryRouter } from 'react-router';
+import { createMemoryRouter, MemoryRouter, RouterProvider, type RouteObject } from 'react-router';
 import { RealtimeProvider } from '@/lib/context/realtime-provider';
 import { ComponentProps } from 'react';
 import { SetupContext, SetupContextValue } from '@/features/setup/setup-context';
@@ -46,13 +46,24 @@ type RenderCitadelOptions = Omit<RenderOptions, 'wrapper'> & {
 };
 
 export function renderCitadel(ui: ReactElement, options: RenderCitadelOptions = {}) {
-  const { route = '/', auth, setup, queryClient = createQueryClient(), groups, ...renderOptions } = options;
+  const { route = '/', ...providers } = options;
+  return renderWithProviders(ui, providers, route);
+}
+
+export function renderCitadelRoutes(routes: RouteObject[], options: RenderCitadelOptions = {}) {
+  const { route = '/', ...providers } = options;
+  const router = createMemoryRouter(routes, { initialEntries: [route] });
+  return { ...renderWithProviders(<RouterProvider router={router} />, providers), router };
+}
+
+function renderWithProviders(ui: ReactElement, options: Omit<RenderCitadelOptions, 'route'>, route?: string) {
+  const { auth, setup, queryClient = createQueryClient(), groups, ...renderOptions } = options;
   const apiClient = createApiClient('http://localhost');
   const authValue = { ...defaultAuth, ...auth };
   const setupValue = { ...defaultSetup, ...setup };
 
-  const Wrapper = ({ children }: PropsWithChildren) => (
-    <MemoryRouter initialEntries={[route]}>
+  const Wrapper = ({ children }: PropsWithChildren) => {
+    const content = (
       <QueryClientProvider client={queryClient}>
         <ApiClientContext.Provider value={{ apiClient }}>
           <SetupContext.Provider value={setupValue}>
@@ -68,8 +79,9 @@ export function renderCitadel(ui: ReactElement, options: RenderCitadelOptions = 
           </SetupContext.Provider>
         </ApiClientContext.Provider>
       </QueryClientProvider>
-    </MemoryRouter>
-  );
+    );
+    return route === undefined ? content : <MemoryRouter initialEntries={[route]}>{content}</MemoryRouter>;
+  };
 
   return {
     user: userEvent.setup(),

@@ -1,28 +1,51 @@
 import { useMemo } from 'react';
-import { AlertEventStatus, AlertEventView } from '@/api/generated/api.types';
+import { AlertEventStatus, AlertEventView, type AlertResourceType } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
-import { useAlertEventQuery } from '@/lib/atoms';
-import { ResourceType } from '@/api/types';
+import { useAlertEventQuery, type AlertEventQueryState } from '@/lib/atoms';
 import { useAppContext } from '@/lib/context/app-context';
 
-export const useAlertEventsList = (resourceId?: string, resourceType?: ResourceType, pageSize?: number) => {
+export const useAlertEventsList = (resourceId?: string, resourceType?: AlertResourceType, pageSize?: number) => {
   const [query] = useAlertEventQuery();
-  const { liveAlertEvents, receivedAlertEventIds } = useAppContext();
+  const filters = useMemo(
+    () => ({
+      ...query,
+      resourceId: resourceId ?? query.resourceId,
+      resourceType: resourceType ?? query.resourceType,
+      pageSize: pageSize ?? query.pageSize,
+    }),
+    [query, resourceId, resourceType, pageSize],
+  );
+  return useAlertPage(filters);
+};
 
-  const { data, isLoading, error, refetch, isFetching } = useRead('listAlertEvents', {
-    query: {
-      Page: query.page,
-      PageSize: pageSize ?? query.pageSize,
-      ResourceType: (resourceType ?? query.resourceType === 'All') ? undefined : query.resourceType,
-      AlertType: query.alertType === 'All' ? undefined : query.alertType,
-      ResourceId: resourceId ?? query.resourceId,
-      UnresolvedOnly: query.unresolvedOnly,
+export const useAlertPage = (
+  query: AlertEventQueryState,
+  options?: { enabled: boolean; staleTime: number; refetchInterval?: number | false },
+  tags?: string[],
+) => {
+  const { liveAlertEvents, receivedAlertEventIds, alertFeedConnected } = useAppContext();
+
+  const { data, isLoading, error, refetch, isFetching } = useRead(
+    'listAlertEvents',
+    {
+      query: {
+        tags,
+        Page: query.page,
+        PageSize: query.pageSize,
+        ResourceType: query.resourceType === 'All' ? undefined : query.resourceType,
+        AlertType: query.alertType === 'All' ? undefined : query.alertType,
+        ResourceId: query.resourceId,
+        UnresolvedOnly: query.unresolvedOnly,
+      },
     },
-  });
+    options,
+  );
 
   const serverPagedAlertEvents = data?.data?.pagedResult;
 
   const pagedAlertEvents = useMemo(() => {
+    // Global notifications do not establish membership in a tagged page.
+    if (tags?.length || alertFeedConnected === false) return serverPagedAlertEvents;
     if (!serverPagedAlertEvents) return undefined;
 
     const pageSizeValue = Number(serverPagedAlertEvents.pageSize ?? 0) || serverPagedAlertEvents.items.length || 1;
@@ -30,8 +53,8 @@ export const useAlertEventsList = (resourceId?: string, resourceType?: ResourceT
     const seen = new Set<string>();
 
     const matchesFilters = (alertEvent: AlertEventView) => {
-      const targetResourceType = resourceType ?? query.resourceType;
-      const targetResourceId = resourceId ?? query.resourceId;
+      const targetResourceType = query.resourceType;
+      const targetResourceId = query.resourceId;
 
       if (targetResourceType !== 'All' && alertEvent.resourceType !== targetResourceType) return false;
       if (query.alertType !== 'All' && alertEvent.type !== query.alertType) return false;
@@ -77,7 +100,7 @@ export const useAlertEventsList = (resourceId?: string, resourceType?: ResourceT
         Number(serverPagedAlertEvents.totalCount ?? 0) - removedVisibleItems + addedReceivedItems,
       ),
     };
-  }, [serverPagedAlertEvents, receivedAlertEventIds, liveAlertEvents, resourceType, resourceId, query]);
+  }, [serverPagedAlertEvents, receivedAlertEventIds, liveAlertEvents, query, tags, alertFeedConnected]);
 
   return { error, refetch, isFetching, pagedAlertEvents, isLoading };
 };

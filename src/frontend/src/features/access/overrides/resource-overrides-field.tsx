@@ -74,7 +74,7 @@ type OverrideResourceConfig = {
   icon: ComponentType<{ className?: string }>;
   listQuery: KnownResourceName;
   readItems: (data: unknown) => ResourceItem[];
-  getEditPath: (resourceId: string) => string | null;
+  getEditPath: (resourceId: string) => string;
 };
 
 const DASHBOARD_PAGE_SIZE = 50;
@@ -112,7 +112,7 @@ export const OVERRIDE_RESOURCE_CONFIG = {
       ((data as DashboardList | undefined)?.dashboards ?? [])
         .slice(0, DASHBOARD_PAGE_SIZE)
         .filter((dashboard) => dashboard.visibility !== DashboardVisibility.Private),
-    getEditPath: () => null,
+    getEditPath: (resourceId) => `/dashboards/${resourceId}`,
   },
   [ResourceType.Platform]: {
     icon: CitadelIcons.Platform,
@@ -253,24 +253,12 @@ const ResourceLinkCell = ({
 }) => {
   const Icon = OVERRIDE_RESOURCE_CONFIG[resourceType].icon;
   const path = getResourceEditPath(resourceType, resourceId);
-  const content = (
-    <>
-      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="truncate">{resourceName}</span>
-    </>
-  );
-
   return (
     <TableCell>
-      {path ? (
-        <Link to={path} className="table-link flex gap-2 items-center max-w-48 sm:max-w-72" title={resourceName}>
-          {content}
-        </Link>
-      ) : (
-        <span className="flex gap-2 items-center max-w-48 sm:max-w-72" title={resourceName}>
-          {content}
-        </span>
-      )}
+      <Link to={path} className="table-link flex gap-2 items-center max-w-48 sm:max-w-72" title={resourceName}>
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="truncate">{resourceName}</span>
+      </Link>
     </TableCell>
   );
 };

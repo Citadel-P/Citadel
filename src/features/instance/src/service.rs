@@ -161,6 +161,34 @@ impl InstanceService {
             .ok_or_else(|| InstanceError::Conflict("Schedule catalog unavailable.".into()))
     }
 
+    pub async fn upcoming_schedules(
+        &self,
+        principal: &ActorPrincipal,
+        tags: &[String],
+        limit: u8,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<crate::ScheduleDefinition>, InstanceError> {
+        let reader = self.schedule_catalog(principal)?;
+        if !(1..=10).contains(&limit) {
+            return Err(InstanceError::Validation(
+                "Choose between one and ten schedules.".into(),
+            ));
+        }
+        let fixed = self
+            .schedule_deadlines
+            .read()
+            .expect("schedule deadlines")
+            .clone();
+        reader
+            .upcoming(
+                tags,
+                usize::from(limit),
+                now,
+                fixed,
+                &self.catalog_policy(false),
+            )
+            .await
+    }
     pub async fn schedules(
         &self,
         principal: &ActorPrincipal,

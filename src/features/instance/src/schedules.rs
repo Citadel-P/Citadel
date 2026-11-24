@@ -222,6 +222,20 @@ pub trait ScheduleReader: Send + Sync {
         limit: i64,
         policy: &'a ScheduleCatalogPolicy,
     ) -> BoxFuture<'a, Result<Vec<ScheduleDefinition>, InstanceError>>;
+    fn upcoming<'a>(
+        &'a self,
+        _tags: &'a [String],
+        _limit: usize,
+        _now: DateTime<Utc>,
+        _fixed: std::collections::BTreeMap<SchedulePurpose, DateTime<Utc>>,
+        _policy: &'a ScheduleCatalogPolicy,
+    ) -> BoxFuture<'a, Result<Vec<ScheduleDefinition>, InstanceError>> {
+        Box::pin(async {
+            Err(InstanceError::Conflict(
+                "Upcoming schedule projection unavailable.".into(),
+            ))
+        })
+    }
     fn discover(
         &self,
         purpose: SchedulePurpose,

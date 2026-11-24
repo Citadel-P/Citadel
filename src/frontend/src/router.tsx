@@ -1,8 +1,8 @@
-import { BrowserRouter, Routes, Route } from 'react-router';
+import { createRoutesFromElements, Outlet, Route } from 'react-router';
 import Layout from '@/layout/layout';
 import NotFound from '@/pages/not-found';
-import Loader from './components/ui/loader';
 import { lazy, Suspense } from 'react';
+import Loader from './components/ui/loader';
 import { RequireAuth, RequireNoAuth } from './features/auth/auth-route-guards';
 import { RequireSetup, RequireSetupComplete } from './features/setup/setup-route-guards';
 import { ResourceForm } from '@/pages/resource-form';
@@ -15,51 +15,53 @@ const Login = lazy(() => import('@/features/auth/login'));
 const MfaVerify = lazy(() => import('@/features/auth/mfa/verify'));
 const MandatoryMfaSetup = lazy(() => import('@/features/auth/mfa/mandatory-setup'));
 const Profile = lazy(() => import('@/features/profile'));
+const DashboardHome = lazy(() => import('./features/dashboards/home'));
+const Dashboard = lazy(() => import('./features/dashboards/board'));
 const License = lazy(() => import('@/features/license'));
 const InitialSetup = lazy(() => import('@/features/setup'));
 
-export const Router = () => {
-  return (
-    <Suspense fallback={<Loader />}>
-      <BrowserRouter>
-        <Routes>
-          <Route element={<RequireSetup />}>
-            <Route path="setup" element={<InitialSetup />} />
+export const appRoutes = createRoutesFromElements(
+  <Route
+    element={
+      <Suspense fallback={<Loader />}>
+        <Outlet />
+      </Suspense>
+    }>
+    <Route element={<RequireSetup />}>
+      <Route path="setup" element={<InitialSetup />} />
+    </Route>
+
+    <Route element={<RequireSetupComplete />}>
+      <Route element={<RequireNoAuth />}>
+        <Route path="login" element={<Login />} />
+        <Route path="login/mfa" element={<MfaVerify />} />
+        <Route path="login/mfa/setup" element={<MandatoryMfaSetup />} />
+      </Route>
+
+      <Route element={<RequireAuth />}>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<DashboardHome />} />
+          <Route path="dashboards/:id" element={<Dashboard />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="license" element={<License />} />
+          <Route path=":type/edit/:id" element={<ResourceForm mode="edit" />} />
+          <Route path=":type/:tab/edit/:id" element={<ResourceForm mode="edit" />} />
+
+          <Route path="platforms">
+            <Route index element={<Resources />} />
+            <Route path=":platformId/:type/edit/:id" element={<ResourceForm mode="edit" />} />
+            <Route path=":platformId/:type/add" element={<ResourceForm mode="add" />} />
+            <Route path=":platformId/:type/:resourceId?" element={<PlatformResource />} />
           </Route>
 
-          <Route element={<RequireSetupComplete />}>
-            <Route element={<RequireNoAuth />}>
-              <Route path="login" element={<Login />} />
-              <Route path="login/mfa" element={<MfaVerify />} />
-              <Route path="login/mfa/setup" element={<MandatoryMfaSetup />} />
-            </Route>
+          <Route path=":type" element={<Resources />} />
+          <Route path=":type/:tab" element={<Resources />} />
+          <Route path=":type/add" element={<ResourceForm mode="add" />} />
+          <Route path=":type/:tab/add" element={<ResourceForm mode="add" />} />
 
-            <Route element={<RequireAuth />}>
-              <Route path="/" element={<Layout />}>
-                <Route index element={<Resources />} />
-                <Route path="profile" element={<Profile />} />
-                <Route path="license" element={<License />} />
-                <Route path=":type/edit/:id" element={<ResourceForm mode="edit" />} />
-                <Route path=":type/:tab/edit/:id" element={<ResourceForm mode="edit" />} />
-
-                <Route path="platforms">
-                  <Route index element={<Resources />} />
-                  <Route path=":platformId/:type/edit/:id" element={<ResourceForm mode="edit" />} />
-                  <Route path=":platformId/:type/add" element={<ResourceForm mode="add" />} />
-                  <Route path=":platformId/:type/:resourceId?" element={<PlatformResource />} />
-                </Route>
-
-                <Route path=":type" element={<Resources />} />
-                <Route path=":type/:tab" element={<Resources />} />
-                <Route path=":type/add" element={<ResourceForm mode="add" />} />
-                <Route path=":type/:tab/add" element={<ResourceForm mode="add" />} />
-
-                <Route path="*" element={<NotFound />} />
-              </Route>
-            </Route>
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </Suspense>
-  );
-};
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Route>
+    </Route>
+  </Route>,
+);

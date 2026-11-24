@@ -31,7 +31,7 @@ const MenuItems: IMenuItem[] = [
   {
     group: 'Infrastructure',
     items: [
-      { icon: renderIcon(CitadelIcons.Platform), label: 'Platforms', route: '/' },
+      { icon: renderIcon(CitadelIcons.Platform), label: 'Platforms', route: '/platforms' },
       { icon: renderIcon(CitadelIcons.BackupPolicy), label: 'Backups', route: '/backup-policies' },
     ],
   },
@@ -64,6 +64,7 @@ const MenuItems: IMenuItem[] = [
   {
     group: 'Monitoring',
     items: [
+      { icon: renderIcon(CitadelIcons.Dashboard), label: 'Dashboards', route: '/dashboards' },
       { icon: renderIcon(CitadelIcons.Alert), label: 'Alerts', route: '/alerts' },
       { icon: renderIcon(CitadelIcons.Activity), label: 'Activities', route: '/activities' },
     ],

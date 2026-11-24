@@ -1,3 +1,4 @@
+import { reconcileTaggedEventPages } from '../collection-scope';
 import {
   GROUP_CAPACITY_ERROR,
   RealtimeConnection,
@@ -62,6 +63,12 @@ const liveBackedQueryKeys = new Set([
   'getStackStats',
   'getStackDrift',
   'listActivities',
+  'listRecentActivities',
+  'getDashboard',
+  'getDashboardDefault',
+  'getCurrentProfile',
+  'listDashboardSources',
+  'getUpcomingSchedules',
   'listAlertEvents',
   'listScripts',
   'listBackupPolicies',
@@ -238,6 +245,10 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
 
       conn.on('TagCatalogChanged', () => {
         void queryClient.invalidateQueries({ queryKey: ['listTags'] });
+        void reconcileTaggedEventPages(queryClient, 'listAlertEvents');
+        void reconcileTaggedEventPages(queryClient, 'listRecentActivities');
+        void reconcileTaggedEventPages(queryClient, 'listDashboardSources');
+        void reconcileTaggedEventPages(queryClient, 'getUpcomingSchedules');
       });
 
       conn.on('LicenseStateChanged', () => {

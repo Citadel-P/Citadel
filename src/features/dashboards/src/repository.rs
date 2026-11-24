@@ -1,6 +1,6 @@
 use crate::{
-    DashboardContent, DashboardError, DashboardSummary, DashboardViewer, DashboardVisibility,
-    SavedDashboard,
+    DashboardContent, DashboardError, DashboardSharingMode, DashboardSummary, DashboardViewer,
+    DashboardVisibility, SavedDashboard,
 };
 use futures_util::future::BoxFuture;
 use uuid::Uuid;
@@ -8,6 +8,11 @@ use uuid::Uuid;
 type ResultFuture<'a, T> = BoxFuture<'a, Result<T, DashboardError>>;
 
 pub trait DashboardRepository: Send + Sync {
+    fn sources(
+        &self,
+        viewer: DashboardViewer,
+        filter: crate::SourceFilter,
+    ) -> ResultFuture<'_, Vec<crate::DashboardSource>>;
     fn list<'a>(
         &'a self,
         viewer: DashboardViewer,
@@ -31,6 +36,14 @@ pub trait DashboardRepository: Send + Sync {
         content: DashboardContent,
     ) -> ResultFuture<'_, SavedDashboard>;
     fn delete(&self, viewer: DashboardViewer, id: Uuid, revision: i64) -> ResultFuture<'_, ()>;
+    fn set_visibility(
+        &self,
+        viewer: DashboardViewer,
+        id: Uuid,
+        revision: i64,
+        mode: DashboardSharingMode,
+        custom_access: bool,
+    ) -> ResultFuture<'_, DashboardSummary>;
     fn default_for(&self, viewer: DashboardViewer) -> ResultFuture<'_, Option<Uuid>>;
     fn set_default(
         &self,

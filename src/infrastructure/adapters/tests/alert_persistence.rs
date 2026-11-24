@@ -17,6 +17,9 @@ use uuid::Uuid;
 #[path = "alert_persistence/update_resolution.rs"]
 mod update_resolution;
 
+#[path = "alert_persistence/tag_filter.rs"]
+mod tag_filter;
+
 #[tokio::test]
 #[ignore = "requires CITADEL_EXECUTION_DATABASE_URL"]
 async fn durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure() {

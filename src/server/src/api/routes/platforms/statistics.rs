@@ -24,7 +24,11 @@ pub(super) fn window(
 }
 
 pub(super) fn storage(error: RuntimeCapabilityError) -> ApiError {
-    ApiError::internal(error)
+    if error.kind == citadel_platforms::RuntimeErrorKind::ResourceExhausted {
+        ApiError::Runtime(error)
+    } else {
+        ApiError::internal(error)
+    }
 }
 
 #[utoipa::path(
@@ -443,4 +447,22 @@ pub(super) async fn workload(
         })
         .collect();
     Ok(no_store(Json(StackHistory { services }).into_response()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn history_contention_returns_retryable_capacity_status() {
+        let error = RuntimeCapabilityError::new(
+            citadel_platforms::RuntimeErrorKind::ResourceExhausted,
+            "History is busy; retry shortly.",
+            true,
+        );
+        assert_eq!(
+            crate::api::error::error_response(storage(error), &HeaderMap::new()).status(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+    }
 }

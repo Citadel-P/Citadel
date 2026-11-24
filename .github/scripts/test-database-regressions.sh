@@ -86,7 +86,8 @@ docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_resource_
 )
 # These ignored fixtures exercise real completion transactions and fault injection.
 for selection in \
-  'dashboards_http dashboard_visibility_revisions_and_defaults_follow_the_viewer' \
+  'activities_http recent_activity_filters_before_limit_for_a_seeded_viewer' \
+  'dashboards_http dashboard_sharing_enforces_visibility_revision_and_entitlement dashboard_visibility_revisions_and_defaults_follow_the_viewer widget_sources_enforce_access_and_upcoming_orders_enabled_schedules' \
   'swarm_services_http managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle' \
   'swarm_service_persistence authoritative_swarm_observation_completes_or_fails_operations_once' \
   'resources_http metadata_endpoints_enforce_authorization_and_persist_complete_lifecycles' \
@@ -96,8 +97,9 @@ for selection in \
   'script_execution script_claim_is_exclusive_and_interrupted_runs_recover' \
   'build_execution build_runs_claim_once_persist_results_cancel_and_recover' \
   'backup_execution backup_claims_are_repository_exclusive_and_late_results_do_not_overwrite_recovery' \
-  'alert_persistence durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure'; do
-  read -r target test_name <<< "$selection"
+  'alert_persistence durable_observation_recovers_missed_wakes_and_does_not_evaluate_twice_after_ack_failure tag_filter::tagged_alerts_require_both_grants_before_pagination'; do
+  read -r -a cases <<< "$selection"
+  target=${cases[0]}
   # Recovery and receipt consumption inspect shared queues; each fixture
   # gets a fresh execution database, separate from authorization tests.
   docker exec "$container" createdb -h 127.0.0.1 -U citadel_test "citadel_$target"
@@ -111,8 +113,10 @@ for selection in \
     if [[ "$target" == swarm_services_http ]]; then
       docker exec "$container" psql -h 127.0.0.1 -U citadel_test -d "citadel_$target" -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION pg_stat_statements'
     fi
-    run_cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
-    run_cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --test-threads=1
+    for test_name in "${cases[@]:1}"; do
+      run_cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
+      run_cargo test --locked --workspace --test "$target" "$test_name" -- --ignored --exact --test-threads=1
+    done
   )
 done
 docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_git_execution

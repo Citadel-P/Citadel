@@ -1,0 +1,337 @@
+import { monitoringLink } from '@/lib/monitoring-link';
+import { useContext, useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
+import { Link } from 'react-router';
+import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import type {
+  ContainerStatView,
+  DashboardWidget,
+  DashboardMetricSource,
+  DashboardSourceView,
+} from '@/api/generated/api.types';
+import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
+import { filterStatsRange, statsBucketSeconds, resolveStatsRange, statsRangeQuery } from '@/lib/stats-range';
+import { requestErrorStatus } from '@/lib/request-error';
+import { useRead } from '@/lib/hooks';
+import { useTaskStatsStream } from '@/features/swarm-resources/tasks/hooks/useTaskStats';
+import { useServiceStatsStream } from '@/features/swarm-resources/services/hooks/useServiceStats';
+import { usePlatformLiveStats } from '@/features/platforms/platform-series';
+import { useRealtimeContext } from '@/lib/context/realtime-context';
+import { RangeClock } from './range-clock';
+import { useStackSeries } from './stack-series';
+import { useAppContext } from '@/lib/context/app-context';
+import { latestLiveStat, mergeStatsBuckets } from '@/lib/stats-buckets';
+import { sourcePath } from './source-path';
+import { Timestamp } from '@/components/custom/timestamp';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import { Tile } from './tile';
+
+export type MetricTile = DashboardWidget & { settings: Extract<DashboardWidget['settings'], { kind: 'Metrics' }> };
+type Sample = { created: number } & Partial<
+  Record<
+    | 'cpuUsage'
+    | 'memoryActive'
+    | 'memoryUsage'
+    | 'rxBytesPerSecond'
+    | 'txBytesPerSecond'
+    | 'blockReadBytesPerSecond'
+    | 'blockWriteBytesPerSecond',
+    number | null
+  >
+>;
+const emptyIds: string[] = [];
+const emptyStats: ContainerStatView[] = [];
+type Series = { name: string; stats: Sample[] };
+const colors = {
+  Blue: 'var(--chart-1)',
+  Green: 'var(--chart-2)',
+  Amber: 'var(--chart-3)',
+  Violet: 'var(--chart-4)',
+  Cyan: 'var(--chart-5)',
+};
+function Chart({
+  tile,
+  series,
+  platform,
+  minutes,
+  now,
+}: {
+  now: number;
+  tile: MetricTile;
+  series: Series;
+  platform: boolean;
+  minutes: number;
+}) {
+  const frame = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!frame.current) return;
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+    observer.observe(frame.current);
+    return () => observer.disconnect();
+  }, []);
+  const { metric, legend, color, presentation } = tile.settings;
+  const bounds = resolveStatsRange({ kind: 'relative', minutes }, now);
+  const data = series.stats;
+  const keys =
+    metric === 'Cpu'
+      ? ['cpuUsage']
+      : metric === 'Memory'
+        ? [platform ? 'memoryUsage' : 'memoryActive']
+        : metric === 'Network'
+          ? ['rxBytesPerSecond', 'txBytesPerSecond']
+          : ['blockReadBytesPerSecond', 'blockWriteBytesPerSecond'];
+  const labels: Record<string, string> = {
+    cpuUsage: 'CPU',
+    memoryUsage: 'Memory',
+    memoryActive: 'Working set',
+    rxBytesPerSecond: 'Receive',
+    txBytesPerSecond: 'Send',
+    blockReadBytesPerSecond: 'Read',
+    blockWriteBytesPerSecond: 'Write',
+  };
+  const unit =
+    metric === 'Cpu' || (platform && metric === 'Memory')
+      ? 'percent'
+      : metric === 'Memory'
+        ? 'bytes'
+        : 'bytesPerSecond';
+  const measured = data.some((s) => keys.some((k) => s[k as keyof Sample] != null));
+  return (
+    <div ref={frame} className="min-h-[145px] min-w-0 flex-1">
+      {series.name && <p className="text-xs">{series.name}</p>}
+      {!measured ? (
+        <p>No measurements in this range.</p>
+      ) : (
+        visible && (
+          <ResponsiveContainer width="100%" height={145} minWidth={0}>
+            <ComposedChart data={data}>
+              <CartesianGrid vertical={false} stroke="var(--border)" />
+              <XAxis
+                dataKey="created"
+                type="number"
+                domain={[bounds.from, bounds.to]}
+                tick={{ fontSize: 10 }}
+                tickFormatter={(v) => new Date(v * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              />
+              <YAxis {...statsValueAxis(unit)} />
+              <Tooltip labelFormatter={(v) => new Date(Number(v) * 1000).toLocaleString()} />
+              {legend && <Legend />}
+              {keys.map((k, i) =>
+                presentation === 'Area' ? (
+                  <Area
+                    key={k}
+                    dataKey={k}
+                    name={labels[k]}
+                    stroke={colors[color]}
+                    strokeDasharray={i ? '4 3' : undefined}
+                    fill={colors[color]}
+                    fillOpacity={0.12}
+                    isAnimationActive={false}
+                  />
+                ) : (
+                  <Line
+                    key={k}
+                    dataKey={k}
+                    name={labels[k]}
+                    stroke={colors[color]}
+                    strokeDasharray={i ? '4 3' : undefined}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                ),
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        )
+      )}
+    </div>
+  );
+}
+
+function useChartSeries(
+  baseStats: readonly Sample[] | undefined,
+  live: readonly Sample[],
+  seconds: number,
+  stackSeries: Series[] | undefined,
+  minutes: number,
+  now: number,
+) {
+  const series = useMemo(
+    () =>
+      stackSeries
+        ? stackSeries
+        : baseStats
+          ? [{ name: '', stats: mergeStatsBuckets<Sample>(baseStats, live, seconds) }]
+          : undefined,
+    [baseStats, live, seconds, stackSeries],
+  );
+  const visibleSeries = useMemo(() => {
+    const bounds = resolveStatsRange({ kind: 'relative', minutes }, now);
+    return series?.map((s) => ({ name: s.name, stats: statsChartData(filterStatsRange(s.stats, bounds), bounds) }));
+  }, [series, now, minutes]);
+  return { series, visibleSeries };
+}
+
+export function MetricHistory({
+  tiles,
+  source,
+  row,
+  minutes,
+  interval,
+  manual,
+}: {
+  tiles: MetricTile[];
+  source: DashboardMetricSource;
+  row: DashboardSourceView;
+  minutes: number;
+  interval: number | false;
+  manual: boolean;
+}) {
+  const app = useAppContext();
+  const canReadPlatform = app.platforms?.some((p) => p.id === row.platformId) === true;
+  const query = statsRangeQuery({ kind: 'relative', minutes }, resolveStatsRange({ kind: 'relative', minutes }));
+  const seconds = statsBucketSeconds(resolveStatsRange({ kind: 'relative', minutes }));
+  const platformSource =
+    !manual && source.kind === 'Platform' ? app.platforms?.find((p) => p.id === source.id) : undefined;
+  const platformLive = usePlatformLiveStats(platformSource, seconds, minutes * 60);
+  const allowedPlatform = !manual && canReadPlatform ? (row.platformId ?? '') : '';
+  const taskLive = useTaskStatsStream(
+    source.kind === 'Container' || source.kind === 'Deployment' ? allowedPlatform : '',
+    source.kind === 'Container'
+      ? source.id
+      : source.kind === 'Deployment'
+        ? (row.containerProjectionId ?? undefined)
+        : undefined,
+    seconds,
+    minutes * 60,
+  );
+  const now = useContext(RangeClock);
+  const { groups } = useRealtimeContext();
+  const streamGroup = source.kind === 'Platform' ? 'platforms' : allowedPlatform && 'containers:' + allowedPlatform;
+  const latest = source.kind === 'Platform' ? platformSource?.stats?.[0]?.created : latestLiveStat(taskLive)?.created;
+  // Stack and Swarm history also supplies membership for aggregating replicas.
+  const receivingSamples = !!latest && now - latest <= 65 && !!streamGroup && groups?.isGroupLive(streamGroup);
+  const opts = {
+    staleTime: manual ? 0 : 15000,
+    refetchInterval: receivingSamples ? (false as const) : interval,
+    retry: (attempt: number, error: Error) => attempt < 2 && requestErrorStatus(error) === 429,
+    retryDelay: (attempt: number) => 500 * 2 ** attempt + Math.random() * 350,
+  };
+  const platform = useRead(
+    'getPlatformStats',
+    { id: source.id, query },
+    { ...opts, enabled: source.kind === 'Platform' },
+  );
+  const container = useRead(
+    'getContainerStats',
+    { id: source.id, query },
+    { ...opts, enabled: source.kind === 'Container' },
+  );
+  const deployment = useRead(
+    'getDeploymentStats',
+    { id: source.id, query },
+    { ...opts, enabled: source.kind === 'Deployment' },
+  );
+  const stack = useRead('getStackStats', { stackId: source.id, query }, { ...opts, enabled: source.kind === 'Stack' });
+  const service = useRead(
+    'getSwarmServiceStats',
+    { platformId: row.platformId ?? undefined, resourceId: row.dockerServiceId ?? undefined, query },
+    { ...opts, enabled: source.kind === 'SwarmService' && canReadPlatform && !!row.dockerServiceId },
+  );
+  const read = {
+    Platform: platform,
+    Stack: stack,
+    Container: container,
+    Deployment: deployment,
+    SwarmService: service,
+  }[source.kind];
+  const data = read.data?.data;
+  const serviceLive = useServiceStatsStream(
+    source.kind === 'SwarmService' && service.data?.data.complete ? allowedPlatform : '',
+    service.data?.data.observedContainerProjectionIds ?? emptyIds,
+    seconds,
+    minutes * 60,
+  );
+  const live =
+    source.kind === 'Platform'
+      ? platformLive
+      : source.kind === 'Container' || source.kind === 'Deployment'
+        ? taskLive
+        : source.kind === 'SwarmService' && serviceLive.observedContainers === service.data?.data.expectedTasks
+          ? serviceLive.stats
+          : emptyStats;
+  const stackSeries = useStackSeries(
+    !manual && source.kind === 'Stack' && stack.data && stack.data.data.services.length <= 8 ? source.id : undefined,
+    stack.data?.data.services,
+    seconds,
+    minutes * 60,
+  );
+  const baseStats = data && 'stats' in data ? data.stats : undefined;
+  const hasServices = !!data && 'services' in data;
+  const { series, visibleSeries } = useChartSeries(
+    baseStats,
+    live,
+    seconds,
+    hasServices ? stackSeries : undefined,
+    minutes,
+    now,
+  );
+  const formatDateTime = useProfileDateTimeFormatter();
+  const latestMeasurement = Math.max(Number(latest ?? 0), ...(series ?? []).map((s) => s.stats.at(-1)?.created ?? 0));
+  const delayed = latestMeasurement > 0 && now - latestMeasurement > Math.max(130, 2 * seconds);
+  const link = sourcePath(source.kind, row);
+  return (
+    <>
+      {tiles.map((tile) => {
+        let body: ReactNode;
+        if (read.isError || !series)
+          body = (
+            <p>
+              {read.isLoading
+                ? 'Loading…'
+                : requestErrorStatus(read.error) === 429
+                  ? 'Statistics reads are busy. Try Refresh shortly.'
+                  : 'Unavailable'}
+            </p>
+          );
+        else if (!series.length) body = <p>No measurements in this range.</p>;
+        else if (series.length > 8)
+          body = <p>This stack has more than eight service series. Open full statistics to view them.</p>;
+        else
+          body = visibleSeries?.map((s) => (
+            <Chart
+              key={s.name}
+              tile={tile}
+              series={s}
+              platform={source.kind === 'Platform'}
+              minutes={minutes}
+              now={now}
+            />
+          ));
+        return (
+          <Tile tile={tile} key={tile.id}>
+            <div className="flex flex-wrap gap-3 text-xs">
+              <Link className="table-link" to={link}>
+                {row.name}
+              </Link>
+              <Link className="table-link" to={monitoringLink(link, source.kind, 'stats', minutes)}>
+                Full statistics
+              </Link>
+            </div>
+            {delayed && !read.isError && (
+              <p className="text-xs text-muted-foreground">
+                Latest measurement <Timestamp value={latestMeasurement * 1000} formatDateTime={formatDateTime} />
+              </p>
+            )}
+            {service.data?.data.complete === false && (
+              <p className="text-xs">
+                Partial coverage · {service.data.data.observedTasks} of {service.data.data.expectedTasks} tasks
+              </p>
+            )}
+            {body}
+          </Tile>
+        );
+      })}
+    </>
+  );
+}

@@ -389,3 +389,290 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
         default(shared)
     );
 }
+
+#[tokio::test]
+#[ignore = "requires a disposable CITADEL_DASHBOARD_DATABASE_URL"]
+async fn dashboard_sharing_enforces_visibility_revision_and_entitlement() {
+    let db = std::env::var("CITADEL_DASHBOARD_DATABASE_URL").unwrap();
+    citadel_database::MigrationRunner::migrate(&db)
+        .await
+        .unwrap();
+    let pool = sqlx::PgPool::connect(&db).await.unwrap();
+    let app = |team| {
+        router(DashboardsHttpState {
+            dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
+            entitlements: Arc::new(StaticEntitlementService::new(team)),
+        })
+    };
+    let (team, community) = (app(true), app(false));
+    let admin = actor(&pool, true).await;
+    let editor = actor(&pool, false).await;
+    let viewer = actor(&pool, false).await;
+    let id = Uuid::now_v7();
+    let path = format!("dashboards/{id}");
+    let sharing = format!("{path}/visibility");
+    let settings = json!({"schemaVersion":1,"rangeMinutes":60,"tags":[],"widgets":[]});
+    let board =
+        |id, mode| json!({"id":id,"name":"Operations","visibility":mode,"configuration":settings});
+    let change = |revision, mode| json!({"revision":revision,"visibility":mode});
+    let share = |app, actor, revision, mode, status| {
+        call(
+            app,
+            actor,
+            Method::PUT,
+            &sharing,
+            change(revision, mode),
+            status,
+        )
+    };
+    let default_for_viewer = || {
+        call(
+            &community,
+            &viewer,
+            Method::GET,
+            "profile/dashboard-default",
+            Value::Null,
+            StatusCode::OK,
+        )
+    };
+    call(
+        &team,
+        &admin,
+        Method::POST,
+        "dashboards",
+        board(id, "InstanceShared"),
+        StatusCode::OK,
+    )
+    .await;
+    let original_default = default_for_viewer().await;
+    call(
+        &team,
+        &viewer,
+        Method::PUT,
+        "profile/dashboard-default",
+        json!({"dashboardId":id}),
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+    sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourceid,resourcetype,permissionlevel,specificpermissions) VALUES ($1,$2,$3,$4,$5,0)")
+        .bind(Uuid::now_v7()).bind(editor.actor_id.value()).bind(id).bind(ResourceType::Dashboard as i32)
+        .bind(PermissionLevel::Write as i32).execute(&pool).await.unwrap();
+    share(&team, &editor, 1, "Restricted", StatusCode::FORBIDDEN).await;
+    let denied = share(&community, &admin, 1, "Restricted", StatusCode::FORBIDDEN).await;
+    assert_eq!(denied["capability"], "CustomAccessControl");
+    let saved = share(&team, &admin, 1, "Restricted", StatusCode::OK).await;
+    assert_eq!(saved["revision"], 2);
+    assert_eq!(saved["visibility"], "Restricted");
+    let noop = share(&community, &admin, 2, "Restricted", StatusCode::OK).await;
+    assert_eq!(noop, saved);
+    call(
+        &community,
+        &viewer,
+        Method::GET,
+        &path,
+        Value::Null,
+        StatusCode::NOT_FOUND,
+    )
+    .await;
+    let fallback = default_for_viewer().await;
+    assert_eq!(fallback, original_default);
+    let retained = call(
+        &community,
+        &editor,
+        Method::GET,
+        &path,
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(retained["summary"]["canEdit"], true);
+    assert_eq!(retained["configuration"], settings);
+    share(&team, &admin, 1, "InstanceShared", StatusCode::CONFLICT).await;
+    share(&team, &admin, 2, "Private", StatusCode::BAD_REQUEST).await;
+    share(&community, &admin, 2, "InstanceShared", StatusCode::OK).await;
+    let restored = default_for_viewer().await;
+    assert_eq!(restored["dashboardId"], json!(id));
+    for owner in [&admin, &editor] {
+        let private = Uuid::now_v7();
+        call(
+            &community,
+            owner,
+            Method::POST,
+            "dashboards",
+            board(private, "Private"),
+            StatusCode::OK,
+        )
+        .await;
+        let status = if owner.actor_id == admin.actor_id {
+            StatusCode::BAD_REQUEST
+        } else {
+            StatusCode::NOT_FOUND
+        };
+        call(
+            &team,
+            &admin,
+            Method::PUT,
+            &format!("dashboards/{private}/visibility"),
+            change(1, "InstanceShared"),
+            status,
+        )
+        .await;
+        let own = call(
+            &community,
+            owner,
+            Method::PUT,
+            &format!("dashboards/{private}"),
+            json!({"revision":1,"name":"My private notes","configuration":settings}),
+            StatusCode::OK,
+        )
+        .await;
+        assert_eq!(own["summary"]["visibility"], "Private");
+        assert_eq!(own["summary"]["name"], "My private notes");
+        assert_eq!(own["summary"]["revision"], 2);
+        call(
+            &community,
+            owner,
+            Method::DELETE,
+            &format!("dashboards/{private}?revision=2"),
+            Value::Null,
+            StatusCode::NO_CONTENT,
+        )
+        .await;
+    }
+    call(
+        &community,
+        &admin,
+        Method::DELETE,
+        &format!("{path}?revision=3"),
+        Value::Null,
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires a disposable CITADEL_DASHBOARD_DATABASE_URL"]
+async fn widget_sources_enforce_access_and_upcoming_orders_enabled_schedules() {
+    use citadel_adapters::persistence::postgres::instance::PostgresSchedules;
+    use citadel_instance::{ScheduleCatalogPolicy, SchedulePurpose, ScheduleReader};
+    let db = std::env::var("CITADEL_DASHBOARD_DATABASE_URL").unwrap();
+    citadel_database::MigrationRunner::migrate(&db)
+        .await
+        .unwrap();
+    let pool = sqlx::PgPool::connect(&db).await.unwrap();
+    let app = router(DashboardsHttpState {
+        dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
+        entitlements: Arc::new(StaticEntitlementService::new(false)),
+    });
+    let viewer = actor(&pool, false).await;
+    let admin = actor(&pool, true).await;
+    let id = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,platformdescriptor,status,volumecount) VALUES($1,'Dashboard source','','Local',1,0,1024,0,'{}','Online',0)").bind(id).execute(&pool).await.unwrap();
+    let path = format!("dashboards/sources?kind=Platform&ids={id}");
+    assert_eq!(
+        call(
+            &app,
+            &viewer,
+            Method::GET,
+            &path,
+            Value::Null,
+            StatusCode::OK
+        )
+        .await,
+        json!([])
+    );
+    sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourceid,resourcetype,permissionlevel,specificpermissions) VALUES ($1,$2,$3,$4,$5,0)").bind(Uuid::now_v7()).bind(viewer.actor_id.value()).bind(id).bind(ResourceType::Platform as i32).bind(PermissionLevel::Read as i32).execute(&pool).await.unwrap();
+    let tagged = call(
+        &app,
+        &viewer,
+        Method::GET,
+        &format!("{path}&tags=missing"),
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(tagged[0]["id"], json!(id));
+    assert_eq!(tagged[0]["matchesTags"], false);
+    for kind in [
+        "Platform",
+        "Deployment",
+        "Container",
+        "Stack",
+        "SwarmService",
+    ] {
+        let rows = call(
+            &app,
+            &admin,
+            Method::GET,
+            &format!("dashboards/sources?kind={kind}&tags=missing"),
+            Value::Null,
+            StatusCode::OK,
+        )
+        .await;
+        assert_eq!(rows, json!([]));
+    }
+    let stack = Uuid::now_v7();
+    let release = Uuid::now_v7();
+    sqlx::query("INSERT INTO stacks(id,name,createdbyactorid,driftpolicy,stacksource,stackupdatestate) VALUES ($1,'Source budget',$2,'{}','Inline','{}')")
+        .bind(stack).bind(admin.actor_id.value()).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO stackreleases(id,stackid,platformid,createdbyactorid,spec,status,version) VALUES ($1,$2,$3,$4,'{}','Running','1')")
+        .bind(release).bind(stack).bind(id).bind(admin.actor_id.value()).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE stacks SET currentstackreleaseid=$1 WHERE id=$2")
+        .bind(release)
+        .bind(stack)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let physical: i64 = sqlx::query_scalar(
+        "INSERT INTO statisticssources(platformid,containerid) VALUES ($1,$2) RETURNING id",
+    )
+    .bind(id)
+    .bind(Uuid::now_v7())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let stack_path = format!("dashboards/sources?kind=Stack&ids={stack}");
+    for (first, last, exceeds) in [(1_i32, 8_i32, false), (9, 9, true)] {
+        sqlx::query("INSERT INTO statisticsowners(sourceid,stackid,kind,servicename,replicakey) SELECT $1,$2,'Workload','service-'||n,'replica' FROM generate_series($3::integer,$4::integer)n")
+            .bind(physical).bind(stack).bind(first).bind(last).execute(&pool).await.unwrap();
+        let rows = call(
+            &app,
+            &admin,
+            Method::GET,
+            &stack_path,
+            Value::Null,
+            StatusCode::OK,
+        )
+        .await;
+        assert_eq!(rows[0]["exceedsChartSeriesLimit"], exceeds);
+    }
+    let now = "2026-11-24T09:00:00Z".parse().unwrap();
+    for (name, cron, enabled) in [
+        ("Later", "0 12 * * *", true),
+        ("Earlier", "0 10 * * *", true),
+        ("Disabled", "1 9 * * *", false),
+    ] {
+        sqlx::query("INSERT INTO scripts(id,name,alertonfailure,code,createdbyactorid,runasactorid,enabled,scheduleenabled,schedulecron,scheduletimezone,timeoutseconds) VALUES($1,$2,false,'',$3,$3,$4,true,$5,'UTC',30)").bind(Uuid::now_v7()).bind(name).bind(viewer.actor_id.value()).bind(enabled).bind(cron).execute(&pool).await.unwrap();
+    }
+    let store = PostgresSchedules(pool);
+    let fixed = SchedulePurpose::ALL
+        .into_iter()
+        .filter(|p| p.fixed_interval().is_some())
+        .map(|p| (p, now))
+        .collect();
+    let policy = ScheduleCatalogPolicy {
+        blockers: Default::default(),
+        max_script_timeout: 300,
+        attention_only: false,
+    };
+    let rows = store.upcoming(&[], 1, now, fixed, &policy).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].name, "Earlier");
+    assert!(
+        store
+            .upcoming(&["missing".into()], 1, now, Default::default(), &policy)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

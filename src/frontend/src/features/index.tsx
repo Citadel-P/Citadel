@@ -55,6 +55,7 @@ export const SwarmResourcePages: Record<SwarmResourceType, ReturnType<typeof lis
 };
 
 export const ResourcePages: Partial<Record<ResourceType, ReturnType<typeof list>>> = {
+  Dashboard: list(() => import('./dashboards').then((m) => m.DashboardComponents)),
   Instance: list(() => import('./instance').then((m) => m.InstanceComponents)),
   Updates: list(() => import('./updates').then((m) => m.UpdatesComponents)),
   Image: list(() => import('./docker-resources/images').then((m) => m.ImageComponents)),

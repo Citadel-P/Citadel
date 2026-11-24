@@ -187,7 +187,7 @@ it('keeps All platforms available from the platform browser', async () => {
   const { user } = renderCitadel(<Harness />, { route: '/deployments' });
   await user.click(screen.getByRole('button', { name: 'Select platform' }));
   await user.click(screen.getByRole('menuitem', { name: 'All platforms' }));
-  expect(screen.getByTestId('location')).toHaveTextContent('/');
+  expect(screen.getByTestId('location')).toHaveTextContent(/^\/platforms$/);
 });
 
 it('supports keyboard selection in utility menus', async () => {

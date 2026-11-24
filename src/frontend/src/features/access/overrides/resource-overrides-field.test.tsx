@@ -60,6 +60,7 @@ it('keeps dashboard grants when editing overrides and only offers shareable boar
     </MemoryRouter>,
   );
   const row = within(screen.getByText('Operations').closest('tr')!);
+  expect(row.getByRole('link', { name: 'Operations' })).toHaveAttribute('href', '/dashboards/board');
   await user.click(row.getByRole('button', { name: 'Edit override' }));
   const dialog = within(screen.getByRole('dialog'));
   expect(dialog.getByText('Operations')).toBeVisible();

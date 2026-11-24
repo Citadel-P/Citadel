@@ -1,3 +1,4 @@
+import { initialRuntimeTab } from '@/lib/monitoring-link';
 import { WorkloadNetworkAction } from '@/features/docker-resources/networks/workload-network-action';
 import { WorkloadHealthCard } from '@/features/workload-health/card';
 import { DuplicateWorkload } from '@/components/custom/resource-copies/duplicate-workload';
@@ -256,7 +257,7 @@ const ServiceRuntime = ({ resource }: { resource: ManagedSwarmServiceView }) => 
   const canInspect = hasCapability(resource, 'canInspect');
   const canViewStats = hasCapability(resource, 'canRead') && Boolean(resource.dockerServiceId);
   const defaultTab = canLogs ? 'logs' : 'inspect';
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [activeTab, setActiveTab] = useState(() => initialRuntimeTab(defaultTab, canLogs));
   const [logsClearedAt, setLogsClearedAt] = useState<number>();
   const taskGroup = useServiceTasksGroup(resource.platformId, resource.dockerServiceId);
   const containerGroup = useContainersGroup(resource.platformId);

@@ -12,7 +12,8 @@ import {
   UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClientContext } from '@/api/api-client-context';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ReadAdmissionContext } from './read-admission';
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Cancellable,
@@ -51,10 +52,14 @@ export function useRead<
   >,
 ): UseQueryResult<TResult, Error> {
   const { apiClient } = useApiClientContext();
+  const admit = useContext(ReadAdmissionContext);
   const query = resourceReadOptions(apiClient, resource, args);
   return useQuery<TResult, Error, TResult, ReturnType<typeof resourceQueryKey<TResource>>>({
     queryKey: query.queryKey,
-    queryFn: async (context) => query.queryFn!(context) as Promise<TResult>,
+    queryFn: (context) => {
+      const read = () => query.queryFn!(context) as Promise<TResult>;
+      return admit ? admit(context.signal, read) : read();
+    },
     ...options,
     enabled: query.enabled ? (options?.enabled ?? true) : false,
   });

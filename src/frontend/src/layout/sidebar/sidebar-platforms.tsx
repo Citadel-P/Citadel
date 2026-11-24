@@ -83,7 +83,7 @@ export function SidebarPlatforms() {
               })}
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link to="/">All platforms</Link>
+                <Link to="/platforms">All platforms</Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

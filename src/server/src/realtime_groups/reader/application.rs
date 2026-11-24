@@ -509,6 +509,7 @@ impl ApplicationGroupReader {
             Topic::Activity { .. } => return self.activities(p, g, lease).await,
             Topic::AlertEvents => {
                 let filter = citadel_alerts::AlertEventFilter {
+                    tags: vec![],
                     page: 1,
                     page_size: 100,
                     resource_id: None,

@@ -3,6 +3,13 @@ use citadel_dashboards as domain;
 use uuid::Uuid;
 
 enum_schema!(
+    DashboardSharingModeSchema,
+    "DashboardSharingMode",
+    domain::DashboardSharingMode,
+    [InstanceShared, Restricted]
+);
+
+enum_schema!(
     DashboardVisibilitySchema,
     "DashboardVisibility",
     domain::DashboardVisibility,
