@@ -273,6 +273,7 @@ export const foundationOperations = {
   listBuildRuns: { method: 'GET', path: '/api/v1/buildRuns' },
   listContainers: { method: 'GET', path: '/api/v1/platforms/{id}/containers' },
   listDashboardSources: { method: 'GET', path: '/api/v1/dashboards/sources' },
+  listDashboardWorkloads: { method: 'GET', path: '/api/v1/dashboards/workloads' },
   listDashboards: { method: 'GET', path: '/api/v1/dashboards' },
   listDeployments: { method: 'GET', path: '/api/v1/deployments' },
   listGitAccounts: { method: 'GET', path: '/api/v1/gitAccounts' },

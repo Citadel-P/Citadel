@@ -1,3 +1,5 @@
+import { CitadelIcons } from '@/lib/icons';
+import { ChartNoAxesCombined, CalendarClock, NotebookText } from 'lucide-react';
 import {
   DashboardChartColor,
   DashboardChartStyle,
@@ -11,25 +13,96 @@ import { STATS_PRESETS } from '@/lib/stats-range';
 import { randomUuid } from '@/lib/utils';
 
 export type WidgetKind = DashboardWidgetSettings['kind'];
+export const categories = ['Overview', 'Infrastructure', 'Monitoring', 'Operations', 'Content'] as const;
+function definition(
+  label: string,
+  description: string,
+  Icon: typeof CitadelIcons.Platform,
+  category: (typeof categories)[number],
+  w: number,
+  h: number,
+  minW = 2,
+  minH = 2,
+) {
+  return { label, description, Icon, category, size: { w, h }, minW, minH };
+}
 export const catalogue = {
-  ResourceSummary: ['Resource summary', 'Counts for visible platforms, containers and alerts.'],
-  Platforms: ['Platforms', 'Connectivity, CPU and memory by platform.'],
-  Workloads: ['Workloads', 'Status and links for a selected workload type.'],
-  Metrics: ['Metrics', 'Plot a measurement for one resource over time.'],
-  OpenAlerts: ['Open alerts', 'Unresolved alerts and their severity.'],
-  Backups: ['Backup activity', 'Recent completed backup operations.'],
-  RecentActivity: ['Recent activity', 'Recent operations you can read.'],
-  UpcomingSchedules: ['Upcoming schedules', 'The next scheduled occurrences.'],
-  Updates: ['Updates', 'Known release information for this instance.'],
-  Notes: ['Notes and links', 'Plain text and links for this dashboard.'],
-} satisfies Record<WidgetKind, [string, string]>;
+  ResourceSummary: definition(
+    'Resource summary',
+    'Counts for visible resources and open alerts.',
+    CitadelIcons.Dashboard,
+    'Overview',
+    12,
+    2,
+  ),
+  Platforms: definition(
+    'Platforms',
+    'Connectivity, CPU and memory by platform.',
+    CitadelIcons.Platform,
+    'Infrastructure',
+    8,
+    3,
+  ),
+  Workloads: definition(
+    'Workloads',
+    'Runtime status, container probes and backup coverage.',
+    CitadelIcons.Deployment,
+    'Infrastructure',
+    8,
+    4,
+  ),
+  Metrics: definition(
+    'Metrics',
+    'Chart measurements for one resource over time.',
+    ChartNoAxesCombined,
+    'Monitoring',
+    8,
+    5,
+    4,
+    3,
+  ),
+  OpenAlerts: definition(
+    'Open alerts',
+    'Unresolved alerts and their severity.',
+    CitadelIcons.Alert,
+    'Monitoring',
+    4,
+    3,
+  ),
+  RecentActivity: definition(
+    'Recent activity',
+    'Recent operations you can read.',
+    CitadelIcons.Activity,
+    'Operations',
+    6,
+    4,
+  ),
+  Backups: definition(
+    'Backup activity',
+    'Results of recently completed backups.',
+    CitadelIcons.BackupRepository,
+    'Operations',
+    6,
+    4,
+  ),
+  UpcomingSchedules: definition(
+    'Upcoming schedules',
+    'The next scheduled occurrences.',
+    CalendarClock,
+    'Operations',
+    6,
+    3,
+  ),
+  Updates: definition('Updates', 'Release information for this instance.', CitadelIcons.Updates, 'Operations', 4, 3),
+  Notes: definition('Notes and links', 'Text and links for this dashboard.', NotebookText, 'Content', 4, 3),
+} satisfies Record<WidgetKind, ReturnType<typeof definition>>;
 
 export function metricSettings(metric = DashboardMetric.Cpu) {
   return {
     kind: 'Metrics' as const,
     source: { kind: 'Platform' as const, id: '' },
     metric,
-    presentation: DashboardChartStyle.Line,
+    presentation: DashboardChartStyle.Gradient,
     color: DashboardChartColor.Blue,
     legend: true,
   };
@@ -54,7 +127,7 @@ export function makeWidget(kind: WidgetKind): DashboardWidget {
     default:
       settings = { kind, limit: 5 };
   }
-  return { id: randomUuid(), title: catalogue[kind][0], settings, layout: { x: 0, y: 0, w: 6, h: 4 } };
+  return { id: randomUuid(), title: catalogue[kind].label, settings, layout: { x: 0, y: 0, ...catalogue[kind].size } };
 }
 
 export function validLink(href: string) {
@@ -75,11 +148,16 @@ export function validLink(href: string) {
   }
 }
 
+export function widgetSourceError(s: DashboardWidgetSettings) {
+  if ('limit' in s && (!Number.isInteger(s.limit) || s.limit < 1 || s.limit > 10))
+    return 'Choose between one and ten rows.';
+  if (s.kind === 'Metrics' && (!s.source.id || (s.source.kind === 'Container' && !s.source.platformId)))
+    return 'Choose a metric resource.';
+}
+
 export function widgetError(widget: DashboardWidget) {
   const { settings: s } = widget;
   if (!widget.title.trim() || [...widget.title].length > 128) return 'Enter a widget title of up to 128 characters.';
-  if ('limit' in s && (!Number.isInteger(s.limit) || s.limit < 1 || s.limit > 10))
-    return 'Choose between one and ten rows.';
   if (
     s.kind === 'Notes' &&
     ([...s.text].length > 2048 ||
@@ -87,8 +165,7 @@ export function widgetError(widget: DashboardWidget) {
       s.links.some((l) => !l.label.trim() || [...l.label].length > 128 || !validLink(l.href)))
   )
     return 'Check the note length and enter a label and valid address for each link.';
-  if (s.kind === 'Metrics' && (!s.source.id || (s.source.kind === 'Container' && !s.source.platformId)))
-    return 'Choose a metric resource.';
+  return widgetSourceError(s);
 }
 
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);

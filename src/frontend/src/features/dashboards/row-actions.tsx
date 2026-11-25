@@ -4,17 +4,8 @@ import { TargetCell } from '@/components/custom/common';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useRead } from '@/lib/hooks';
-import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
+import { MoreHorizontal } from 'lucide-react';
 import { ViewOnlyContext } from './tile';
-
-export function CopyResourceLink({ path }: { path: string }) {
-  const [copied, copy] = useCopyToClipboard(2000);
-  return (
-    <Button size="sm" variant="ghost" onClick={() => copy(new URL(path, window.location.origin).href)}>
-      {copied ? 'Copied' : 'Copy link'}
-    </Button>
-  );
-}
 
 export function ActivityActions({ id }: { id: string }) {
   const [open, setOpen] = useState(false);
@@ -23,7 +14,7 @@ export function ActivityActions({ id }: { id: string }) {
     <Popover open={open && !paused} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button disabled={paused} size="sm" variant="ghost" aria-label="Activity links">
-          Links
+          <MoreHorizontal />
         </Button>
       </PopoverTrigger>
       <PopoverContent>{open && !paused && <ActivityTarget id={id} />}</PopoverContent>

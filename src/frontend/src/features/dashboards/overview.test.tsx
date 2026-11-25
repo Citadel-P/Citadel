@@ -235,25 +235,58 @@ it('shares pinned chart history and freezes a paused board after one explicit re
   server.use(
     http.get('*/api/v1/dashboards/sources', metadata),
     http.get('*/api/v1/platforms/:id/stats', history),
+    http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
     http.get('*/api/v1/application/info', () => HttpResponse.json({})),
     http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
     http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
   );
+  const settled = vi.fn();
   const board = (paused: boolean, refresh: number) => (
     <AppProvider>
-      <DashboardGrid configuration={config} paused={paused} refresh={refresh} />
+      <DashboardGrid configuration={config} paused={paused} refresh={refresh} onSettled={settled} />
     </AppProvider>
   );
-  const { rerender } = renderCitadel(board(false, 0));
-  await waitFor(() => expect(screen.getAllByText('No measurements in this range.')).toHaveLength(3));
+  const { rerender, queryClient } = renderCitadel(board(false, 0));
+  await waitFor(() => expect(screen.getAllByText('No measurements in this range.')).toHaveLength(3), { timeout: 5000 });
+  expect(history).toHaveBeenCalledTimes(1);
+  expect(metadata).toHaveBeenCalledTimes(1);
+  config.widgets = config.widgets.map((w) => ({
+    ...w,
+    title: w.title + ' edited',
+    layout: { ...w.layout, h: w.layout.h + 1 },
+  }));
+  rerender(board(false, 0));
   expect(history).toHaveBeenCalledTimes(1);
   expect(metadata).toHaveBeenCalledTimes(1);
   rerender(board(true, 0));
+  const unrelated = ['getPlatformStats', { id: 'other', query: { minutes: 60 } }];
+  queryClient.setQueryData(unrelated, { data: { stats: [] } });
+  await act(async () => {
+    await queryClient.invalidateQueries({ queryKey: unrelated });
+  });
   expect(screen.getAllByText('No measurements in this range.')).toHaveLength(3);
+  let release!: () => void;
+  const pending = queryClient.fetchQuery({
+    queryKey: unrelated,
+    queryFn: () =>
+      new Promise((resolve) => {
+        release = () => resolve({ data: { stats: [] } });
+      }),
+    staleTime: 0,
+  });
+  settled.mockClear();
   rerender(board(true, 1));
   await waitFor(() => expect(history).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(screen.getAllByText('No measurements in this range.')).toHaveLength(3));
+  await waitFor(() => expect(settled).toHaveBeenCalled());
+  expect(queryClient.isFetching({ queryKey: unrelated })).toBe(1);
+  release();
+  await pending;
   expect(metadata).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['getPlatformStats', { id }] });
+  });
+  expect(screen.queryByText('No measurements in this range.')).toBeNull();
 });
 
 it('links to full statistics without fetching an oversized stack history', async () => {

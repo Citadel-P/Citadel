@@ -101,6 +101,7 @@ pub enum Metric {
 pub enum ChartStyle {
     Line,
     Area,
+    Gradient,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]

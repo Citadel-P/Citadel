@@ -50,6 +50,8 @@ pub(crate) struct ActivitiesView {
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RecentActivityView {
+    #[schema(value_type = crate::api::resources::vocabulary::ActivityResourceTypeSchema)]
+    resource_type: ActivityResourceType,
     id: Uuid,
     resource_name: String,
     #[schema(value_type = crate::api::resources::vocabulary::ActivityEventTypeSchema)]
@@ -63,6 +65,7 @@ impl From<citadel_activities::RecentActivity> for RecentActivityView {
     fn from(row: citadel_activities::RecentActivity) -> Self {
         Self {
             id: row.id,
+            resource_type: row.resource_type,
             resource_name: row.resource_name,
             event_type: row.event_type,
             status: row.status,

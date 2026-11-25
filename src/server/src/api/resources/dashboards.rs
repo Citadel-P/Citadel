@@ -154,3 +154,27 @@ impl From<citadel_dashboards::DashboardSource> for DashboardSourceView {
         }
     }
 }
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct DashboardWorkloadQuery {
+    #[param(value_type=super::schema_models::dashboards::DashboardWorkloadKindSchema)]
+    pub kind: citadel_dashboards::WorkloadKind,
+    pub limit: Option<u8>,
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardWorkloadView {
+    pub id: Uuid,
+    pub name: String,
+    pub platform_id: Uuid,
+    pub status: String,
+    pub processing: bool,
+    #[schema(value_type=Vec<super::platforms::workload_health_views::HealthStatus>)]
+    pub observed_probes: Vec<citadel_primitives::health::HealthStatus>,
+    pub more_probes: bool,
+    #[schema(value_type=Option<super::schema_models::backups::BackupCoverageStatusSchema>)]
+    pub backup_status: Option<citadel_backups::BackupCoverageStatus>,
+    pub can_view_logs: bool,
+}

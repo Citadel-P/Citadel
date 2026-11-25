@@ -85,6 +85,17 @@ async fn read(
 }
 
 impl DashboardRepository for PostgresDashboardRepository {
+    fn workloads(
+        &self,
+        viewer: DashboardViewer,
+        kind: citadel_dashboards::WorkloadKind,
+        tags: Vec<String>,
+        limit: i64,
+    ) -> ResultFuture<'_, Vec<citadel_dashboards::DashboardWorkload>> {
+        Box::pin(super::sources::workloads(
+            &self.pool, viewer, kind, tags, limit,
+        ))
+    }
     fn sources(
         &self,
         viewer: DashboardViewer,

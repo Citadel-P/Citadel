@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   DashboardSharingMode,
@@ -7,6 +6,7 @@ import {
   type DashboardSummaryView,
 } from '@/api/generated/api.types';
 import { resourceQueryKey } from '@/api/dispatch';
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,38 +20,27 @@ import { useLicenseEntitlements } from '@/features/license/use-license-entitleme
 import { useMutate, useRead } from '@/lib/hooks';
 import { requestErrorMessage, requestErrorStatus } from '@/lib/request-error';
 
-export function DashboardSharing({ board }: { board: DashboardSummaryView }) {
-  const profile = useRead('getCurrentProfile');
-  if (
-    profile.isError ||
-    !profile.data?.data.authorization.isAdministrator ||
-    board.visibility === DashboardVisibility.Private
-  )
-    return null;
-  return <SharingButton board={board} />;
+export function useCanManageSharing(board: DashboardSummaryView) {
+  const profile = useRead('getCurrentProfile', undefined, {
+    enabled: board.visibility !== DashboardVisibility.Private,
+  });
+  return (
+    board.visibility !== DashboardVisibility.Private &&
+    !profile.isError &&
+    !!profile.data?.data.authorization.isAdministrator
+  );
 }
-
-function SharingButton({ board }: { board: DashboardSummaryView }) {
+export function SharingItem({ board, select }: { board: DashboardSummaryView; select: () => void }) {
   const { hasCapability } = useLicenseEntitlements();
   const disabled =
     board.visibility === DashboardVisibility.InstanceShared && !hasCapability(LicenseCapability.CustomAccessControl);
-  // Confirm the revision and audience seen when the administrator opened the dialog.
-  const [selection, setSelection] = useState<DashboardSummaryView>();
   return (
-    <>
-      <Button
-        variant="outline"
-        disabled={disabled}
-        title={disabled ? 'Restricting access requires Team' : undefined}
-        onClick={() => setSelection(board)}>
-        Sharing
-      </Button>
-      {selection && <SharingDialog board={selection} close={() => setSelection(undefined)} />}
-    </>
+    <DropdownMenuItem disabled={disabled} onSelect={select}>
+      Sharing
+    </DropdownMenuItem>
   );
 }
-
-function SharingDialog({ board, close }: { board: DashboardSummaryView; close: () => void }) {
+export function SharingDialog({ board, close }: { board: DashboardSummaryView; close: () => void }) {
   const client = useQueryClient();
   const restrict = board.visibility === DashboardVisibility.InstanceShared;
   const change = useMutate('setDashboardVisibility', {

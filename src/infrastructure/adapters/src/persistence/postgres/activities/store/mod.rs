@@ -144,7 +144,7 @@ impl ActivityQueryStore for PostgresActivityStore {
                      IN (SELECT kind,id FROM tagged_event_owners)")
             };
             let query = format!(
-                "{AUTHORIZED_ACTIVITY_CTES}{owners} SELECT id, resourcename, eventtype, status, createdat
+                "{AUTHORIZED_ACTIVITY_CTES}{owners} SELECT id, resourcename, resourcetype, eventtype, status, createdat
                 FROM filtered_activities {predicate} ORDER BY createdat DESC, id DESC LIMIT $7"
             );
             let mut read = sqlx::query(AssertSqlSafe(query.as_str()))
@@ -162,6 +162,12 @@ impl ActivityQueryStore for PostgresActivityStore {
             rows.into_iter()
                 .map(|row| {
                     Ok(citadel_activities::RecentActivity {
+                        resource_type: ActivityResourceType::from_database_str(
+                            row.try_get("resourcetype").map_err(activity_storage)?,
+                        )
+                        .ok_or_else(|| {
+                            ActivityError::Storage("Unknown activity resource type.".into())
+                        })?,
                         id: row.try_get("id").map_err(activity_storage)?,
                         resource_name: row.try_get("resourcename").map_err(activity_storage)?,
                         event_type: ActivityEventType::from_database_str(

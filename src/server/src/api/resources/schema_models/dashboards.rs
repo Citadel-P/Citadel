@@ -34,7 +34,7 @@ enum_schema!(
     DashboardChartStyleSchema,
     "DashboardChartStyle",
     domain::ChartStyle,
-    [Line, Area]
+    [Line, Area, Gradient]
 );
 
 enum_schema!(

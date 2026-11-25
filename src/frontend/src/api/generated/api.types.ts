@@ -765,6 +765,7 @@ export enum DashboardMetric {
 export enum DashboardChartStyle {
   Line = "Line",
   Area = "Area",
+  Gradient = "Gradient",
 }
 
 export enum DashboardChartColor {
@@ -3279,6 +3280,20 @@ export type DashboardWidgetSettings =
       links: DashboardNoteLink[];
       text: string;
     };
+
+export interface DashboardWorkloadView {
+  backupStatus?: BackupCoverageStatus | null;
+  canViewLogs: boolean;
+  /** @format uuid */
+  id: string;
+  moreProbes: boolean;
+  name: string;
+  observedProbes: HealthStatus[];
+  /** @format uuid */
+  platformId: string;
+  processing: boolean;
+  status: string;
+}
 
 export interface DatabaseConnectionsView {
   /**
@@ -6805,6 +6820,7 @@ export interface RecentActivityView {
   /** @format uuid */
   id: string;
   resourceName: string;
+  resourceType: ActivityResourceType;
   status: ActivityStatus;
 }
 
@@ -13314,6 +13330,44 @@ export class Api<
     ) =>
       this.request<DashboardSourceView[], ProblemDetails>({
         path: `/api/v1/dashboards/sources`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
+     * @name ListDashboardWorkloads
+     * @summary List readable workloads with persisted monitoring and backup coverage
+     * @request GET:/api/v1/dashboards/workloads
+     * @secure
+     * @response `200` `(DashboardWorkloadView)[]` Bounded workload rows
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    listDashboardWorkloads: (
+      query: {
+        kind: DashboardWorkloadKind;
+        /**
+         * @format int32
+         * @min 0
+         */
+        limit?: number;
+        /** Match all resource tag names */
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<DashboardWorkloadView[], ProblemDetails>({
+        path: `/api/v1/dashboards/workloads`,
         method: "GET",
         query: query,
         secure: true,

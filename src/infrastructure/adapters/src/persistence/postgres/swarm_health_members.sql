@@ -6,6 +6,3 @@ SELECT jsonb_agg(jsonb_build_object(
  AND (CASE WHEN c.dockernodeid IS NULL THEN p.status='Online'
  ELSE EXISTS(SELECT 1 FROM swarmnoderuntimeprojectionstates ns WHERE ns.platformid=t.platformid AND ns.dockernodeid=t.dockernodeid AND NOT ns.isstale) END))
  ) ORDER BY t.dockerserviceid,t.slot,t.dockertaskid)
- FROM (SELECT DISTINCT ON (task.dockerserviceid, COALESCE(task.slot::text,task.dockernodeid)) task.*
- FROM swarmtaskprojections task
- WHERE lower(task.desiredstate)='running' AND

@@ -244,6 +244,7 @@ pub fn router(
     }))
     .merge(citadel_server::api::routes::dashboards::router(
         citadel_server::api::routes::dashboards::DashboardsHttpState {
+            backup_coverage: Some(backup_coverage.clone()),
             dashboards,
             entitlements: entitlements.clone(),
         },

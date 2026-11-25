@@ -1,76 +1,54 @@
+import Loader from '@/components/ui/loader';
+import { ArrowRight, CalendarClock } from 'lucide-react';
 import { monitoringLink } from '@/lib/monitoring-link';
 import { Link } from 'react-router';
 import { lazy, Suspense, useMemo } from 'react';
-import type { DashboardWidget, DashboardSourceView, DashboardMetricSource } from '@/api/generated/api.types';
+import type { DashboardWidget, DashboardMetricSource, DashboardWorkloadKind } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { StateBadge } from '@/components/custom/state-badge';
+import { WorkloadTable } from './resource-rows';
 import { Timestamp } from '@/components/custom/timestamp';
 import { useAppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { resourceLink } from '@/features/instance/schedules/presentation';
 import { validLink } from './catalogue';
-import type { MetricTile } from './metrics';
+import type { MetricTile, WorkloadTile, DashboardRequirements } from './requirements';
 import { sourcePath } from './source-path';
 const MetricHistory = lazy(() => import('./metrics').then((m) => ({ default: m.MetricHistory })));
 import { DashboardRangeClock } from './range-clock';
-import { CopyResourceLink } from './row-actions';
-import { Tile } from './tile';
+import { Tile, WidgetNotice } from './tile';
 
 type Options = { tags: string[]; range: number; enabled: boolean; interval: number | false };
-type WorkloadTile = DashboardWidget & { settings: Extract<DashboardWidget['settings'], { kind: 'Workloads' }> };
-function SourceRows({
+function WorkloadRows({
   kind,
   tiles,
   tags,
   enabled,
   interval,
-}: { kind: DashboardMetricSource['kind']; tiles: WorkloadTile[] } & Options) {
+}: { kind: DashboardWorkloadKind; tiles: WorkloadTile[] } & Options) {
   const limit = Math.max(...tiles.map((t) => t.settings.limit));
   const rows = useRead(
-    'listDashboardSources',
+    'listDashboardWorkloads',
     { query: { kind, tags, limit } },
-    { enabled, refetchInterval: interval, retry: false },
+    { enabled, staleTime: interval ? 15000 : 0, refetchInterval: interval, retry: false },
   );
   return (
     <>
       {tiles.map((tile) => (
         <Tile key={tile.id} tile={tile}>
           {rows.isError ? (
-            <p>Unavailable</p>
+            <WidgetNotice>Unavailable</WidgetNotice>
           ) : !rows.data ? (
-            <p>Loading…</p>
+            <Loader />
           ) : rows.data.data.length ? (
-            <ul className="divide-y">
-              {rows.data.data.slice(0, tile.settings.limit).map((r) => (
-                <SourceRow key={r.id} kind={kind} row={r} />
-              ))}
-            </ul>
+            <WorkloadTable kind={kind} rows={rows.data.data.slice(0, tile.settings.limit)} />
           ) : (
-            <p>No matching workloads.</p>
+            <p className="text-muted-foreground">No matching workloads.</p>
           )}
         </Tile>
       ))}
     </>
-  );
-}
-function SourceRow({ kind, row }: { kind: DashboardMetricSource['kind']; row: DashboardSourceView }) {
-  const link = sourcePath(kind, row);
-  return (
-    <li className="flex flex-wrap items-center justify-between gap-2 py-1.5">
-      <Link className="table-link" to={link}>
-        {row.name}
-      </Link>
-      <StateBadge value={row.status} />
-      <Link className="table-link text-xs" to={monitoringLink(link, kind, 'stats')}>
-        Statistics
-      </Link>
-      <Link className="table-link text-xs" to={monitoringLink(link, kind, 'logs')}>
-        Logs
-      </Link>
-      <CopyResourceLink path={link} />
-    </li>
   );
 }
 function MetricSources({
@@ -85,7 +63,7 @@ function MetricSources({
   const meta = useRead(
     'listDashboardSources',
     { query: { kind, tags, ids: ids.join(','), limit: ids.length } },
-    { enabled, refetchInterval: interval, retry: false },
+    { enabled, staleTime: interval ? 15000 : 0, refetchInterval: interval, retry: false },
   );
   return (
     <>
@@ -122,7 +100,7 @@ function MetricSources({
           <div className="contents" key={id}>
             {missing.map((w) => (
               <Tile key={w.id} tile={w}>
-                <p>Resource unavailable.</p>
+                <WidgetNotice>Resource unavailable.</WidgetNotice>
               </Tile>
             ))}
             {matching.length > 0 && (
@@ -182,18 +160,23 @@ function Maintenance({ tiles, tags, enabled, interval }: Options & { tiles: Dash
                 <Badge variant="outline">Instance-wide</Badge>
               </div>
               {!status ? (
-                <p>Unavailable</p>
+                <WidgetNotice>Unavailable</WidgetNotice>
               ) : (
                 <>
-                  <p>Installed version · {status.version}</p>
+                  <p className="flex flex-wrap items-baseline gap-x-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">Installed version</span>
+                    <strong className="break-all font-mono">{status.version}</strong>
+                  </p>
                   <p>
                     {status.availableUpdate
                       ? 'Available · ' + status.availableUpdate.version
                       : 'No available release reported.'}
                   </p>
                   {agentVersions.length > 0 && <p>Reported Agent versions · {agentVersions.join(', ')}</p>}
-                  <Link className="table-link" to="/updates">
-                    View updates
+                  <Link
+                    className="table-link mt-auto inline-flex w-fit items-center gap-1.5 text-xs font-medium"
+                    to="/updates">
+                    View updates <ArrowRight className="size-3" />
                   </Link>
                 </>
               )}
@@ -204,25 +187,26 @@ function Maintenance({ tiles, tags, enabled, interval }: Options & { tiles: Dash
         return (
           <Tile key={tile.id} tile={tile}>
             {schedules.isError ? (
-              <p>Unavailable</p>
+              <WidgetNotice>Unavailable</WidgetNotice>
             ) : !items ? (
-              <p>Loading…</p>
+              <Loader />
             ) : items.length ? (
               <ul className="divide-y">
                 {items.slice(0, tile.settings.kind === 'UpcomingSchedules' ? tile.settings.limit : 0).map((item) => {
                   const link = resourceLink(item);
                   return (
-                    <li
-                      key={item.purpose + item.ownerId}
-                      className="flex flex-wrap items-center justify-between gap-2 py-1">
+                    <li key={item.purpose + item.ownerId} className="flex min-w-0 items-center gap-2.5 py-2 text-xs">
+                      <CalendarClock aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
                       {link ? (
-                        <Link to={link} className="table-link">
+                        <Link to={link} className="table-link min-w-0 truncate font-mono" title={item.name}>
                           {item.name}
                         </Link>
                       ) : (
-                        item.name
+                        <span className="min-w-0 truncate font-mono" title={item.name}>
+                          {item.name}
+                        </span>
                       )}
-                      <span>
+                      <span className="ms-auto shrink-0 text-muted-foreground">
                         {item.nextAt && <Timestamp value={item.nextAt} formatDateTime={format} />} {item.timeZone}
                       </span>
                     </li>
@@ -238,54 +222,39 @@ function Maintenance({ tiles, tags, enabled, interval }: Options & { tiles: Dash
     </>
   );
 }
-export function SupplementalTiles({ tiles, ...options }: Options & { tiles: DashboardWidget[] }) {
-  const workloads = tiles.filter((w): w is WorkloadTile => w.settings.kind === 'Workloads');
-  const metrics = tiles.filter((w): w is MetricTile => w.settings.kind === 'Metrics');
-  const maintenance = tiles.filter((w) => w.settings.kind === 'UpcomingSchedules' || w.settings.kind === 'Updates');
+export function SupplementalTiles({ plan, ...options }: Options & { plan: DashboardRequirements }) {
+  const { workloads, metrics, notes, maintenance } = plan;
   return (
     <>
-      {tiles.map(
-        (w) =>
-          w.settings.kind === 'Notes' && (
-            <Tile key={w.id} tile={w}>
-              <p className="whitespace-pre-wrap break-words">{w.settings.text}</p>
-              <ul>
-                {w.settings.links
-                  .filter((l) => validLink(l.href))
-                  .map((l, i) => (
-                    <li key={i}>
-                      <Button variant="link" size="sm" asChild>
-                        {l.href.startsWith('/') ? (
-                          <Link to={l.href}>{l.label}</Link>
-                        ) : (
-                          <a href={l.href} rel="noreferrer">
-                            {l.label}
-                          </a>
-                        )}
-                      </Button>
-                    </li>
-                  ))}
-              </ul>
-            </Tile>
-          ),
-      )}
-      {[...new Set(workloads.map((t) => t.settings.resourceKind))].map((kind) => (
-        <SourceRows
-          {...options}
-          key={kind}
-          kind={kind}
-          tiles={workloads.filter((t) => t.settings.resourceKind === kind)}
-        />
+      {notes.map((w) => (
+        <Tile key={w.id} tile={w}>
+          <p className="whitespace-pre-wrap break-words">{w.settings.text}</p>
+          <ul>
+            {w.settings.links
+              .filter((l) => validLink(l.href))
+              .map((l, i) => (
+                <li key={i}>
+                  <Button variant="link" size="sm" asChild>
+                    {l.href.startsWith('/') ? (
+                      <Link to={l.href}>{l.label}</Link>
+                    ) : (
+                      <a href={l.href} rel="noreferrer">
+                        {l.label}
+                      </a>
+                    )}
+                  </Button>
+                </li>
+              ))}
+          </ul>
+        </Tile>
       ))}
-      {metrics.length > 0 && (
+      {[...workloads].map(([kind, tiles]) => (
+        <WorkloadRows {...options} key={kind} kind={kind} tiles={tiles} />
+      ))}
+      {metrics.size > 0 && (
         <DashboardRangeClock minutes={options.range} live={!!options.interval}>
-          {[...new Set(metrics.map((t) => t.settings.source.kind))].map((kind) => (
-            <MetricSources
-              {...options}
-              key={kind}
-              kind={kind}
-              tiles={metrics.filter((t) => t.settings.source.kind === kind)}
-            />
+          {[...metrics].map(([kind, tiles]) => (
+            <MetricSources {...options} key={kind} kind={kind} tiles={tiles} />
           ))}
         </DashboardRangeClock>
       )}

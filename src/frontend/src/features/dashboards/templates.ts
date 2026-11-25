@@ -6,9 +6,10 @@ import {
 } from '@/api/generated/api.types';
 import { randomUuid } from '@/lib/utils';
 
-type StarterWidget = { title: string; settings: DashboardWidgetSettings };
+type StarterWidget = { title: string; settings: DashboardWidgetSettings; size?: { w: number; h: number } };
 
-import { metricSettings } from './catalogue';
+import { nextPosition } from './layout';
+import { catalogue, metricSettings } from './catalogue';
 const templates = {
   Blank: [],
   Overview: [
@@ -33,8 +34,8 @@ const templates = {
   ],
   Maintenance: [
     { title: 'Backup activity', settings: { kind: 'Backups', limit: 5 } },
-    { title: 'Upcoming schedules', settings: { kind: 'UpcomingSchedules', limit: 5 } },
-    { title: 'Updates', settings: { kind: 'Updates' } },
+    { title: 'Upcoming schedules', size: { w: 6, h: 4 }, settings: { kind: 'UpcomingSchedules', limit: 5 } },
+    { title: 'Updates', size: { w: 6, h: 4 }, settings: { kind: 'Updates' } },
     { title: 'Recent activity', settings: { kind: 'RecentActivity', limit: 5 } },
   ],
 } satisfies Record<string, StarterWidget[]>;
@@ -42,17 +43,15 @@ const templates = {
 export type DashboardTemplate = keyof typeof templates;
 
 export function fromTemplate(template: DashboardTemplate): DashboardConfiguration {
-  return {
-    schemaVersion: 1,
-    tags: [],
-    rangeMinutes: 60,
-    widgets: templates[template].map(({ title, settings }, index) => ({
-      id: randomUuid(),
-      title,
-      settings: { ...settings },
-      layout: { x: (index % 2) * 6, y: Math.floor(index / 2) * 4, w: 6, h: 4 },
-    })),
-  };
+  const widgets: DashboardConfiguration['widgets'] = [];
+  const starters: readonly StarterWidget[] = templates[template];
+  for (const { title, settings, size } of starters) {
+    const { w, h } = size ?? catalogue[settings.kind].size;
+    const layout = nextPosition(widgets, w, h);
+    if (!layout) throw new Error('Dashboard template exceeds grid bounds');
+    widgets.push({ id: randomUuid(), title, settings: { ...settings }, layout });
+  }
+  return { schemaVersion: 1, tags: [], rangeMinutes: 60, widgets };
 }
 
 export const dashboardTemplates = Object.keys(templates) as DashboardTemplate[];

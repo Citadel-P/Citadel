@@ -74,6 +74,7 @@ pub struct ActivityRecord {
 
 #[derive(Debug, Clone)]
 pub struct RecentActivity {
+    pub resource_type: ActivityResourceType,
     pub id: Uuid,
     pub resource_name: String,
     pub event_type: ActivityEventType,

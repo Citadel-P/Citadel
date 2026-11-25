@@ -455,3 +455,22 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 }
+
+@media (hover: hover) and (pointer: fine) {
+  .dashboard-widget-scroll {
+    scrollbar-width: thin;
+    --widget-scroll-thumb: transparent;
+    scrollbar-color: var(--widget-scroll-thumb) transparent;
+  }
+  .dashboard-widget-scroll:hover,
+  .dashboard-widget-scroll:focus-within,
+  :is(.react-grid-item, section):hover > .dashboard-widget-scroll {
+    --widget-scroll-thumb: color-mix(in oklab, var(--foreground) 30%, transparent);
+  }
+  .dashboard-widget-scroll::-webkit-scrollbar {
+    background: transparent;
+  }
+  .dashboard-widget-scroll::-webkit-scrollbar-thumb {
+    background: var(--widget-scroll-thumb);
+  }
+}

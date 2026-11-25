@@ -28,7 +28,7 @@ export function DashboardHomePreference({ board }: { board?: DashboardSummaryVie
   );
 }
 
-function PreferenceDialog({ board, close }: { board?: DashboardSummaryView; close: () => void }) {
+export function PreferenceDialog({ board, close }: { board?: DashboardSummaryView; close: () => void }) {
   const client = useQueryClient();
   const profile = useRead('getCurrentProfile');
   const canSetInstance =

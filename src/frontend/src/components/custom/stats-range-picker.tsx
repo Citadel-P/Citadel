@@ -6,9 +6,11 @@ import type { StatsRangeState } from '@/hooks/useStatsRange';
 export function StatsRangePicker({
   range,
   showLabel = true,
+  includeCalendarDays = true,
 }: {
   range: Pick<StatsRangeState, 'selection' | 'setSelection'>;
   showLabel?: boolean;
+  includeCalendarDays?: boolean;
 }) {
   const value = range.selection.kind === 'relative' ? String(range.selection.minutes) : range.selection.kind;
   return (
@@ -35,8 +37,12 @@ export function StatsRangePicker({
               {label}
             </SelectItem>
           ))}
-          <SelectItem value="today">Today</SelectItem>
-          <SelectItem value="yesterday">Yesterday</SelectItem>
+          {includeCalendarDays && (
+            <>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="yesterday">Yesterday</SelectItem>
+            </>
+          )}
         </SelectContent>
       </Select>
     </div>

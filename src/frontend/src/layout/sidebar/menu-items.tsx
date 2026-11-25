@@ -29,6 +29,10 @@ const renderIcon = (Icon?: React.ComponentType<{ className?: string }>, classNam
 
 const MenuItems: IMenuItem[] = [
   {
+    group: 'Overview',
+    items: [{ icon: renderIcon(CitadelIcons.Dashboard), label: 'Dashboards', route: '/dashboards' }],
+  },
+  {
     group: 'Infrastructure',
     items: [
       { icon: renderIcon(CitadelIcons.Platform), label: 'Platforms', route: '/platforms' },
@@ -64,7 +68,6 @@ const MenuItems: IMenuItem[] = [
   {
     group: 'Monitoring',
     items: [
-      { icon: renderIcon(CitadelIcons.Dashboard), label: 'Dashboards', route: '/dashboards' },
       { icon: renderIcon(CitadelIcons.Alert), label: 'Alerts', route: '/alerts' },
       { icon: renderIcon(CitadelIcons.Activity), label: 'Activities', route: '/activities' },
     ],

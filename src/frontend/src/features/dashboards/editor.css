@@ -1,13 +1,108 @@
+.app-content:has(> .dashboard-builder) {
+  max-width: none;
+  padding: 0;
+  gap: 0;
+}
+
+.dashboard-builder-layout {
+  --builder-height: calc(100dvh - var(--layout-header-height));
+  --selection-color: var(--color-blue-500);
+  display: grid;
+  grid-template-areas: "toolbar" "canvas";
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  min-height: var(--builder-height);
+  min-width: 0;
+}
+
+.dashboard-builder-toolbar {
+  grid-area: toolbar;
+  padding: 1rem var(--content-padding-x);
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.dashboard-builder-canvas {
+  grid-area: canvas;
+  min-width: 0;
+  padding: .25rem;
+  background-color: color-mix(in oklab, var(--muted) 30%, var(--background));
+  background-image: linear-gradient(to right, var(--builder-line) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--builder-line) 1px, transparent 1px);
+  --builder-line: color-mix(in oklab, var(--border) 45%, transparent);
+  background-size: 24px 24px;
+}
+
+.dashboard-builder-panel {
+  grid-area: panel;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: 70dvh;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-builder-layout[data-panel='true'] {
+  grid-template-areas: "toolbar" "panel" "canvas";
+  grid-template-rows: auto auto 1fr;
+}
+
+@media (min-width: 64rem) {
+  .dashboard-builder-layout[data-panel='true'] {
+    grid-template-areas: "toolbar panel" "canvas panel";
+    grid-template-columns: minmax(0, 1fr) clamp(19rem, 24vw, 23rem);
+    grid-template-rows: auto 1fr;
+  }
+  .dashboard-builder-toolbar, .dashboard-builder-panel {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .dashboard-builder-panel {
+    align-self: start;
+    height: var(--builder-height);
+    max-height: none;
+    border-bottom: 0;
+    border-left: 1px solid var(--border);
+  }
+}
+
 .dashboard-editor-grid .react-grid-placeholder {
   display: grid;
   place-content: center;
   background: var(--muted);
   color: var(--foreground);
-  border: 1px dashed var(--primary);
+  border: 1px dashed var(--selection-color);
   opacity: .85;
 }
 .dashboard-editor-grid .react-grid-placeholder::after {
   content: var(--dashboard-ghost);
+}
+.dashboard-editor-grid .dashboard-edit-tile {
+  border-radius: max(.5rem, var(--radius));
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+.dashboard-edit-tile > header {
+  border-radius: inherit;
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+.dashboard-editor-grid .dashboard-edit-tile[data-selected='true'] {
+  border-color: var(--selection-color);
+  outline: 1px solid var(--selection-color);
+  z-index: 2;
+}
+.dashboard-editor-grid .dashboard-edit-tile[data-selected='true'] > .react-resizable-handle-se {
+  opacity: 1;
+  right: -3px;
+  bottom: -3px;
+  background: var(--selection-color);
+  border-radius: .3rem;
+}
+.dashboard-editor-grid .dashboard-edit-tile[data-selected='true'] > .react-resizable-handle-se::after {
+  border-color: white;
+  opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
   .dashboard-editor-grid .react-grid-item { transition: none; }

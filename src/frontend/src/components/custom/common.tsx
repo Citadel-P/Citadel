@@ -225,6 +225,8 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   placeholder,
   searchPlaceholder,
   className,
+  onSearchChange,
+  onOpenChange,
   sourceResourceId,
   platformId,
   queryEnabled = true,
@@ -244,6 +246,8 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   placeholder?: string;
   searchPlaceholder?: string;
   className?: string;
+  onSearchChange?: (search: string) => void;
+  onOpenChange?: (open: boolean) => void;
   sourceResourceId?: string;
   platformId?: string;
   queryEnabled?: boolean;
@@ -304,9 +308,13 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
     return [...entries.entries()];
   }, [filtered]);
 
+  const changeOpen = (next: boolean) => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
   const handleSelect = (item: T | undefined) => {
     onSelect?.(item);
-    setOpen(false);
+    changeOpen(false);
   };
 
   useLayoutEffect(() => {
@@ -315,7 +323,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
 
   const defaultDisplay = (item: T | undefined) => (item?.name == '' ? `<id=${item?.id}>` : item?.name);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={changeOpen}>
       <PopoverTrigger asChild>
         <Button
           id={id}
@@ -347,7 +355,10 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
           <CommandInput
             placeholder={searchPlaceholder ?? `Search ${getLookupResourceName(sourceType ?? targetType)}`}
             value={search}
-            onValueChange={setSearch}
+            onValueChange={(value) => {
+              setSearch(value);
+              onSearchChange?.(value);
+            }}
           />
 
           <CommandList>

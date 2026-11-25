@@ -5,11 +5,12 @@ use citadel_dashboards::{
 use citadel_primitives::{PermissionLevel, ResourceType};
 use sqlx::{PgPool, Row};
 
-pub(super) async fn read(
+async fn visible(
     pool: &PgPool,
     viewer: DashboardViewer,
     filter: SourceFilter,
-) -> Result<Vec<DashboardSource>, DashboardError> {
+    workload: bool,
+) -> Result<Vec<sqlx::postgres::PgRow>, DashboardError> {
     // Docker containers inherit platform access and have no independent tag assignment.
     let (resource, owner, table, status, platform, docker_id, tag_type) = match filter.kind {
         SourceKind::Platform => (
@@ -59,7 +60,7 @@ pub(super) async fn read(
         ),
     };
     let container = if matches!(filter.kind, SourceKind::Deployment) && !filter.ids.is_empty() {
-        "(SELECT c.id FROM containers c WHERE c.platformid=r.platformid AND c.deploymentid=r.id AND c.dockercontainerid=r.dockercontainerid AND c.dockernodeid IS NULL)"
+        "(SELECT c.id FROM containers c WHERE c.platformid=r.platformid AND c.deploymentid=r.id ORDER BY c.updated DESC,c.id DESC LIMIT 1)"
     } else {
         "NULL::uuid"
     };
@@ -76,9 +77,34 @@ pub(super) async fn read(
     } else {
         "FALSE"
     };
+    let mut columns = String::new();
+    let mut joins = "";
+    let mut projection = "v.*".to_owned();
+    if workload {
+        let identity = match filter.kind {
+            SourceKind::Container => {
+                "r.dockercontainerid AS runtime_id,r.dockernodeid AS node_id,r.projectionstalesince IS NOT NULL AS stale"
+            }
+            _ => "NULL::text AS runtime_id,NULL::text AS node_id,FALSE AS stale",
+        };
+        columns = format!(
+            ",{identity},coalesce(r.controlstate='Processing',false) AS processing,{owner} AS owner"
+        );
+        let effective_status = if matches!(filter.kind, SourceKind::SwarmService) {
+            joins = " JOIN platforms p ON p.id=v.platform_id JOIN swarmservices s ON s.id=v.id LEFT JOIN swarmserviceprojections projection ON projection.platformid=v.platform_id AND projection.dockerserviceid=v.docker_id";
+            include_str!("../swarm_services/effective_health.sql")
+        } else {
+            joins = " JOIN platforms p ON p.id=v.platform_id";
+            "v.status"
+        };
+        let probes = super::probes::selected(filter.kind);
+        projection = format!("v.*, {effective_status} AS workload_status, p.status='Online' AS online,{probes} AS probes,
+            ($4 OR EXISTS(SELECT FROM actor_scope s JOIN actorroles ar ON ar.actorid=s.actorid JOIN permissions p ON p.roleid=ar.roleid WHERE p.resourcetype=$2 AND (p.specificpermissions & $10)<>0)
+            OR EXISTS(SELECT FROM actor_scope s JOIN resourceaccesses a ON a.actorid=s.actorid WHERE a.resourcetype=$2 AND a.resourceid=v.owner AND (a.specificpermissions & $10)<>0)) AS logs");
+    }
     let sql = format!(
         r#"{AUTHORIZED_BY_LEVELS_CTE}, visible AS (
-        SELECT r.id,r.name,{status} AS status,{platform} AS platform_id,{docker_id} AS docker_id,{container} AS container_id,{exceeds_budget} AS exceeds_budget,
+        SELECT r.id,r.name,{status} AS status,{platform} AS platform_id,{docker_id} AS docker_id,{container} AS container_id,{exceeds_budget} AS exceeds_budget{columns},
         NOT EXISTS (SELECT FROM unnest($6::text[]) requested(name) WHERE NOT EXISTS (
             SELECT FROM resourcetags link JOIN tags t ON t.id=link.tagid WHERE link.resourceid=r.id
             AND link.resourcetype=$5 AND t.normalizedname=lower(requested.name))) AS matches_tags
@@ -88,9 +114,9 @@ pub(super) async fn read(
           WHERE a.resourcetype=$2 AND a.resourceid={owner} AND a.permissionlevel=ANY($3)))
         AND (cardinality($7::uuid[])=0 OR r.id=ANY($7))
         AND ($8='' OR strpos(lower(r.name),lower($8))>0)
-    ) SELECT * FROM visible WHERE matches_tags OR cardinality($7::uuid[])>0 ORDER BY name,id LIMIT $9"#
+    ) SELECT {projection} FROM (SELECT * FROM visible WHERE matches_tags OR cardinality($7::uuid[])>0 ORDER BY name,id LIMIT $9) v{joins} ORDER BY v.name,v.id"#
     );
-    let rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
         .bind(viewer.actor.value())
         .bind(resource as i32)
         .bind(PermissionLevel::Read.accepted_database_levels())
@@ -99,10 +125,22 @@ pub(super) async fn read(
         .bind(filter.tags)
         .bind(filter.ids)
         .bind(filter.search)
-        .bind(filter.limit)
+        .bind(filter.limit);
+    if workload {
+        query = query.bind(citadel_primitives::SpecificPermission::Logs as i32);
+    }
+    query
         .fetch_all(pool)
         .await
-        .map_err(|e| DashboardError::Storage(e.to_string()))?;
+        .map_err(|e| DashboardError::Storage(e.to_string()))
+}
+
+pub(super) async fn read(
+    pool: &PgPool,
+    viewer: DashboardViewer,
+    filter: SourceFilter,
+) -> Result<Vec<DashboardSource>, DashboardError> {
+    let rows = visible(pool, viewer, filter, false).await?;
     rows.iter()
         .map(|r| {
             Ok(DashboardSource {
@@ -117,5 +155,63 @@ pub(super) async fn read(
             })
         })
         .collect::<Result<Vec<_>, sqlx::Error>>()
+        .map_err(|e| DashboardError::Storage(e.to_string()))
+}
+
+pub(super) async fn workloads(
+    pool: &PgPool,
+    viewer: DashboardViewer,
+    kind: citadel_dashboards::WorkloadKind,
+    tags: Vec<String>,
+    limit: i64,
+) -> Result<Vec<citadel_dashboards::DashboardWorkload>, DashboardError> {
+    use citadel_primitives::health::{ContainerHealthObservation, observed_status};
+    let rows = visible(
+        pool,
+        viewer,
+        SourceFilter {
+            kind: kind.into(),
+            tags,
+            limit,
+            ids: vec![],
+            search: String::new(),
+        },
+        true,
+    )
+    .await?;
+    let now = chrono::Utc::now().timestamp_millis();
+    rows.iter()
+        .map(|r| {
+            let online: bool = r.try_get("online")?;
+            #[derive(serde::Deserialize)]
+            struct Probe {
+                observation: Option<ContainerHealthObservation>,
+                state: String,
+                available: bool,
+            }
+            let sqlx::types::Json(observed): sqlx::types::Json<Vec<Probe>> = r.try_get("probes")?;
+            let more_probes = observed.len() > 16;
+            let probes = observed
+                .iter()
+                .take(16)
+                .map(|p| {
+                    observed_status(p.observation.as_ref(), &p.state, online && p.available, now)
+                })
+                .collect();
+            Ok(citadel_dashboards::DashboardWorkload {
+                id: r.try_get("id")?,
+                name: r.try_get("name")?,
+                status: r.try_get("workload_status")?,
+                platform_id: r.try_get("platform_id")?,
+                processing: r.try_get("processing")?,
+                probes,
+                more_probes,
+                docker_id: r.try_get("runtime_id")?,
+                node_id: r.try_get("node_id")?,
+                stale: r.try_get("stale")?,
+                can_view_logs: online && r.try_get::<bool, _>("logs")?,
+            })
+        })
+        .collect::<Result<_, sqlx::Error>>()
         .map_err(|e| DashboardError::Storage(e.to_string()))
 }

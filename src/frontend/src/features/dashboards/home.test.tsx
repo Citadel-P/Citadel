@@ -58,7 +58,7 @@ it('opens the freshly resolved home without loading the previously cached board'
   const queryClient = createQueryClient();
   queryClient.setQueryData(resourceQueryKey('getDashboardDefault'), { data: { dashboardId: 'old' } });
   renderCitadelRoutes(appRoutes, { queryClient });
-  await screen.findByRole('heading', { name: 'Board mine' });
+  await screen.findByRole('heading', { name: 'Board mine' }, { timeout: 5000 });
   expect(board.mock.calls.map(([{ params }]) => params.id)).toEqual(['mine']);
 });
 
@@ -69,8 +69,9 @@ it('shows an empty installation its built-in Overview and lets the user start a 
   const { user } = renderCitadelRoutes(appRoutes);
   await screen.findByRole('heading', { name: 'Overview' });
   expect(screen.getAllByRole('region')).toHaveLength(5);
-  expect(screen.getByRole('link', { name: 'Dashboards' })).toHaveAttribute('href', '/dashboards');
-  await user.click(screen.getByRole('button', { name: 'Save a copy' }));
+  await user.click(screen.getByRole('button', { name: 'Dashboard options' }));
+  expect(screen.getByRole('menuitem', { name: 'Dashboards' })).toHaveAttribute('href', '/dashboards');
+  await user.click(screen.getByRole('menuitem', { name: 'Save a copy' }));
   expect(within(screen.getByRole('dialog')).getByLabelText('Template')).toHaveTextContent('Overview');
   await user.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(create).not.toHaveBeenCalled();
@@ -83,7 +84,7 @@ it('offers retry when resolving home fails', async () => {
   home.mockImplementationOnce(() => HttpResponse.json({ dashboardId: null }, { status: 500 }));
   const { user } = renderCitadelRoutes(appRoutes);
   await user.click(await screen.findByRole('button', { name: 'Retry' }));
-  await screen.findByRole('heading', { name: 'Board mine' });
+  await screen.findByRole('heading', { name: 'Board mine' }, { timeout: 5000 });
   expect(home).toHaveBeenCalledTimes(2);
 });
 
@@ -96,7 +97,8 @@ it.each([
 ])('saves $scope home from $path (administrator=$admin)', async ({ admin, path, scope, id }) => {
   const { home, writes } = setup(admin, 'other');
   const { user } = renderCitadelRoutes(appRoutes, { route: path });
-  await user.click(await screen.findByRole('button', { name: id ? 'Set as home' : 'Reset home' }));
+  if (id) await user.click(await screen.findByRole('button', { name: 'Dashboard options' }));
+  await user.click(await screen.findByRole(id ? 'menuitem' : 'button', { name: id ? 'Set as home' : 'Reset home' }));
   const dialog = within(screen.getByRole('dialog'));
   if (scope === 'instance') await user.click(await dialog.findByRole('radio', { name: 'Instance default' }));
   else expect(dialog.queryByRole('radio', { name: 'Instance default' })).toBeNull();

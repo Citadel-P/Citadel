@@ -264,6 +264,14 @@ async fn recent_activity_filters_before_limit_for_a_seeded_viewer() {
         let rows = data.as_array().unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0]["id"], expected.to_string());
+        assert_eq!(
+            rows[0]["resourceType"],
+            if expected == backup {
+                "BackupPolicy"
+            } else {
+                "Platform"
+            }
+        );
         assert!(rows[0].get("info").is_none());
     }
     let (status, data) = get(

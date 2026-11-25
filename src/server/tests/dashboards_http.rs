@@ -88,6 +88,7 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
     let repository = Arc::new(PostgresDashboardRepository::new(pool.clone()));
     let app = |team| {
         router(DashboardsHttpState {
+            backup_coverage: None,
             dashboards: repository.clone(),
             entitlements: Arc::new(StaticEntitlementService::new(team)),
         })
@@ -400,6 +401,7 @@ async fn dashboard_sharing_enforces_visibility_revision_and_entitlement() {
     let pool = sqlx::PgPool::connect(&db).await.unwrap();
     let app = |team| {
         router(DashboardsHttpState {
+            backup_coverage: None,
             dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
             entitlements: Arc::new(StaticEntitlementService::new(team)),
         })
@@ -561,6 +563,7 @@ async fn widget_sources_enforce_access_and_upcoming_orders_enabled_schedules() {
         .unwrap();
     let pool = sqlx::PgPool::connect(&db).await.unwrap();
     let app = router(DashboardsHttpState {
+        backup_coverage: None,
         dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
         entitlements: Arc::new(StaticEntitlementService::new(false)),
     });
@@ -631,6 +634,71 @@ async fn widget_sources_enforce_access_and_upcoming_orders_enabled_schedules() {
     .fetch_one(&pool)
     .await
     .unwrap();
+    for kind in ["Stack", "SwarmService", "Deployment", "Container"] {
+        let rows = call(
+            &app,
+            &admin,
+            Method::GET,
+            &format!("dashboards/workloads?kind={kind}&tags=missing"),
+            Value::Null,
+            StatusCode::OK,
+        )
+        .await;
+        assert_eq!(rows, json!([]));
+    }
+    let rows = call(
+        &app,
+        &admin,
+        Method::GET,
+        "dashboards/workloads?kind=Stack",
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    let visible = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == json!(stack))
+        .unwrap();
+    assert_eq!(visible["name"], "Source budget");
+    assert_eq!(visible["status"], "Running");
+    assert_eq!(visible["processing"], false);
+    assert_eq!(visible["canViewLogs"], true);
+    assert!(visible.get("spec").is_none());
+    assert_eq!(visible["observedProbes"], json!([]));
+    let rows = call(
+        &app,
+        &viewer,
+        Method::GET,
+        "dashboards/workloads?kind=Stack",
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(rows, json!([]));
+    let container = Uuid::now_v7();
+    sqlx::query("INSERT INTO containers(id,name,platformid,dockercontainerid,dockerimageid,state,created,updated,ports,health,controlstate) VALUES($1,'Fixture workload',$2,'fixture-runtime','image','Running',0,0,'[]',$3,'Processing')")
+        .bind(container).bind(id).bind(json!({"configuration":"Enabled","result":"Unhealthy","observedAt":chrono::Utc::now().timestamp_millis()})).execute(&pool).await.unwrap();
+    let rows = call(
+        &app,
+        &viewer,
+        Method::GET,
+        "dashboards/workloads?kind=Container",
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    let row = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == json!(container))
+        .unwrap();
+    assert_eq!(row["processing"], true);
+    assert_eq!(row["observedProbes"], json!(["Unhealthy"]));
+    assert_eq!(row["canViewLogs"], false);
+    assert!(row["backupStatus"].is_null());
     let stack_path = format!("dashboards/sources?kind=Stack&ids={stack}");
     for (first, last, exceeds) in [(1_i32, 8_i32, false), (9, 9, true)] {
         sqlx::query("INSERT INTO statisticsowners(sourceid,stackid,kind,servicename,replicakey) SELECT $1,$2,'Workload','service-'||n,'replica' FROM generate_series($3::integer,$4::integer)n")

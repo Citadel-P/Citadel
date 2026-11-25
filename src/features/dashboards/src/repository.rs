@@ -8,6 +8,13 @@ use uuid::Uuid;
 type ResultFuture<'a, T> = BoxFuture<'a, Result<T, DashboardError>>;
 
 pub trait DashboardRepository: Send + Sync {
+    fn workloads(
+        &self,
+        viewer: DashboardViewer,
+        kind: crate::WorkloadKind,
+        tags: Vec<String>,
+        limit: i64,
+    ) -> ResultFuture<'_, Vec<crate::DashboardWorkload>>;
     fn sources(
         &self,
         viewer: DashboardViewer,

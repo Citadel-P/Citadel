@@ -1,3 +1,6 @@
+import { PreferenceDialog } from './home-preference';
+import { useCanManageSharing, SharingItem, SharingDialog } from './sharing';
+import { MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -22,7 +25,9 @@ export function DashboardMenu({
   board: DashboardSummaryView;
   configuration?: DashboardConfiguration;
 }) {
-  const [action, setAction] = useState<'duplicate' | 'delete'>();
+  const [action, setAction] = useState<'duplicate' | 'delete' | 'home'>();
+  const canShare = useCanManageSharing(board);
+  const [sharing, setSharing] = useState<DashboardSummaryView>();
   const [version, setVersion] = useState(board.revision);
   const client = useQueryClient();
   const navigate = useNavigate();
@@ -38,7 +43,9 @@ export function DashboardMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline">Dashboard options</Button>
+          <Button variant="outline" size="icon" aria-label="Dashboard options">
+            <MoreHorizontal />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem asChild>
@@ -47,6 +54,8 @@ export function DashboardMenu({
           {configuration && (
             <DropdownMenuItem onSelect={() => setAction('duplicate')}>Duplicate dashboard</DropdownMenuItem>
           )}
+          <DropdownMenuItem onSelect={() => setAction('home')}>Set as home</DropdownMenuItem>
+          {canShare && <SharingItem board={board} select={() => setSharing(board)} />}
           {board.canDelete && (
             <DropdownMenuItem
               onSelect={() => {
@@ -58,6 +67,8 @@ export function DashboardMenu({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      {action === 'home' && <PreferenceDialog board={board} close={() => setAction(undefined)} />}
+      {sharing && canShare && <SharingDialog board={sharing} close={() => setSharing(undefined)} />}
       {action === 'duplicate' && configuration && (
         <CreateDashboardDialog copy={{ name: board.name, configuration }} close={() => setAction(undefined)} />
       )}

@@ -1,13 +1,19 @@
+import MemoryUsage from '@/features/docker-resources/containers/container-info/stats/memory-usage';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  CHART_ACTIVE_DOT,
+  CHART_HOVER_CURSOR,
+} from '@/components/ui/chart';
+import Loader from '@/components/ui/loader';
 import { monitoringLink } from '@/lib/monitoring-link';
-import { useContext, useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
+import { useId, useContext, useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import type {
-  ContainerStatView,
-  DashboardWidget,
-  DashboardMetricSource,
-  DashboardSourceView,
-} from '@/api/generated/api.types';
+import { Area, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
+import type { ContainerStatView, DashboardMetricSource, DashboardSourceView } from '@/api/generated/api.types';
 import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
 import { filterStatsRange, statsBucketSeconds, resolveStatsRange, statsRangeQuery } from '@/lib/stats-range';
 import { requestErrorStatus } from '@/lib/request-error';
@@ -16,19 +22,25 @@ import { useTaskStatsStream } from '@/features/swarm-resources/tasks/hooks/useTa
 import { useServiceStatsStream } from '@/features/swarm-resources/services/hooks/useServiceStats';
 import { usePlatformLiveStats } from '@/features/platforms/platform-series';
 import { useRealtimeContext } from '@/lib/context/realtime-context';
-import { RangeClock } from './range-clock';
+import { RangeField, Choice, chartPalette } from './display-controls';
+import { STATS_PRESETS } from '@/lib/stats-range';
+import { HistoryRangeContext, RangeClock } from './range-clock';
 import { useStackSeries } from './stack-series';
 import { useAppContext } from '@/lib/context/app-context';
 import { latestLiveStat, mergeStatsBuckets } from '@/lib/stats-buckets';
 import { sourcePath } from './source-path';
 import { Timestamp } from '@/components/custom/timestamp';
+import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
-import { Tile } from './tile';
+import { Tile, WidgetNotice } from './tile';
 
-export type MetricTile = DashboardWidget & { settings: Extract<DashboardWidget['settings'], { kind: 'Metrics' }> };
+import type { MetricTile } from './requirements';
 type Sample = { created: number } & Partial<
   Record<
     | 'cpuUsage'
+    | 'memoryCache'
+    | 'memoryActiveCache'
+    | 'memoryLimit'
     | 'memoryActive'
     | 'memoryUsage'
     | 'rxBytesPerSecond'
@@ -41,26 +53,22 @@ type Sample = { created: number } & Partial<
 const emptyIds: string[] = [];
 const emptyStats: ContainerStatView[] = [];
 type Series = { name: string; stats: Sample[] };
-const colors = {
-  Blue: 'var(--chart-1)',
-  Green: 'var(--chart-2)',
-  Amber: 'var(--chart-3)',
-  Violet: 'var(--chart-4)',
-  Cyan: 'var(--chart-5)',
-};
 function Chart({
   tile,
   series,
   platform,
   minutes,
   now,
+  formatTime,
 }: {
+  formatTime: DateTimeFormatter;
   now: number;
   tile: MetricTile;
   series: Series;
   platform: boolean;
   minutes: number;
 }) {
+  const gradientId = useId().replaceAll(':', '');
   const frame = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -96,55 +104,148 @@ function Chart({
         ? 'bytes'
         : 'bytesPerSecond';
   const measured = data.some((s) => keys.some((k) => s[k as keyof Sample] != null));
+  const latest = data.at(-1);
+  const format = statsValueAxis(unit).tickFormatter;
+  const config = Object.fromEntries(
+    keys.map((key, i) => [key, { label: labels[key], color: i ? 'var(--chart-2)' : chartPalette[color] }]),
+  );
+  if (!platform && metric === 'Memory' && measured)
+    return (
+      <div ref={frame} className="flex min-h-40 flex-1 flex-col">
+        {visible && (
+          <MemoryUsage
+            stats={data}
+            controls={
+              latest && (
+                <span className="text-muted-foreground">
+                  <Timestamp value={latest.created * 1000} formatDateTime={formatTime} />
+                </span>
+              )
+            }
+            current={latest}
+            isLoading={false}
+            embedded={{ bounds, color: chartPalette[color], presentation, legend }}
+          />
+        )}
+      </div>
+    );
   return (
-    <div ref={frame} className="min-h-[145px] min-w-0 flex-1">
-      {series.name && <p className="text-xs">{series.name}</p>}
+    <div ref={frame} className="flex min-h-40 min-w-0 flex-1 flex-col md:min-h-0">
+      {measured && latest && (
+        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2">
+          <span className="font-mono text-base font-semibold tabular-nums">
+            {keys
+              .map((k) => {
+                const v = latest[k as keyof Sample];
+                return labels[k] + ' ' + (v == null ? '—' : format(v));
+              })
+              .join(' · ')}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            <Timestamp value={latest.created * 1000} formatDateTime={formatTime} />
+          </span>
+        </div>
+      )}
       {!measured ? (
-        <p>No measurements in this range.</p>
+        <p className="text-muted-foreground">No measurements in this range.</p>
       ) : (
         visible && (
-          <ResponsiveContainer width="100%" height={145} minWidth={0}>
-            <ComposedChart data={data}>
-              <CartesianGrid vertical={false} stroke="var(--border)" />
-              <XAxis
-                dataKey="created"
-                type="number"
-                domain={[bounds.from, bounds.to]}
-                tick={{ fontSize: 10 }}
-                tickFormatter={(v) => new Date(v * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              />
-              <YAxis {...statsValueAxis(unit)} />
-              <Tooltip labelFormatter={(v) => new Date(Number(v) * 1000).toLocaleString()} />
-              {legend && <Legend />}
-              {keys.map((k, i) =>
-                presentation === 'Area' ? (
-                  <Area
-                    key={k}
-                    dataKey={k}
-                    name={labels[k]}
-                    stroke={colors[color]}
-                    strokeDasharray={i ? '4 3' : undefined}
-                    fill={colors[color]}
-                    fillOpacity={0.12}
-                    isAnimationActive={false}
+          <div className="relative min-h-20 flex-1">
+            <div className="absolute inset-0">
+              <ChartContainer config={config} className="aspect-auto h-full w-full">
+                <ComposedChart data={data} accessibilityLayer>
+                  {presentation === 'Gradient' && (
+                    <defs>
+                      {keys.map((k) => (
+                        <linearGradient key={k} id={gradientId + k} x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor={`var(--color-${k})`} stopOpacity={0.32} />
+                          <stop offset="100%" stopColor={`var(--color-${k})`} stopOpacity={0.03} />
+                        </linearGradient>
+                      ))}
+                    </defs>
+                  )}
+                  <CartesianGrid vertical={false} stroke="var(--border)" />
+                  <XAxis
+                    dataKey="created"
+                    type="number"
+                    domain={[bounds.from, bounds.to]}
+                    tick={{ fontSize: 10 }}
+                    tickFormatter={(v) =>
+                      new Date(v * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    }
                   />
-                ) : (
-                  <Line
-                    key={k}
-                    dataKey={k}
-                    name={labels[k]}
-                    stroke={colors[color]}
-                    strokeDasharray={i ? '4 3' : undefined}
-                    dot={false}
-                    isAnimationActive={false}
+                  <YAxis {...statsValueAxis(unit)} />
+                  <ChartTooltip
+                    cursor={CHART_HOVER_CURSOR}
+                    content={
+                      <ChartTooltipContent
+                        indicator="dot"
+                        labelFormatter={(_, points) => formatTime(Number(points[0]?.payload?.created) * 1000)}
+                        valueFormatter={(v) => format(Number(v))}
+                      />
+                    }
                   />
-                ),
-              )}
-            </ComposedChart>
-          </ResponsiveContainer>
+                  {legend && <ChartLegend content={<ChartLegendContent />} />}
+                  {keys.map((k, i) =>
+                    presentation !== 'Line' ? (
+                      <Area
+                        key={k}
+                        dataKey={k}
+                        name={labels[k]}
+                        stroke={i ? 'var(--chart-2)' : chartPalette[color]}
+                        strokeDasharray={i ? '4 3' : undefined}
+                        activeDot={CHART_ACTIVE_DOT}
+                        fill={presentation === 'Gradient' ? `url(#${gradientId + k})` : `var(--color-${k})`}
+                        fillOpacity={presentation === 'Gradient' ? 1 : 0.18}
+                        isAnimationActive={false}
+                      />
+                    ) : (
+                      <Line
+                        key={k}
+                        dataKey={k}
+                        name={labels[k]}
+                        stroke={i ? 'var(--chart-2)' : chartPalette[color]}
+                        strokeDasharray={i ? '4 3' : undefined}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    ),
+                  )}
+                </ComposedChart>
+              </ChartContainer>
+            </div>
+          </div>
         )
       )}
     </div>
+  );
+}
+
+function SeriesChart({
+  tile,
+  series,
+  platform,
+  minutes,
+  now,
+  formatTime,
+}: {
+  formatTime: DateTimeFormatter;
+  tile: MetricTile;
+  series: Series[];
+  platform: boolean;
+  minutes: number;
+  now: number;
+}) {
+  const [name, setName] = useState('');
+  const selected = series.find((s) => s.name === name) ?? series[0];
+  return (
+    <>
+      {series.length > 1 && (
+        <Choice label="Service" value={selected.name} options={series.map((s) => s.name)} change={setName} />
+      )}
+      {series.length === 1 && selected.name && <span className="text-xs">{selected.name}</span>}
+      <Chart formatTime={formatTime} tile={tile} series={selected} platform={platform} minutes={minutes} now={now} />
+    </>
   );
 }
 
@@ -187,6 +288,7 @@ export function MetricHistory({
   interval: number | false;
   manual: boolean;
 }) {
+  const setRange = useContext(HistoryRangeContext);
   const app = useAppContext();
   const canReadPlatform = app.platforms?.some((p) => p.id === row.platformId) === true;
   const query = statsRangeQuery({ kind: 'relative', minutes }, resolveStatsRange({ kind: 'relative', minutes }));
@@ -285,36 +387,43 @@ export function MetricHistory({
       {tiles.map((tile) => {
         let body: ReactNode;
         if (read.isError || !series)
-          body = (
-            <p>
-              {read.isLoading
-                ? 'Loading…'
-                : requestErrorStatus(read.error) === 429
-                  ? 'Statistics reads are busy. Try Refresh shortly.'
-                  : 'Unavailable'}
-            </p>
+          body = read.isLoading ? (
+            <Loader />
+          ) : (
+            <WidgetNotice>
+              {requestErrorStatus(read.error) === 429
+                ? 'Statistics reads are busy. Try Refresh shortly.'
+                : 'Unavailable'}
+            </WidgetNotice>
           );
-        else if (!series.length) body = <p>No measurements in this range.</p>;
+        else if (!series.length) body = <p className="text-muted-foreground">No measurements in this range.</p>;
         else if (series.length > 8)
           body = <p>This stack has more than eight service series. Open full statistics to view them.</p>;
         else
-          body = visibleSeries?.map((s) => (
-            <Chart
-              key={s.name}
+          body = visibleSeries && (
+            <SeriesChart
+              formatTime={formatDateTime}
+              series={visibleSeries}
               tile={tile}
-              series={s}
               platform={source.kind === 'Platform'}
               minutes={minutes}
               now={now}
             />
-          ));
+          );
         return (
           <Tile tile={tile} key={tile.id}>
-            <div className="flex flex-wrap gap-3 text-xs">
-              <Link className="table-link" to={link}>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <Link
+                className="table-link max-w-full truncate rounded border bg-muted/35 px-2 py-0.5 font-mono text-xs font-medium text-foreground"
+                to={link}>
                 {row.name}
               </Link>
-              <Link className="table-link" to={monitoringLink(link, source.kind, 'stats', minutes)}>
+              {setRange && !manual ? (
+                <RangeField value={minutes} change={setRange} />
+              ) : (
+                <span>History range · {STATS_PRESETS.find((p) => p.minutes === minutes)?.label}</span>
+              )}
+              <Link className="table-link ml-auto" to={monitoringLink(link, source.kind, 'stats', minutes)}>
                 Full statistics
               </Link>
             </div>

@@ -7384,7 +7384,8 @@
       "DashboardChartStyle": {
         "enum": [
           "Line",
-          "Area"
+          "Area",
+          "Gradient"
         ],
         "type": "string"
       },
@@ -7954,6 +7955,60 @@
           "SwarmService"
         ],
         "type": "string"
+      },
+      "DashboardWorkloadView": {
+        "properties": {
+          "backupStatus": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BackupCoverageStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "canViewLogs": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "moreProbes": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "observedProbes": {
+            "items": {
+              "$ref": "#/components/schemas/HealthStatus"
+            },
+            "type": "array"
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "processing": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "platformId",
+          "status",
+          "processing",
+          "observedProbes",
+          "moreProbes",
+          "canViewLogs"
+        ],
+        "type": "object"
       },
       "DatabaseConnectionsView": {
         "properties": {
@@ -21370,11 +21425,15 @@
           "resourceName": {
             "type": "string"
           },
+          "resourceType": {
+            "$ref": "#/components/schemas/ActivityResourceType"
+          },
           "status": {
             "$ref": "#/components/schemas/ActivityStatus"
           }
         },
         "required": [
+          "resourceType",
           "id",
           "resourceName",
           "eventType",
@@ -46135,6 +46194,130 @@
           }
         ],
         "summary": "Find readable monitoring sources and check pinned resource tag membership",
+        "tags": [
+          "Dashboards"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
+    "/api/v1/dashboards/workloads": {
+      "get": {
+        "operationId": "listDashboardWorkloads",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DashboardWorkloadKind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Match all resource tag names",
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DashboardWorkloadView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Bounded workload rows"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List readable workloads with persisted monitoring and backup coverage",
         "tags": [
           "Dashboards"
         ],

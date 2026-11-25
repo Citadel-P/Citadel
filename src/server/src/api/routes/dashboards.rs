@@ -20,6 +20,8 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct DashboardsHttpState {
+    pub backup_coverage:
+        Option<Arc<crate::api::resources::backups::coverage::BackupCoverageService>>,
     pub dashboards: Arc<dyn DashboardRepository>,
     pub entitlements: Arc<dyn EntitlementService>,
 }
@@ -55,6 +57,7 @@ pub fn router(state: DashboardsHttpState) -> Router {
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<DashboardsHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
         .normalized_routes(utoipa_axum::routes!(sources))
+        .normalized_routes(utoipa_axum::routes!(workloads))
         .normalized_routes(utoipa_axum::routes!(list))
         .normalized_routes(utoipa_axum::routes!(get))
         .normalized_routes(utoipa_axum::routes!(create))
@@ -349,6 +352,71 @@ async fn sources(
         Json(
             rows.into_iter()
                 .map(DashboardSourceView::from)
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
+    ))
+}
+
+#[utoipa::path(get, path="/api/v1/dashboards/workloads", operation_id="listDashboardWorkloads", tag="Dashboards",
+    summary="List readable workloads with persisted monitoring and backup coverage",
+    params(DashboardWorkloadQuery, ("tags"=Option<Vec<String>>, Query, description="Match all resource tag names")),
+    responses((status=200,description="Bounded workload rows",body=Vec<DashboardWorkloadView>),crate::openapi::errors::AccessErrors),
+    security(("Bearer"=[])), extensions(("x-citadel-principal"=json!("human")),("x-citadel-public"=json!(false)),("x-citadel-setup-exempt"=json!(false))))]
+async fn workloads(
+    State(state): State<DashboardsHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: HeaderMap,
+    ApiQuery(query): ApiQuery<DashboardWorkloadQuery>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+) -> HttpResult {
+    let principal = api_result(require_human(principal), &headers)?;
+    let tags = api_result(
+        crate::api::request_validation::parse_tag_filters(raw.as_deref()),
+        &headers,
+    )?;
+    let limit = query.limit.unwrap_or(5);
+    if !(1..=10).contains(&limit) {
+        return api_result(
+            Err(ApiError::Validation(
+                "Request between one and ten workloads.".into(),
+            )),
+            &headers,
+        );
+    }
+    let viewer = DashboardViewer {
+        actor: principal.actor_id,
+        administrator: principal.is_administrator(),
+    };
+    let rows = api_result(
+        state
+            .dashboards
+            .workloads(viewer, query.kind, tags, limit.into())
+            .await,
+        &headers,
+    )?;
+    let mut statuses = match &state.backup_coverage {
+        Some(service) => {
+            service
+                .dashboard_statuses(&principal, query.kind, &rows)
+                .await
+        }
+        None => Default::default(),
+    };
+    Ok(no_store(
+        Json(
+            rows.into_iter()
+                .map(|r| DashboardWorkloadView {
+                    id: r.id,
+                    name: r.name,
+                    platform_id: r.platform_id,
+                    status: r.status,
+                    processing: r.processing,
+                    observed_probes: r.probes,
+                    more_probes: r.more_probes,
+                    backup_status: statuses.remove(&r.id),
+                    can_view_logs: r.can_view_logs,
+                })
                 .collect::<Vec<_>>(),
         )
         .into_response(),
