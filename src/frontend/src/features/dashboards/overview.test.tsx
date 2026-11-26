@@ -2,7 +2,6 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { focusManager } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router';
-import { collectionEventKey, collectionGroup } from '@/lib/collection-scope';
 import { AppProvider } from '@/lib/context/app-provider';
 import * as transport from '@/lib/createRealtimeConnection';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
@@ -10,27 +9,50 @@ import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
 import Board from './board';
 import { DashboardGrid } from './grid';
+import { makeWidget, metricSettings, supportedConfiguration, type WidgetKind } from './catalogue';
+import { DashboardFleetKind, DashboardSourceKind, DashboardMetric } from '@/api/generated/api.types';
 import { fromTemplate } from './templates';
 
-it('renders the private Overview with one read per source and one listener for duplicate live tiles', async () => {
-  const config = fromTemplate('Overview');
+it.each([
+  { kind: 'ResourceSummary' },
+  { kind: 'Platforms', limit: 5 },
+  { kind: 'Workloads', limit: 5, resourceKind: 'Deployment' },
+])('rejects the retired $kind widget', (settings) => {
+  const board = fromTemplate('Overview');
+  expect(supportedConfiguration(board)).toBe(true);
+  expect(supportedConfiguration({ ...board, widgets: [{ ...board.widgets[0], settings }] })).toBe(false);
+});
+
+it('accepts container state counts and rejects individual container pins', () => {
+  const board = fromTemplate('Blank');
+  const source = { kind: 'Container', id: '91a05d4c-f022-403a-bf11-c2e93fa9c617' };
+  const supports = (settings: unknown) =>
+    supportedConfiguration({ ...board, widgets: [{ ...makeWidget('ResourceState'), settings }] });
+  expect(supports({ kind: 'ResourceState', resourceKind: 'Container' })).toBe(true);
+  expect(supports({ ...metricSettings(), source })).toBe(false);
+  expect(supports({ kind: 'Watchlist', pins: [source] })).toBe(false);
+});
+
+function activityBoard() {
+  const kinds: WidgetKind[] = ['OpenAlerts', 'Backups', 'RecentActivity'];
+  return {
+    ...fromTemplate('Blank'),
+    widgets: kinds.map((kind, index) => ({ ...makeWidget(kind), layout: { x: 0, y: index * 4, w: 12, h: 4 } })),
+  };
+}
+
+it('shares reads and realtime listeners across the activity and alert widgets of a private board', async () => {
+  const config = activityBoard();
   const alertsTile = config.widgets.find((w) => w.settings.kind === 'OpenAlerts')!;
-  config.widgets.push({ ...alertsTile, title: 'Second alert list', id: 'second', layout: { x: 6, y: 8, w: 6, h: 4 } });
+  config.widgets.push({
+    ...alertsTile,
+    title: 'Second alert list',
+    id: 'second',
+    layout: { x: 0, y: 20, w: 12, h: 4 },
+  });
   const live = new FakeRealtimeConnection();
   vi.spyOn(transport, 'createRealtimeConnection').mockReturnValue(live);
-  const platforms = vi.fn(() =>
-    HttpResponse.json({
-      platforms: [
-        {
-          id: 'p',
-          name: 'Lab',
-          status: 'Online',
-          platformDescriptor: { $type: 'Docker', containerCount: 3 },
-          stats: [{ cpuUsage: 2, memoryUsage: 25 }],
-        },
-      ],
-    }),
-  );
+  const platforms = vi.fn(() => HttpResponse.json({ platforms: [] }));
   const alerts = vi.fn(() => HttpResponse.json({ pagedResult: { items: [], totalCount: 0, pageSize: 5 } }));
   const recent = vi.fn(({ request }: { request: Request }) => {
     const query = new URL(request.url).searchParams;
@@ -68,9 +90,6 @@ it('renders the private Overview with one read per source and one listener for d
   );
   await screen.findByRole('link', { name: 'Nightly volumes' });
   expect(await screen.findByRole('link', { name: 'Stack Applied · Web' })).toHaveAttribute('href', '/activities/event');
-  expect(screen.getByRole('link', { name: 'Lab' })).toHaveAttribute('href', '/platforms/edit/p');
-  expect(screen.getByText('Memory 25.0%')).toBeVisible();
-  expect(within(screen.getByRole('region', { name: 'Resource summary' })).getByText('3')).toBeVisible();
   await waitFor(() => expect(live.listenerCount('AlertEventReceived')).toBe(1));
   act(() =>
     live.emit('AlertEventReceived', {
@@ -98,22 +117,8 @@ it('renders the private Overview with one read per source and one listener for d
   expect(live.listenerCount('AlertEventReceived')).toBe(0);
 });
 
-it('shares the tagged platform feed across tiles and excludes global data when membership or scope changes', async () => {
-  const config = { ...fromTemplate('Overview'), tags: ['Production'] };
-  const tile = config.widgets.find(({ settings }) => settings.kind === 'Platforms')!;
-  config.widgets.push({ ...tile, id: 'second', title: 'Second platform list', layout: { x: 6, y: 8, w: 6, h: 4 } });
-  const platform = (id: string, name: string, containerCount: number) => ({
-    id,
-    name,
-    status: 'Online',
-    platformDescriptor: { $type: 'Docker', containerCount },
-  });
-  const global = platform('all', 'Outside this filter', 80);
-  const prod = platform('prod', 'Production host', 7);
-  const reads = vi.fn(({ request }: { request: Request }) => {
-    const tags = new URL(request.url).searchParams.getAll('tags');
-    return HttpResponse.json({ platforms: tags.length ? (tags[0] === 'production' ? [prod] : []) : [global, prod] });
-  });
+it('keeps alerts and activity scoped when tag membership or the selected scope changes', async () => {
+  const config = { ...activityBoard(), tags: ['Production'] };
   let ownerTagged = true;
   let prodAlerts = [{ id: 'scoped', message: 'Scoped alert', severity: 'Warning', status: 'Active' }];
   const recent = vi.fn(({ request }: { request: Request }) => {
@@ -143,7 +148,7 @@ it('shares the tagged platform feed across tiles and excludes global data when m
   server.use(
     http.get('*/api/v1/application/info', () => HttpResponse.json({ realtimeTransport: 'WebSocketV1' })),
     http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
-    http.get('*/api/v1/platforms', reads),
+    http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
     http.get('*/api/v1/tags/_filter', ({ request }) => {
       const tags = new URL(request.url).searchParams.getAll('tags');
       return HttpResponse.json(Object.fromEntries(tags.map((name) => [name, name.toLowerCase()])));
@@ -157,15 +162,9 @@ it('shares the tagged platform feed across tiles and excludes global data when m
     </AppProvider>
   );
   const { rerender } = renderCitadel(renderBoard(config.tags));
-  const summary = () => within(screen.getByRole('region', { name: 'Resource summary' }));
-  expect(await screen.findAllByRole('link', { name: prod.name })).toHaveLength(2);
-  expect(screen.queryByText(global.name)).toBeNull();
-  expect(summary().getByText('7')).toBeVisible();
   expect(await screen.findByRole('link', { name: 'Scoped alert' })).toBeVisible();
   expect(await screen.findByRole('link', { name: 'Tagged policy' })).toBeVisible();
   expect(await screen.findByRole('link', { name: 'Stack Applied · Tagged stack' })).toBeVisible();
-  expect(summary().getByText('Open alerts').nextElementSibling).toHaveTextContent('1');
-  expect(summary().queryByText('99')).toBeNull();
   prodAlerts = [];
   const outside = { id: 'outside', message: 'Outside alert', severity: 'Warning', status: 'Active' };
   act(() => {
@@ -174,32 +173,11 @@ it('shares the tagged platform feed across tiles and excludes global data when m
   });
   await waitFor(() => expect(screen.queryByText('Scoped alert')).toBeNull());
   expect(screen.queryByText('Outside alert')).toBeNull();
-  expect(summary().getByText('Open alerts').nextElementSibling).toHaveTextContent('0');
-  const scope = collectionGroup('platforms', ['production']);
-  await waitFor(() => expect(live.listenerCount(collectionEventKey(scope, 'PlatformUpdated'))).toBe(1));
-  act(() => {
-    live.emit('PlatformUpdated', global);
-    live.emit(collectionEventKey(scope, 'PlatformsDeleted'), prod.id);
-  });
-  expect(screen.getAllByText('No visible platforms match these tags.')).toHaveLength(2);
-  expect(summary().getAllByText('0')).toHaveLength(3);
-  const updated = platform('match', 'New matching host', 6);
-  act(() => live.emit(collectionEventKey(scope, 'PlatformUpdated'), updated));
-  expect(screen.getAllByText(updated.name)).toHaveLength(2);
-  expect(summary().getByText('6')).toBeVisible();
   ownerTagged = false;
   act(() => live.emit('TagCatalogChanged'));
   expect(await screen.findByText('No completed backups.')).toBeVisible();
   expect(await screen.findByText('No recent activity.')).toBeVisible();
   rerender(renderBoard(['Unassigned']));
-  expect(screen.queryByText(updated.name)).toBeNull();
-  await waitFor(() => expect(live.listenerCount(collectionEventKey(scope, 'PlatformUpdated'))).toBe(0));
-  expect(await screen.findAllByText('No visible platforms match these tags.')).toHaveLength(2);
-  expect(reads.mock.calls.map(([{ request }]) => new URL(request.url).searchParams.getAll('tags'))).toEqual([
-    [],
-    ['production'],
-    ['unassigned'],
-  ]);
   expect(await screen.findByText('No completed backups.')).toBeVisible();
   expect(screen.queryByText('Tagged policy')).toBeNull();
   expect(screen.getByText('No recent activity.')).toBeVisible();
@@ -223,10 +201,17 @@ it('shares the tagged platform feed across tiles and excludes global data when m
 it('shares pinned chart history and freezes a paused board after one explicit refresh', async () => {
   const id = '10000000-0000-4000-8000-000000000001';
   const config = fromTemplate('Infrastructure and capacity');
+  config.widgets.push({
+    ...makeWidget('Metrics'),
+    title: 'Network traffic',
+    settings: metricSettings(DashboardMetric.Network),
+  });
   config.widgets = config.widgets
     .filter((w) => w.settings.kind === 'Metrics')
     .map((w) =>
-      w.settings.kind === 'Metrics' ? { ...w, settings: { ...w.settings, source: { kind: 'Platform', id } } } : w,
+      w.settings.kind === 'Metrics'
+        ? { ...w, settings: { ...w.settings, source: { kind: DashboardSourceKind.Platform, id } } }
+        : w,
     );
   const history = vi.fn(() => HttpResponse.json({ stats: [] }));
   const metadata = vi.fn(() =>
@@ -296,7 +281,9 @@ it('links to full statistics without fetching an oversized stack history', async
     .filter((w) => w.settings.kind === 'Metrics')
     .slice(0, 1)
     .map((w) =>
-      w.settings.kind === 'Metrics' ? { ...w, settings: { ...w.settings, source: { kind: 'Stack', id } } } : w,
+      w.settings.kind === 'Metrics'
+        ? { ...w, settings: { ...w.settings, source: { kind: DashboardSourceKind.Stack, id } } }
+        : w,
     );
   const history = vi.fn(() => HttpResponse.json({ services: [] }));
   server.use(
@@ -320,4 +307,109 @@ it('links to full statistics without fetching an oversized stack history', async
     expect.stringContaining(id),
   );
   expect(history).not.toHaveBeenCalled();
+});
+
+it('investigates the full Updates selection with its original scope and server-side paging', async () => {
+  const board = fromTemplate('Overview');
+  board.widgets = board.widgets.filter((w) => w.settings.kind === 'NeedsAttention');
+  for (const w of board.widgets) {
+    if (w.settings.kind === 'NeedsAttention') w.settings.kinds = [DashboardFleetKind.Stack];
+  }
+  const reads: URLSearchParams[] = [];
+  server.use(
+    http.get('*/api/v1/dashboards/fleet', ({ request }) => {
+      const q = new URL(request.url).searchParams;
+      reads.push(q);
+      const page = Number(q.get('offset') ?? 0);
+      const name = q.get('tab') === 'Updates' ? (page === 25 ? 'Last stack' : 'Update only stack') : 'Offline platform';
+      return HttpResponse.json({
+        rows: [
+          {
+            id: 'row' + page,
+            kind: 'Stack',
+            name,
+            state: 'Healthy',
+            reasons: [{ code: 'New Git commit', occurrences: 1 }],
+          },
+        ],
+        total: 31,
+        updates: 30,
+        problems: 2,
+        alerts: 0,
+        states: [],
+      });
+    }),
+    http.get('*/api/v1/application/info', () => HttpResponse.json({})),
+    http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
+    http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
+    http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
+  );
+  const { user } = renderCitadel(
+    <AppProvider>
+      <DashboardGrid configuration={board} />
+    </AppProvider>,
+  );
+  await screen.findByText('Offline platform');
+  await user.click(screen.getByRole('radio', { name: 'Updates 30' }));
+  await screen.findByText('Update only stack');
+  await user.click(screen.getByRole('button', { name: 'View all 30 resources' }));
+  const sheet = within(await screen.findByRole('dialog', { name: 'Needs attention' }));
+  await sheet.findByText('Update only stack');
+  const next = sheet.getByRole('link', { name: /next/i });
+  await user.click(next);
+  expect(await sheet.findByText('Last stack')).toBeVisible();
+  expect(reads.every((q) => q.get('kinds') === 'Stack')).toBe(true);
+  expect(reads.filter((q) => q.get('limit') === '25').map((q) => [q.get('tab'), q.get('offset')])).toEqual([
+    ['Updates', '0'],
+    ['Updates', '25'],
+  ]);
+});
+
+it('resolves shared watchlist pins once, preserves order, and hides unavailable sources', async () => {
+  const board = fromTemplate('Blank');
+  const ids = [1, 2, 3, 4].map((i) => '10000000-0000-4000-8000-00000000000' + i);
+  const pins = ids.map((id) => ({ kind: DashboardSourceKind.Deployment, id }));
+  board.widgets = [
+    { ...makeWidget('Watchlist'), title: 'My watchlist', settings: { kind: 'Watchlist', pins } },
+    {
+      ...makeWidget('Watchlist'),
+      title: 'Other watchlist',
+      layout: { x: 6, y: 0, w: 6, h: 5 },
+      settings: { kind: 'Watchlist', pins: [pins[1]] },
+    },
+  ];
+  const metadata = vi.fn(() =>
+    HttpResponse.json([
+      { id: ids[1], name: 'Beta app', status: 'Healthy', matchesTags: true },
+      { id: ids[0], name: 'Zulu app', status: 'Degraded', matchesTags: true, platformId: 'platform-a' },
+      { id: ids[3], name: 'Hidden by filter', status: 'Failed', matchesTags: false },
+    ]),
+  );
+  const details = vi.fn(() => HttpResponse.json({ id: ids[0], name: 'Zulu app', status: 'Degraded' }));
+  server.use(
+    http.get('*/api/v1/deployments/:id', details),
+    http.get('*/api/v1/dashboards/sources', metadata),
+    http.get('*/api/v1/application/info', () => HttpResponse.json({})),
+    http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
+    http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
+    http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
+  );
+  const { user } = renderCitadel(
+    <AppProvider>
+      <DashboardGrid configuration={board} />
+    </AppProvider>,
+  );
+  const widget = within(await screen.findByRole('region', { name: 'My watchlist' }));
+  await widget.findByText('Zulu app');
+  expect(widget.getAllByRole('listitem').map((row) => row.textContent)).toEqual([
+    expect.stringContaining('Zulu app'),
+    expect.stringContaining('Beta app'),
+    'Resource unavailable.',
+    'Outside current filter.',
+  ]);
+  expect(screen.queryByText('Hidden by filter')).toBeNull();
+  expect(metadata).toHaveBeenCalledTimes(1);
+  expect(details).not.toHaveBeenCalled();
+  await user.click(widget.getByRole('button', { name: 'View health for Zulu app' }));
+  await waitFor(() => expect(details).toHaveBeenCalledTimes(1));
 });

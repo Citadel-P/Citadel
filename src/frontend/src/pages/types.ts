@@ -6,6 +6,7 @@ type ResourceContentProps<T = any> = {
   actions: Record<string, DropdownActionComponent<T>>;
   isLoading: boolean;
   isFiltered?: boolean;
+  search?: string;
   realtimeGroup?: string;
 };
 

@@ -1,10 +1,14 @@
 import { CitadelIcons } from '@/lib/icons';
 import { ChartNoAxesCombined, CalendarClock, NotebookText } from 'lucide-react';
 import {
+  DashboardFleetKind,
+  DashboardStateKind,
+  DashboardSourceKind,
+  DashboardFleetMeasure,
+  DashboardAttentionTab,
   DashboardChartColor,
   DashboardChartStyle,
   DashboardMetric,
-  DashboardWorkloadKind,
   type DashboardConfiguration,
   type DashboardWidget,
   type DashboardWidgetSettings,
@@ -13,7 +17,7 @@ import { STATS_PRESETS } from '@/lib/stats-range';
 import { randomUuid } from '@/lib/utils';
 
 export type WidgetKind = DashboardWidgetSettings['kind'];
-export const categories = ['Overview', 'Infrastructure', 'Monitoring', 'Operations', 'Content'] as const;
+export const categories = ['Overview', 'Monitoring', 'Operations', 'Content'] as const;
 function definition(
   label: string,
   description: string,
@@ -27,45 +31,63 @@ function definition(
   return { label, description, Icon, category, size: { w, h }, minW, minH };
 }
 export const catalogue = {
-  ResourceSummary: definition(
-    'Resource summary',
-    'Counts for visible resources and open alerts.',
+  FleetSummary: definition(
+    'Fleet summary',
+    'Connectivity, managed workloads and unresolved alerts.',
     CitadelIcons.Dashboard,
     'Overview',
     12,
     2,
+    6,
+    2,
   ),
-  Platforms: definition(
-    'Platforms',
-    'Connectivity, CPU and memory by platform.',
-    CitadelIcons.Platform,
-    'Infrastructure',
-    8,
-    3,
-  ),
-  Workloads: definition(
-    'Workloads',
-    'Runtime status, container probes and backup coverage.',
-    CitadelIcons.Deployment,
-    'Infrastructure',
-    8,
+  NeedsAttention: definition(
+    'Needs attention',
+    'Resources with current problems or available updates.',
+    CitadelIcons.Alert,
+    'Overview',
+    7,
+    7,
+    4,
     4,
   ),
-  Metrics: definition(
-    'Metrics',
-    'Chart measurements for one resource over time.',
-    ChartNoAxesCombined,
+  ResourceState: definition(
+    'Resource state',
+    'Counts by lifecycle state for one resource type.',
+    CitadelIcons.Platform,
+    'Overview',
+    5,
+    7,
+    4,
+    4,
+  ),
+  Watchlist: definition(
+    'Watchlist',
+    'Track the resources you choose.',
+    CitadelIcons.Deployment,
     'Monitoring',
-    8,
+    6,
     5,
     4,
     3,
+  ),
+  Metrics: definition(
+    'Metric chart',
+    'Chart measurements for one resource over time.',
+    ChartNoAxesCombined,
+    'Monitoring',
+    6,
+    6,
+    4,
+    4,
   ),
   OpenAlerts: definition(
     'Open alerts',
     'Unresolved alerts and their severity.',
     CitadelIcons.Alert,
     'Monitoring',
+    6,
+    5,
     4,
     3,
   ),
@@ -75,7 +97,9 @@ export const catalogue = {
     CitadelIcons.Activity,
     'Operations',
     6,
+    6,
     4,
+    3,
   ),
   Backups: definition(
     'Backup activity',
@@ -83,7 +107,9 @@ export const catalogue = {
     CitadelIcons.BackupRepository,
     'Operations',
     6,
+    6,
     4,
+    3,
   ),
   UpcomingSchedules: definition(
     'Upcoming schedules',
@@ -91,16 +117,27 @@ export const catalogue = {
     CalendarClock,
     'Operations',
     6,
+    4,
+    4,
     3,
   ),
-  Updates: definition('Updates', 'Release information for this instance.', CitadelIcons.Updates, 'Operations', 4, 3),
-  Notes: definition('Notes and links', 'Text and links for this dashboard.', NotebookText, 'Content', 4, 3),
+  Updates: definition(
+    'Instance updates',
+    'Release information for this instance.',
+    CitadelIcons.Updates,
+    'Operations',
+    6,
+    4,
+    4,
+    3,
+  ),
+  Notes: definition('Notes and links', 'Text and links for this dashboard.', NotebookText, 'Content', 4, 3, 3, 2),
 } satisfies Record<WidgetKind, ReturnType<typeof definition>>;
 
 export function metricSettings(metric = DashboardMetric.Cpu) {
   return {
     kind: 'Metrics' as const,
-    source: { kind: 'Platform' as const, id: '' },
+    source: { kind: DashboardSourceKind.Platform, id: '' },
     metric,
     presentation: DashboardChartStyle.Gradient,
     color: DashboardChartColor.Blue,
@@ -111,7 +148,18 @@ export function metricSettings(metric = DashboardMetric.Cpu) {
 export function makeWidget(kind: WidgetKind): DashboardWidget {
   let settings: DashboardWidgetSettings;
   switch (kind) {
-    case 'ResourceSummary':
+    case 'FleetSummary':
+      settings = { kind, measures: Object.values(DashboardFleetMeasure) };
+      break;
+    case 'ResourceState':
+      settings = { kind, resourceKind: DashboardStateKind.Deployment };
+      break;
+    case 'NeedsAttention':
+      settings = { kind, kinds: [], tab: DashboardAttentionTab.All, limit: 5 };
+      break;
+    case 'Watchlist':
+      settings = { kind, pins: [] };
+      break;
     case 'Updates':
       settings = { kind };
       break;
@@ -120,9 +168,6 @@ export function makeWidget(kind: WidgetKind): DashboardWidget {
       break;
     case 'Metrics':
       settings = metricSettings();
-      break;
-    case 'Workloads':
-      settings = { kind, resourceKind: DashboardWorkloadKind.Deployment, limit: 5 };
       break;
     default:
       settings = { kind, limit: 5 };
@@ -151,8 +196,9 @@ export function validLink(href: string) {
 export function widgetSourceError(s: DashboardWidgetSettings) {
   if ('limit' in s && (!Number.isInteger(s.limit) || s.limit < 1 || s.limit > 10))
     return 'Choose between one and ten rows.';
-  if (s.kind === 'Metrics' && (!s.source.id || (s.source.kind === 'Container' && !s.source.platformId)))
-    return 'Choose a metric resource.';
+  if (s.kind === 'Watchlist' && (!s.pins.length || s.pins.length > 8)) return 'Choose one to eight resources.';
+  if (s.kind === 'FleetSummary' && !s.measures.length) return 'Choose at least one measure.';
+  if (s.kind === 'Metrics' && !s.source.id) return 'Choose a metric resource.';
 }
 
 export function widgetError(widget: DashboardWidget) {
@@ -174,6 +220,24 @@ const integer = (v: unknown, min: number, max: number): v is number =>
 function supportedSettings(s: unknown): s is DashboardWidgetSettings {
   if (!record(s) || typeof s.kind !== 'string' || !Object.hasOwn(catalogue, s.kind)) return false;
   switch (s.kind) {
+    case 'FleetSummary':
+      return Array.isArray(s.measures) && s.measures.every((v) => Object.hasOwn(DashboardFleetMeasure, v));
+    case 'NeedsAttention':
+      return (
+        Array.isArray(s.kinds) &&
+        s.kinds.every((v) => Object.hasOwn(DashboardFleetKind, v)) &&
+        Object.hasOwn(DashboardAttentionTab, String(s.tab)) &&
+        typeof s.limit === 'number' &&
+        [3, 5, 10].includes(s.limit)
+      );
+    case 'ResourceState':
+      return Object.hasOwn(DashboardStateKind, String(s.resourceKind));
+    case 'Watchlist':
+      return (
+        Array.isArray(s.pins) &&
+        s.pins.length <= 8 &&
+        s.pins.every((p) => record(p) && typeof p.id === 'string' && Object.hasOwn(DashboardSourceKind, String(p.kind)))
+      );
     case 'Notes':
       return (
         typeof s.text === 'string' &&
@@ -184,18 +248,14 @@ function supportedSettings(s: unknown): s is DashboardWidgetSettings {
       return (
         record(s.source) &&
         typeof s.source.id === 'string' &&
-        ['Platform', ...Object.values(DashboardWorkloadKind)].includes(String(s.source.kind)) &&
-        (s.source.kind !== 'Container' || typeof s.source.platformId === 'string') &&
+        Object.hasOwn(DashboardSourceKind, String(s.source.kind)) &&
         Object.hasOwn(DashboardMetric, String(s.metric)) &&
         Object.hasOwn(DashboardChartColor, String(s.color)) &&
         Object.hasOwn(DashboardChartStyle, String(s.presentation)) &&
         typeof s.legend === 'boolean'
       );
-    case 'ResourceSummary':
     case 'Updates':
       return true;
-    case 'Workloads':
-      return Object.hasOwn(DashboardWorkloadKind, String(s.resourceKind)) && integer(s.limit, 1, 10);
     default:
       return integer(s.limit, 1, 10);
   }
@@ -203,7 +263,7 @@ function supportedSettings(s: unknown): s is DashboardWidgetSettings {
 export function supportedConfiguration(c: unknown): c is DashboardConfiguration {
   return (
     record(c) &&
-    c.schemaVersion === 1 &&
+    c.schemaVersion === 2 &&
     STATS_PRESETS.some((p) => p.minutes === c.rangeMinutes) &&
     Array.isArray(c.tags) &&
     c.tags.every((t) => typeof t === 'string') &&

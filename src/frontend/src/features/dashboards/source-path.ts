@@ -1,8 +1,5 @@
-import type { DashboardMetricSource, DashboardSourceView } from '@/api/generated/api.types';
-export const sourcePath = (
-  kind: DashboardMetricSource['kind'],
-  row: Pick<DashboardSourceView, 'id' | 'platformId'>,
-) => {
+import type { DashboardStateKind, DashboardSourceView } from '@/api/generated/api.types';
+export const sourcePath = (kind: `${DashboardStateKind}`, row: Pick<DashboardSourceView, 'id' | 'platformId'>) => {
   switch (kind) {
     case 'Container':
       return '/platforms/' + row.platformId + '/containers/' + row.id;

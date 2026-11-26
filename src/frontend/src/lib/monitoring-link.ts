@@ -7,9 +7,7 @@ export function monitoringLink(
   tab: 'logs' | 'stats',
   minutes?: number,
 ) {
-  const parent = { Platform: tab, Container: tab, Deployment: 'container', Stack: 'services', SwarmService: 'runtime' }[
-    kind
-  ];
+  const parent = { Platform: tab, Deployment: 'container', Stack: 'services', SwarmService: 'runtime' }[kind];
   const query = new URLSearchParams();
   if (parent !== tab) query.set('view', tab);
   if (minutes !== undefined) query.set('minutes', String(minutes));

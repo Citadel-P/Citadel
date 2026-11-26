@@ -159,14 +159,15 @@ fn shared_categories_survive_runtime_feature_and_http_boundaries() {
 #[test]
 fn dashboard_widget_schemas_preserve_source_identity_and_field_names() {
     use citadel_dashboards::{MetricSource, WidgetSettings};
-    let source = json!({"kind":"Container","id":Uuid::now_v7(),"platformId":Uuid::now_v7()});
+    let source = json!({"kind":"Deployment","id":Uuid::now_v7()});
     let source_native: MetricSource = serde_json::from_value(source.clone()).unwrap();
     assert_eq!(
         assert_wire_matches::<_, dashboards::DashboardMetricSourceSchema>(source_native),
         source
     );
     for settings in [
-        json!({"kind":"Workloads","resourceKind":"SwarmService","limit":5}),
+        json!({"kind":"ResourceState","resourceKind":"SwarmService"}),
+        json!({"kind":"Watchlist","pins":[source]}),
         json!({"kind":"Metrics","source":source,"metric":"Cpu","presentation":"Area","color":"Blue","legend":false}),
     ] {
         let native: WidgetSettings = serde_json::from_value(settings.clone()).unwrap();

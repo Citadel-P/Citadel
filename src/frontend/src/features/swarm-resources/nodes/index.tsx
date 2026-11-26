@@ -1,5 +1,5 @@
 import { RegularResourceComponents } from '@/pages/types';
-import { Network } from 'lucide-react';
+import { CitadelIcons } from '@/lib/icons';
 import { SwarmNodeListView, useNodesGroup } from './hooks/useNodesGroup';
 import { NodesTable } from './table';
 import { NodeEditDropdownAction } from './node-edit-dialog';
@@ -7,7 +7,7 @@ import { ActionBar } from '@/components/custom/action-bar';
 import { NodeGroupActions } from './actions';
 
 export const NodeComponents: RegularResourceComponents<SwarmNodeListView> = {
-  Icon: Network,
+  Icon: CitadelIcons.Node,
   header: {
     title: 'Nodes',
     subtitle: 'Docker Swarm node inventory and task placement.',

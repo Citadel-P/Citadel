@@ -68,6 +68,7 @@ const liveBackedQueryKeys = new Set([
   'getDashboardDefault',
   'getCurrentProfile',
   'listDashboardSources',
+  'getDashboardFleet',
   'getUpcomingSchedules',
   'listAlertEvents',
   'listScripts',
@@ -248,6 +249,7 @@ export const RealtimeProvider: React.FC<RealtimeProviderProps> = ({
         void reconcileTaggedEventPages(queryClient, 'listAlertEvents');
         void reconcileTaggedEventPages(queryClient, 'listRecentActivities');
         void reconcileTaggedEventPages(queryClient, 'listDashboardSources');
+        void reconcileTaggedEventPages(queryClient, 'getDashboardFleet');
         void reconcileTaggedEventPages(queryClient, 'getUpcomingSchedules');
       });
 

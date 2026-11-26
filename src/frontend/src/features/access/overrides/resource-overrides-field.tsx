@@ -26,7 +26,7 @@ import { useRead } from '@/lib/hooks';
 import { useAppContext } from '@/lib/context/app-context';
 import { CitadelIcons } from '@/lib/icons';
 import { Link } from 'react-router';
-import { LayoutDashboard, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState, type ComponentType } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { KnownResourceName } from '@/api/types';
@@ -106,7 +106,7 @@ const readItemsFrom =
 
 export const OVERRIDE_RESOURCE_CONFIG = {
   [ResourceType.Dashboard]: {
-    icon: LayoutDashboard,
+    icon: CitadelIcons.Dashboard,
     listQuery: 'listDashboards',
     readItems: (data) =>
       ((data as DashboardList | undefined)?.dashboards ?? [])

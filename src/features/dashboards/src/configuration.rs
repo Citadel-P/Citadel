@@ -31,14 +31,21 @@ pub struct Layout {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all_fields = "camelCase", deny_unknown_fields)]
 pub enum WidgetSettings {
-    ResourceSummary,
-    Platforms {
+    FleetSummary {
+        measures: Vec<FleetMeasure>,
+    },
+    NeedsAttention {
+        tab: AttentionTab,
+        kinds: Vec<FleetKind>,
         limit: u8,
     },
-    Workloads {
-        resource_kind: WorkloadKind,
-        limit: u8,
+    ResourceState {
+        resource_kind: StateKind,
     },
+    Watchlist {
+        pins: Vec<MetricSource>,
+    },
+
     Metrics {
         source: MetricSource,
         metric: Metric,
@@ -72,22 +79,11 @@ pub struct NoteLink {
     pub href: String,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub enum WorkloadKind {
-    Container,
-    Deployment,
-    Stack,
-    SwarmService,
-}
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all_fields = "camelCase", deny_unknown_fields)]
-pub enum MetricSource {
-    Platform { id: Uuid },
-    Container { id: Uuid, platform_id: Uuid },
-    Deployment { id: Uuid },
-    Stack { id: Uuid },
-    SwarmService { id: Uuid },
+#[serde(deny_unknown_fields)]
+pub struct MetricSource {
+    pub kind: crate::SourceKind,
+    pub id: Uuid,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Metric {
@@ -111,4 +107,37 @@ pub enum ChartColor {
     Amber,
     Violet,
     Cyan,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum FleetMeasure {
+    Platforms,
+    Workloads,
+    Alerts,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum AttentionTab {
+    All,
+    Problems,
+    Updates,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum FleetKind {
+    Platform,
+    Deployment,
+    Stack,
+    SwarmService,
+    BackupPolicy,
+    Build,
+    BuildAgentPool,
+    Registry,
+    GitRepository,
+    Script,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum StateKind {
+    Platform,
+    Deployment,
+    Stack,
+    SwarmService,
+    Container,
 }

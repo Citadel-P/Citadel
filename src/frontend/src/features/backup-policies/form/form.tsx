@@ -1,3 +1,4 @@
+import { CitadelIcons } from '@/lib/icons';
 import { useReconcileBackupPolicy } from '../cache';
 import {
   BackupCoverageStatus,
@@ -38,17 +39,7 @@ import { ResourceTagSelector } from '@/features/tags/components';
 import { byteTransform } from '@/lib/bytes.helper';
 import { useMutate, useRead, useSaveResource } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  Rocket,
-  Database,
-  FolderOpen,
-  Info,
-  Layers,
-  LoaderCircle,
-  Network,
-  ServerCog,
-  TriangleAlert,
-} from 'lucide-react';
+import { FolderOpen, Info, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { backupReturnPath, backupSourceFromSearch } from '../navigation';
@@ -68,28 +59,28 @@ const EMPTY_BACKUP_REPOSITORIES: BackupRepositoryView[] = [];
 const sourceTypes = {
   Deployment: {
     label: 'Deployment storage',
-    icon: Rocket,
+    icon: CitadelIcons.Deployment,
     group: 'Application storage',
     description:
       'Back up declared named volumes and supported bind mounts discovered from this deployment. Host paths require platform write access.',
   },
   Stack: {
     label: 'Stack storage',
-    icon: Layers,
+    icon: CitadelIcons.Stack,
     group: 'Application storage',
     description:
       'Back up applied Docker volumes and supported bind mounts used by this stack. Host paths require platform write access.',
   },
   SwarmService: {
     label: 'Swarm service storage',
-    icon: Network,
+    icon: CitadelIcons.SwarmService,
     group: 'Application storage',
     description:
       'Back up local Docker volumes and supported bind mounts on the nodes running this service’s current tasks. Host paths require platform write access.',
   },
   DockerVolume: {
     label: 'Docker volume',
-    icon: Database,
+    icon: CitadelIcons.Volume,
     group: 'Individual storage',
     description: 'Back up one named or anonymous Docker volume.',
   },
@@ -101,7 +92,7 @@ const sourceTypes = {
   },
   CitadelSystem: {
     label: 'Citadel system',
-    icon: ServerCog,
+    icon: CitadelIcons.Instance,
     group: 'System recovery',
     description: "Back up Citadel's database and recovery keys.",
   },
@@ -1064,7 +1055,7 @@ function StackSourcePreview({
     <div className="rounded-sm border border-border/70 bg-muted/20 p-3">
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-          <Layers className="size-3.5 text-muted-foreground" />
+          <CitadelIcons.Stack className="size-3.5 text-muted-foreground" />
           <span className="font-medium">{'stackName' in preview ? preview.stackName : ''}</span>
           <span className="text-muted-foreground">on</span>
           <span className="truncate text-muted-foreground">{preview.platformName}</span>
@@ -1079,7 +1070,7 @@ function StackSourcePreview({
                 {volume.kind === 'BindMount' ? (
                   <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
                 ) : (
-                  <Database className="size-3 shrink-0 text-muted-foreground" />
+                  <CitadelIcons.Volume className="size-3 shrink-0 text-muted-foreground" />
                 )}
                 <span className="truncate" title={volume.name}>
                   {volume.name}
@@ -1157,7 +1148,7 @@ export function DeploymentSourcePreview({
     <div className="rounded-sm border border-border/70 bg-muted/20 p-3">
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-          <Rocket className="size-3.5 text-muted-foreground" />
+          <CitadelIcons.Deployment className="size-3.5 text-muted-foreground" />
           <span className="font-medium">{'deploymentName' in preview ? preview.deploymentName : ''}</span>
           <span className="text-muted-foreground">on</span>
           <span className="truncate text-muted-foreground">{preview.platformName}</span>
@@ -1172,7 +1163,7 @@ export function DeploymentSourcePreview({
                 {volume.kind === 'BindMount' ? (
                   <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
                 ) : (
-                  <Database className="size-3 shrink-0 text-muted-foreground" />
+                  <CitadelIcons.Volume className="size-3 shrink-0 text-muted-foreground" />
                 )}
                 <span className="truncate" title={volume.name}>
                   {volume.name}
@@ -1255,7 +1246,7 @@ function SwarmServiceSourcePreview({
     <div className="rounded-sm border border-border/70 bg-muted/20 p-3">
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-          <Layers className="size-3.5 text-muted-foreground" />
+          <CitadelIcons.SwarmService className="size-3.5 text-muted-foreground" />
           <span className="font-medium">{'swarmServiceName' in preview ? preview.swarmServiceName : ''}</span>
           <span className="text-muted-foreground">on</span>
           <span className="truncate text-muted-foreground">{preview.platformName}</span>
@@ -1270,7 +1261,7 @@ function SwarmServiceSourcePreview({
                 {volume.kind === 'BindMount' ? (
                   <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
                 ) : (
-                  <Database className="size-3 shrink-0 text-muted-foreground" />
+                  <CitadelIcons.Volume className="size-3 shrink-0 text-muted-foreground" />
                 )}
                 <span className="truncate" title={volume.name}>
                   {volume.name}

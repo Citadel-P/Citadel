@@ -10,6 +10,7 @@ import {
 import { CircleAlert } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Surface } from '@/components/custom/surface';
+import { dashboardGrid } from './layout';
 import { catalogue } from './catalogue';
 import { createPortal } from 'react-dom';
 import type { DashboardWidget } from '@/api/generated/api.types';
@@ -17,6 +18,7 @@ import type { DashboardWidget } from '@/api/generated/api.types';
 export const CaptureContext = createContext<((key: string, value: ReactNode, pending: boolean) => void) | undefined>(
   undefined,
 );
+export const ClearScopeContext = createContext<(() => void) | undefined>(undefined);
 export const ViewOnlyContext = createContext(false);
 export function WidgetNotice({ children }: { children: ReactNode }) {
   return (
@@ -46,12 +48,17 @@ export function Tile({
     return target ? createPortal(children, target) : null;
   }
   const Icon = catalogue[tile.settings.kind].Icon;
+  const summary = tile.settings.kind === 'FleetSummary';
   const section = (
     <Surface
       aria-label={tile.title}
-      className="flex min-h-0 min-w-0 flex-col overflow-hidden p-0 md:[grid-column:var(--tile-column)] md:[grid-row:var(--tile-row)]"
+      className={
+        'flex min-h-0 min-w-0 flex-col overflow-hidden p-0 md:[grid-column:var(--tile-column)] md:[grid-row:var(--tile-row)]' +
+        (summary ? ' md:flex-row md:items-center' : '')
+      }
       style={{ '--tile-column': x + 1 + ' / span ' + w, '--tile-row': y + 1 + ' / span ' + h } as CSSProperties}>
-      <h2 className="flex shrink-0 items-center gap-2 border-b px-4 py-2 text-sm font-medium">
+      <h2
+        className={'flex shrink-0 items-center gap-2 px-4 py-3 text-base font-semibold ' + (summary ? '' : 'border-b')}>
         <Icon className="size-4 shrink-0 text-muted-foreground" />
         <span className="truncate" title={tile.title}>
           {tile.title}
@@ -68,6 +75,11 @@ const TileSlots = createContext<Map<string, HTMLDivElement> | undefined>(undefin
 
 export const EditorTileSlots = createContext<Map<string, HTMLDivElement> | undefined>(undefined);
 
+export function useFrozenDashboard() {
+  const paused = useContext(ViewOnlyContext);
+  const editing = useContext(EditorTileSlots);
+  return paused && !editing;
+}
 export function Slot({
   id,
   register,
@@ -111,7 +123,9 @@ export function OrderedTiles({ tiles, children }: { tiles: DashboardWidget[]; ch
   const { slots, register } = useTileSlots();
   if (useContext(EditorTileSlots)) return children;
   return (
-    <div className="grid gap-3 md:grid-cols-12 md:auto-rows-[2.75rem]">
+    <div
+      className="grid md:grid-cols-12 md:auto-rows-(--dashboard-row-height)"
+      style={{ gap: dashboardGrid.gap, '--dashboard-row-height': dashboardGrid.rowHeight + 'px' } as CSSProperties}>
       {tiles.map((t) => (
         <Slot key={t.id} id={t.id} register={register} />
       ))}

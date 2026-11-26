@@ -1,22 +1,21 @@
 import Loader from '@/components/ui/loader';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { ActivityEventType, type PlatformView, type RecentActivityView } from '@/api/generated/api.types';
+import { ActivityEventType, type RecentActivityView } from '@/api/generated/api.types';
 import { StateBadge } from '@/components/custom/state-badge';
 import { useAlertPage } from '@/features/alerters/alert-events/hooks/useAlertEventsList';
 import { useAppContext } from '@/lib/context/app-context';
-import { useRealtimeContext } from '@/lib/context/realtime-context';
 import { useRead } from '@/lib/hooks';
 import { formatActivityEvent } from '@/lib/utils';
-import { PlatformRow } from './resource-rows';
 import { TimelineItem } from './timeline';
 import { CitadelIcons } from '@/lib/icons';
-import { usePlatformCollection } from '@/features/platforms/hooks/usePlatformsGroup';
 import { useResolvedTagFilter } from '@/features/tags/components';
 import { Tile, OrderedTiles, WidgetNotice } from './tile';
 import { SupplementalTiles } from './widget-data';
 import { ActivityActions } from './row-actions';
-import { AlertRow } from './alert-row';
+import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { AlertRow, ScopedAlerts } from './alert-row';
 import type { DashboardRequirements } from './requirements';
 import type { SavedTile } from './grid';
 
@@ -36,6 +35,7 @@ function recentRows(rows: RecentActivityView[], limit: number, backups: boolean,
             : [formatActivityEvent(row.eventType), row.resourceName].filter(Boolean).join(' · ')
         }
         path={'/activities/' + row.id}
+        failed={row.status === 'Failure'}
         time={row.createdAt}
         status={<StateBadge kind="activity" value={row.status} />}
         actions={<ActivityActions id={row.id} />}
@@ -52,10 +52,26 @@ function list(rows: ReactNode[] | undefined, empty: string, loading: boolean, er
   );
 }
 
+function ScopedActivity({ tags }: { tags: string[] }) {
+  const format = useProfileDateTimeFormatter();
+  const recent = useRead('listRecentActivities', { query: { tags, limit: 10 } });
+  return (
+    <div className="min-h-0 overflow-auto px-4">
+      {list(
+        recent.data && recentRows(recent.data.data, 10, false, format),
+        'No recent activity.',
+        recent.isLoading,
+        recent.error,
+        true,
+      )}
+    </div>
+  );
+}
+
 export function OverviewTiles({
   plan,
   tiles,
-  tags,
+  tags: tokens,
   range,
   manual,
 }: {
@@ -65,81 +81,8 @@ export function OverviewTiles({
   range: number;
   manual: boolean;
 }) {
-  const app = useAppContext();
-  const { groups } = useRealtimeContext();
-  const platformLive = groups?.isGroupLive('platforms');
-  const needsPlatforms = !tags.length && plan.needsPlatforms;
-  const [fallback] = useState(() => 60000 + Math.floor(Math.random() * 5000));
-  const platformRead = useRead('listPlatforms', undefined, {
-    enabled: needsPlatforms && (manual || !platformLive),
-    staleTime: manual ? 0 : fallback,
-    refetchInterval: !manual && !platformLive ? fallback : false,
-  });
-  if (tags.length) return <TaggedTiles plan={plan} tiles={tiles} tags={tags} range={range} manual={manual} />;
-  return (
-    <TileGrid
-      plan={plan}
-      range={range}
-      manual={manual}
-      tiles={tiles}
-      platforms={manual || !platformLive ? platformRead.data?.data.platforms : app.platforms}
-      platformError={manual || !platformLive ? platformRead.error : app.platformListError}
-      platformsLoading={manual || !platformLive ? platformRead.isLoading : app.isLoading}
-    />
-  );
-}
-
-function TaggedTiles({
-  plan,
-  tiles,
-  tags,
-  range,
-  manual,
-}: {
-  plan: DashboardRequirements;
-  tiles: SavedTile[];
-  tags: string[];
-  range: number;
-  manual: boolean;
-}) {
-  const { selectedTagNames, filterReady } = useResolvedTagFilter(tags);
-  const scoped = usePlatformCollection(selectedTagNames, plan.needsPlatforms && filterReady, !manual);
-  return (
-    <TileGrid
-      plan={plan}
-      range={range}
-      manual={manual}
-      tiles={tiles}
-      tags={selectedTagNames}
-      ready={filterReady}
-      platforms={scoped.platformsMessage}
-      platformError={scoped.error}
-      platformsLoading={!filterReady || scoped.isLoading}
-    />
-  );
-}
-
-function TileGrid({
-  range,
-  manual,
-  plan,
-  tiles,
-  tags,
-  ready = true,
-  platforms,
-  platformError,
-  platformsLoading,
-}: {
-  range: number;
-  manual: boolean;
-  plan: DashboardRequirements;
-  tiles: SavedTile[];
-  tags?: string[];
-  ready?: boolean;
-  platforms?: PlatformView[];
-  platformError?: unknown;
-  platformsLoading: boolean;
-}) {
+  const { selectedTagNames, filterReady: ready } = useResolvedTagFilter(tokens);
+  const tags = selectedTagNames.length ? selectedTagNames : undefined;
   const app = useAppContext();
   const format = useProfileDateTimeFormatter();
   const { limits } = plan;
@@ -161,7 +104,7 @@ function TileGrid({
   const alerts = useAlertPage(
     alertQuery,
     {
-      enabled: ready && (!!limits.OpenAlerts || (!!tags && 'ResourceSummary' in limits)),
+      enabled: ready && !!limits.OpenAlerts,
       staleTime: !manual && !tags && alertQuery.pageSize === 5 ? Infinity : 0,
       refetchInterval: !manual && !app.alertFeedConnected ? interval : false,
     },
@@ -184,80 +127,9 @@ function TileGrid({
       refetchInterval: manual ? false : interval,
     },
   );
-  const query = new URLSearchParams(tags?.map((tag) => ['tags', tag]));
-  const scopedPath = (path: string) => path + (query.size ? '?' + query : '');
-
   function contents(tile: SavedTile) {
     const limit = 'limit' in tile.settings ? tile.settings.limit : 0;
     switch (tile.settings.kind) {
-      case 'Platforms':
-        return list(
-          platforms
-            ?.slice(0, limit)
-            .map((platform) => <PlatformRow key={platform.id} platform={platform} range={range} />),
-          tags ? 'No visible platforms match these tags.' : 'No visible platforms.',
-          platformsLoading,
-          platformError,
-        );
-      case 'ResourceSummary': {
-        const visiblePlatforms = platformError ? undefined : platforms;
-        const containers = visiblePlatforms?.map(({ platformDescriptor }) =>
-          platformDescriptor && 'containerCount' in platformDescriptor ? platformDescriptor.containerCount : undefined,
-        );
-        const count = containers?.every((n): n is number => typeof n === 'number')
-          ? containers.reduce((a, b) => a + b, 0)
-          : undefined;
-        return (
-          <dl className="grid grid-cols-3 divide-x py-1">
-            {Object.entries({
-              Platforms: visiblePlatforms?.length,
-              'Reported containers': count,
-              'Open alerts': tags
-                ? alerts.error
-                  ? undefined
-                  : alerts.pagedAlertEvents?.totalCount
-                : app.alertCountAvailable
-                  ? app.unresolvedAlertCount
-                  : undefined,
-            }).map(([name, value]) => {
-              const Icon =
-                name === 'Platforms'
-                  ? CitadelIcons.Platform
-                  : name === 'Open alerts'
-                    ? CitadelIcons.Alert
-                    : CitadelIcons.Container;
-              const path =
-                name === 'Platforms'
-                  ? scopedPath('/platforms')
-                  : name === 'Open alerts' && !tags?.length
-                    ? '/alerts'
-                    : undefined;
-              return (
-                <div key={name} className="min-w-0 px-2 first:pl-0 sm:px-4">
-                  <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Icon className="hidden size-3.5 sm:block" />
-                    {name}
-                  </dt>
-                  <dd className="mt-1 text-xl font-semibold tabular-nums">
-                    {path ? (
-                      <Link aria-label={name + ' · ' + (value ?? 'unavailable')} to={path}>
-                        {value ?? '—'}
-                      </Link>
-                    ) : (
-                      (value ?? '—')
-                    )}
-                    {name === 'Platforms' && visiblePlatforms && (
-                      <span className="ml-2 whitespace-nowrap text-xs font-normal text-muted-foreground">
-                        {visiblePlatforms.filter((p) => p.status === 'Online').length} online
-                      </span>
-                    )}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
-        );
-      }
       case 'OpenAlerts':
         return list(
           alerts.pagedAlertEvents?.items
@@ -307,21 +179,34 @@ function TileGrid({
       {plan.overview.map((tile) => (
         <Tile key={tile.id} tile={tile}>
           {contents(tile)}
-          {tile.settings.kind === 'Platforms' && (
-            <Link className="table-link mt-1 text-xs" to={scopedPath('/platforms')}>
-              View all platforms
-            </Link>
-          )}
-          {tile.settings.kind === 'RecentActivity' && (
-            <Link className="table-link mt-auto text-xs" to="/activities">
-              View all activities
-            </Link>
-          )}
-          {tile.settings.kind === 'OpenAlerts' && (
-            <Link className="table-link mt-auto text-xs" to="/alerts">
-              View all alerts
-            </Link>
-          )}
+          {tile.settings.kind === 'RecentActivity' &&
+            (tags?.length ? (
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button className="mt-auto w-fit" variant="link">
+                    Open recent activity
+                  </Button>
+                </SheetTrigger>
+                <SheetContent>
+                  <SheetHeader>
+                    <SheetTitle>Recent activity</SheetTitle>
+                  </SheetHeader>
+                  <ScopedActivity tags={tags} />
+                </SheetContent>
+              </Sheet>
+            ) : (
+              <Link className="table-link mt-auto text-xs" to="/activities">
+                View all activities
+              </Link>
+            ))}
+          {tile.settings.kind === 'OpenAlerts' &&
+            (tags?.length ? (
+              <ScopedAlerts tags={tags}>View all alerts</ScopedAlerts>
+            ) : (
+              <Link className="table-link mt-auto text-xs" to="/alerts">
+                View all alerts
+              </Link>
+            ))}
         </Tile>
       ))}
       <SupplementalTiles

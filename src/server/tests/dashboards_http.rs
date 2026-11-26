@@ -88,7 +88,6 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
     let repository = Arc::new(PostgresDashboardRepository::new(pool.clone()));
     let app = |team| {
         router(DashboardsHttpState {
-            backup_coverage: None,
             dashboards: repository.clone(),
             entitlements: Arc::new(StaticEntitlementService::new(team)),
         })
@@ -111,7 +110,7 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
     let private = Uuid::now_v7();
     let shared = Uuid::now_v7();
     let restricted = Uuid::now_v7();
-    let config = json!({"schemaVersion":1,"rangeMinutes":60,"tags":[],"widgets":[]});
+    let config = json!({"schemaVersion":2,"rangeMinutes":60,"tags":[],"widgets":[]});
     let board = |id, visibility| json!({"id":id,"name":"System","visibility":visibility,"configuration":config});
     let private_path = format!("dashboards/{private}");
     let restricted_path = format!("dashboards/{restricted}");
@@ -125,6 +124,38 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
     )
     .await;
     assert_eq!(saved["summary"]["revision"], 1);
+    let container_pin = json!({"kind":"Container","id":Uuid::now_v7(),"platformId":Uuid::now_v7()});
+    for settings in [
+        json!({"kind":"Watchlist","pins":[container_pin]}),
+        json!({"kind":"Metrics","source":container_pin,"metric":"Cpu","presentation":"Area","color":"Blue","legend":false}),
+        json!({"kind":"ResourceSummary"}),
+        json!({"kind":"Platforms","limit":5}),
+        json!({"kind":"Workloads","resourceKind":"Deployment","limit":5}),
+    ] {
+        let mut retired = config.clone();
+        retired["widgets"] = json!([{"id":Uuid::now_v7(),"title":"Old widget","layout":{"x":0,"y":0,"w":6,"h":4},"settings":settings}]);
+        call(
+            &community,
+            &owner,
+            Method::PUT,
+            &private_path,
+            json!({"revision":1,"name":"System","configuration":retired}),
+            StatusCode::BAD_REQUEST,
+        )
+        .await;
+    }
+    assert_eq!(
+        call(
+            &community,
+            &owner,
+            Method::GET,
+            &private_path,
+            Value::Null,
+            StatusCode::OK
+        )
+        .await,
+        saved
+    );
     assert_eq!(
         call(
             &community,
@@ -270,7 +301,7 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
     statuses.sort();
     assert_eq!(statuses, [StatusCode::OK, StatusCode::CONFLICT]);
     // An older client may still read a newer definition, but saving must preserve it.
-    sqlx::query("UPDATE dashboards SET configuration=jsonb_set(configuration,'{schemaVersion}','2') WHERE id=$1")
+    sqlx::query("UPDATE dashboards SET configuration=jsonb_set(configuration,'{schemaVersion}','3') WHERE id=$1")
         .bind(restricted).execute(&pool).await.unwrap();
     call(
         &community,
@@ -290,7 +321,7 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
         StatusCode::OK,
     )
     .await;
-    assert_eq!(newer["configuration"]["schemaVersion"], 2);
+    assert_eq!(newer["configuration"]["schemaVersion"], 3);
     assert_eq!(newer["summary"]["revision"], 3);
     call(
         &community,
@@ -401,7 +432,6 @@ async fn dashboard_sharing_enforces_visibility_revision_and_entitlement() {
     let pool = sqlx::PgPool::connect(&db).await.unwrap();
     let app = |team| {
         router(DashboardsHttpState {
-            backup_coverage: None,
             dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
             entitlements: Arc::new(StaticEntitlementService::new(team)),
         })
@@ -413,7 +443,7 @@ async fn dashboard_sharing_enforces_visibility_revision_and_entitlement() {
     let id = Uuid::now_v7();
     let path = format!("dashboards/{id}");
     let sharing = format!("{path}/visibility");
-    let settings = json!({"schemaVersion":1,"rangeMinutes":60,"tags":[],"widgets":[]});
+    let settings = json!({"schemaVersion":2,"rangeMinutes":60,"tags":[],"widgets":[]});
     let board =
         |id, mode| json!({"id":id,"name":"Operations","visibility":mode,"configuration":settings});
     let change = |revision, mode| json!({"revision":revision,"visibility":mode});
@@ -563,7 +593,6 @@ async fn widget_sources_enforce_access_and_upcoming_orders_enabled_schedules() {
         .unwrap();
     let pool = sqlx::PgPool::connect(&db).await.unwrap();
     let app = router(DashboardsHttpState {
-        backup_coverage: None,
         dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
         entitlements: Arc::new(StaticEntitlementService::new(false)),
     });
@@ -585,6 +614,51 @@ async fn widget_sources_enforce_access_and_upcoming_orders_enabled_schedules() {
         json!([])
     );
     sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourceid,resourcetype,permissionlevel,specificpermissions) VALUES ($1,$2,$3,$4,$5,0)").bind(Uuid::now_v7()).bind(viewer.actor_id.value()).bind(id).bind(ResourceType::Platform as i32).bind(PermissionLevel::Read as i32).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE platforms SET status='Offline' WHERE id=$1")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    for read in ["Attention", "Summary", "States", "Members"] {
+        let result = call(
+            &app,
+            &viewer,
+            Method::GET,
+            &format!("dashboards/fleet?read={read}"),
+            Value::Null,
+            StatusCode::OK,
+        )
+        .await;
+        if read == "Attention" {
+            assert_eq!(result["problems"], 1);
+            assert_eq!(result["rows"][0]["id"], json!(id));
+            assert_eq!(result["rows"][0]["reasons"][0]["code"], "Offline");
+        } else if read == "Members" {
+            assert_eq!(result["total"], 1);
+        } else {
+            assert_eq!(
+                result["states"],
+                json!([{"kind":"Platform","state":"Offline","count":1}])
+            );
+        }
+    }
+    for query in ["tab=Updates", "tags=unassigned"] {
+        let result = call(
+            &app,
+            &viewer,
+            Method::GET,
+            &format!("dashboards/fleet?read=Attention&{query}"),
+            Value::Null,
+            StatusCode::OK,
+        )
+        .await;
+        assert_eq!(result["rows"], json!([]));
+    }
+    sqlx::query("UPDATE platforms SET status='Online' WHERE id=$1")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
     let tagged = call(
         &app,
         &viewer,
@@ -596,13 +670,7 @@ async fn widget_sources_enforce_access_and_upcoming_orders_enabled_schedules() {
     .await;
     assert_eq!(tagged[0]["id"], json!(id));
     assert_eq!(tagged[0]["matchesTags"], false);
-    for kind in [
-        "Platform",
-        "Deployment",
-        "Container",
-        "Stack",
-        "SwarmService",
-    ] {
+    for kind in ["Platform", "Deployment", "Stack", "SwarmService"] {
         let rows = call(
             &app,
             &admin,
@@ -634,71 +702,52 @@ async fn widget_sources_enforce_access_and_upcoming_orders_enabled_schedules() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    for kind in ["Stack", "SwarmService", "Deployment", "Container"] {
-        let rows = call(
+    call(
+        &app,
+        &admin,
+        Method::GET,
+        "dashboards/sources?kind=Container",
+        Value::Null,
+        StatusCode::BAD_REQUEST,
+    )
+    .await;
+    let deployment = Uuid::now_v7();
+    sqlx::query("INSERT INTO deployments(id,createdbyactorid,name,platformid,spec,status) VALUES ($1,$2,'Pinned deployment',$3,'{}','Healthy')")
+        .bind(deployment).bind(admin.actor_id.value()).bind(id).execute(&pool).await.unwrap();
+    let source_path = format!("dashboards/sources?kind=Deployment&ids={deployment}");
+    for container in [Uuid::now_v7(), Uuid::now_v7()] {
+        sqlx::query("INSERT INTO containers(id,name,platformid,deploymentid,dockercontainerid,dockerimageid,state,created,updated,ports) VALUES($1,'Fixture workload',$2,$3,$1::uuid::text,'image','Running',0,0,'[]')")
+            .bind(container).bind(id).bind(deployment).execute(&pool).await.unwrap();
+        let source = call(
             &app,
             &admin,
             Method::GET,
-            &format!("dashboards/workloads?kind={kind}&tags=missing"),
+            &source_path,
             Value::Null,
             StatusCode::OK,
         )
         .await;
-        assert_eq!(rows, json!([]));
+        assert_eq!(source[0]["id"], json!(deployment));
+        assert_eq!(source[0]["containerProjectionId"], json!(container));
+        let states = call(
+            &app,
+            &viewer,
+            Method::GET,
+            "dashboards/fleet?read=States&kinds=Container",
+            Value::Null,
+            StatusCode::OK,
+        )
+        .await;
+        assert_eq!(
+            states["states"],
+            json!([{"kind":"Container","state":"Running","count":1}])
+        );
+        sqlx::query("DELETE FROM containers WHERE id=$1")
+            .bind(container)
+            .execute(&pool)
+            .await
+            .unwrap();
     }
-    let rows = call(
-        &app,
-        &admin,
-        Method::GET,
-        "dashboards/workloads?kind=Stack",
-        Value::Null,
-        StatusCode::OK,
-    )
-    .await;
-    let visible = rows
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|r| r["id"] == json!(stack))
-        .unwrap();
-    assert_eq!(visible["name"], "Source budget");
-    assert_eq!(visible["status"], "Running");
-    assert_eq!(visible["processing"], false);
-    assert_eq!(visible["canViewLogs"], true);
-    assert!(visible.get("spec").is_none());
-    assert_eq!(visible["observedProbes"], json!([]));
-    let rows = call(
-        &app,
-        &viewer,
-        Method::GET,
-        "dashboards/workloads?kind=Stack",
-        Value::Null,
-        StatusCode::OK,
-    )
-    .await;
-    assert_eq!(rows, json!([]));
-    let container = Uuid::now_v7();
-    sqlx::query("INSERT INTO containers(id,name,platformid,dockercontainerid,dockerimageid,state,created,updated,ports,health,controlstate) VALUES($1,'Fixture workload',$2,'fixture-runtime','image','Running',0,0,'[]',$3,'Processing')")
-        .bind(container).bind(id).bind(json!({"configuration":"Enabled","result":"Unhealthy","observedAt":chrono::Utc::now().timestamp_millis()})).execute(&pool).await.unwrap();
-    let rows = call(
-        &app,
-        &viewer,
-        Method::GET,
-        "dashboards/workloads?kind=Container",
-        Value::Null,
-        StatusCode::OK,
-    )
-    .await;
-    let row = rows
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|r| r["id"] == json!(container))
-        .unwrap();
-    assert_eq!(row["processing"], true);
-    assert_eq!(row["observedProbes"], json!(["Unhealthy"]));
-    assert_eq!(row["canViewLogs"], false);
-    assert!(row["backupStatus"].is_null());
     let stack_path = format!("dashboards/sources?kind=Stack&ids={stack}");
     for (first, last, exceeds) in [(1_i32, 8_i32, false), (9, 9, true)] {
         sqlx::query("INSERT INTO statisticsowners(sourceid,stackid,kind,servicename,replicakey) SELECT $1,$2,'Workload','service-'||n,'replica' FROM generate_series($3::integer,$4::integer)n")
@@ -742,5 +791,147 @@ async fn widget_sources_enforce_access_and_upcoming_orders_enabled_schedules() {
             .await
             .unwrap()
             .is_empty()
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires a disposable CITADEL_DASHBOARD_DATABASE_URL"]
+async fn fleet_ranks_before_limiting_and_counts_only_visible_owners() {
+    let url = std::env::var("CITADEL_DASHBOARD_DATABASE_URL").unwrap();
+    citadel_database::MigrationRunner::migrate(&url)
+        .await
+        .unwrap();
+    let pool = sqlx::PgPool::connect(&url).await.unwrap();
+    let admin = actor(&pool, true).await;
+    let reader = actor(&pool, false).await;
+    let platform = Uuid::now_v7();
+    let app = router(DashboardsHttpState {
+        dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
+        entitlements: Arc::new(StaticEntitlementService::new(false)),
+    });
+    sqlx::query("INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,platformdescriptor,status,volumecount) VALUES($1,'Scale fixture',$1::uuid::text,'Local',1,0,1024,0,'{}','Online',0)").bind(platform).execute(&pool).await.unwrap();
+    let problem = Uuid::now_v7();
+    sqlx::query(r#"INSERT INTO deployments(id,createdbyactorid,name,platformid,spec,status,autoupdatestate_status,autoupdatestate_currentdigest,autoupdatestate_remotedigest) VALUES($1,$2,'zz-last',$3,'{"Image":{"ResolvedDigest":"sha256:applied"}}','Failed','UpdateAvailable','sha256:applied','sha256:new')"#).bind(problem).bind(admin.actor_id.value()).bind(platform).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourceid,resourcetype,permissionlevel,specificpermissions) VALUES (gen_random_uuid(),$1,$2,$3,$4,0)").bind(reader.actor_id.value()).bind(problem).bind(ResourceType::Deployment as i32).bind(PermissionLevel::Read as i32).execute(&pool).await.unwrap();
+    let mut previous = 1;
+    for size in [10, 1_000, 10_000] {
+        sqlx::query("INSERT INTO deployments(id,createdbyactorid,name,platformid,spec,status) SELECT gen_random_uuid(),$1,'app-'||i,$2,'{}','Healthy' FROM generate_series($3::int+1,$4::int) i").bind(admin.actor_id.value()).bind(platform).bind(previous).bind(size).execute(&pool).await.unwrap();
+        previous = size;
+        for viewer in [&admin, &reader] {
+            for tab in ["All", "Updates"] {
+                let result = call(
+                    &app,
+                    viewer,
+                    Method::GET,
+                    &format!("dashboards/fleet?read=Attention&kinds=Deployment&tab={tab}&limit=1"),
+                    Value::Null,
+                    StatusCode::OK,
+                )
+                .await;
+                assert!(
+                    serde_json::to_vec(&result).unwrap().len() < 1024,
+                    "One preview owner should have a bounded payload at fleet size {size}"
+                );
+                assert_eq!(result["rows"][0]["id"], json!(problem));
+                assert_eq!(result["problems"], 1);
+                assert_eq!(result["updates"], 1);
+                assert_eq!(result["total"], 1);
+                assert_eq!(result["rows"][0]["reasons"].as_array().unwrap().len(), 2);
+            }
+            let states = call(
+                &app,
+                viewer,
+                Method::GET,
+                "dashboards/fleet?read=States&kinds=Deployment",
+                Value::Null,
+                StatusCode::OK,
+            )
+            .await;
+            let total: i64 = states["states"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|s| s["count"].as_i64().unwrap())
+                .sum();
+            assert_eq!(
+                total,
+                if viewer.is_administrator() {
+                    i64::from(size)
+                } else {
+                    1
+                }
+            );
+        }
+    }
+    sqlx::query("UPDATE deployments SET spec='{}',status='Stopped' WHERE id=$1")
+        .bind(problem)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let result = call(
+        &app,
+        &reader,
+        Method::GET,
+        "dashboards/fleet?read=Attention",
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(result["total"], 0);
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('fixture.actor',$1,true),set_config('fixture.platform',$2,true),set_config('fixture.deployment',$3,true)").bind(admin.actor_id.value().to_string()).bind(platform.to_string()).bind(problem.to_string()).execute(&mut *tx).await.unwrap();
+    sqlx::raw_sql(include_str!("fixtures/dashboard_attention.sql"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let get =
+        |path: &'static str| call(&app, &admin, Method::GET, path, Value::Null, StatusCode::OK);
+    let all = get("dashboards/fleet?read=Attention").await;
+    assert_eq!(
+        (&all["total"], &all["problems"], &all["updates"]),
+        (&json!(14), &json!(4), &json!(12))
+    );
+    let rows = all["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 5);
+    assert_eq!(rows[0]["kind"], "Platform");
+    assert_eq!(rows[1]["id"], json!(problem));
+    let summary = get("dashboards/fleet?read=Summary").await;
+    let alerts = get("dashboards/fleet?read=OpenAlerts").await;
+    assert_eq!(summary["alerts"], 3);
+    assert_eq!(alerts["total"], summary["alerts"]);
+    let last = get("dashboards/fleet?read=Attention&tab=Updates&limit=25").await;
+    assert!(
+        last["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["name"] == "web-stack" && r["reasons"][0]["target"].is_string())
+    );
+    let tags: Vec<String> = sqlx::query_scalar(
+        "SELECT t.name FROM tags t JOIN resourcetags rt ON rt.tagid=t.id WHERE rt.resourceid=$1",
+    )
+    .bind(problem)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let scoped = call(
+        &app,
+        &reader,
+        Method::GET,
+        &format!(
+            "dashboards/fleet?read=Attention&tags={}&tags={}",
+            tags[0], tags[1]
+        ),
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(scoped["total"], 1);
+    assert_eq!(scoped["rows"][0]["reasons"].as_array().unwrap().len(), 2);
+    sqlx::query("INSERT INTO backupruns(id,backuppolicyid,backuprepositoryid,policynamesnapshot,repositorytypesnapshot,snapshotavailability,sourcesnapshot,status,trigger,triggeredbyactorid,completedat) SELECT gen_random_uuid(),id,backuprepositoryid,name,'Local','Available','{}','Succeeded','Scheduled',runasactorid,now() FROM backuppolicies WHERE normalizedname='r4-payments-daily'").execute(&pool).await.unwrap();
+    assert_eq!(
+        get("dashboards/fleet?read=Attention&kinds=BackupPolicy").await["total"],
+        0
     );
 }

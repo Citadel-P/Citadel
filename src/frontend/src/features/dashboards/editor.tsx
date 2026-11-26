@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { collides, type Layout } from 'react-grid-layout';
 import { Check, Copy, GripVertical, Plus, Trash2, X } from 'lucide-react';
 import {
+  DashboardAttentionTab,
   DashboardVisibility,
   type DashboardConfiguration,
   type DashboardWidget,
@@ -14,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { useMutate } from '@/lib/hooks';
+import { useMutate, useRead } from '@/lib/hooks';
 import { requestErrorMessage, requestErrorStatus } from '@/lib/request-error';
 import { randomUuid } from '@/lib/utils';
 import { categories, catalogue, makeWidget, widgetError, type WidgetKind } from './catalogue';
@@ -72,6 +73,9 @@ export default function Editor({
   initial: DashboardConfiguration;
   close: (saved: boolean) => void;
 }) {
+  const profile = useRead('getCurrentProfile');
+  const admin = profile.data?.data.authorization.isAdministrator && !profile.isError;
+  const updatesPreset = useRef(false);
   const [base] = useState(() => ({ board, initial }));
   const [name, setName] = useState(board?.name ?? 'My Overview');
   const [config, setConfig] = useState(initial);
@@ -109,7 +113,14 @@ export default function Editor({
     if (mutation.isPending) return;
     if (!base.board) {
       create.mutate(
-        { data: { id: copyId, name: name.trim(), configuration: config, visibility: DashboardVisibility.Private } },
+        {
+          data: {
+            id: copyId,
+            name: name.trim(),
+            configuration: config,
+            visibility: DashboardVisibility.Private,
+          },
+        },
         {
           onSuccess: ({ data }) => {
             leaving.current = true;
@@ -124,7 +135,10 @@ export default function Editor({
     }
     const id = base.board.id;
     update.mutate(
-      { id: base.board.id, data: { revision: base.board.revision, name: name.trim(), configuration: config } },
+      {
+        id: base.board.id,
+        data: { revision: base.board.revision, name: name.trim(), configuration: config },
+      },
       {
         onError: (err) => {
           if (requestErrorStatus(err) === 409)
@@ -159,13 +173,17 @@ export default function Editor({
       }),
     );
   };
-  const add = (kind: WidgetKind, from?: DashboardWidget, layout?: Layout, ghostId?: string) => {
+  const add = (kind: WidgetKind, from?: DashboardWidget, layout?: Layout, ghostId?: string, updates = false) => {
     if (
       config.widgets.length >= 24 ||
       (kind === 'Metrics' && config.widgets.filter((w) => w.settings.kind === 'Metrics').length >= 8)
     )
       return;
     const item = from ? { ...structuredClone(from), id: randomUuid() } : makeWidget(kind);
+    if (updates && item.settings.kind === 'NeedsAttention') {
+      item.title = 'Updates';
+      item.settings = { ...item.settings, tab: DashboardAttentionTab.Updates };
+    }
     const position = layout?.find((p) => p.i === ghostId) ?? nextPosition(config.widgets, item.layout.w, item.layout.h);
     if (!position) {
       setError('No space available at this position.');
@@ -199,6 +217,20 @@ export default function Editor({
       if (result.every((w) => w.y <= 512)) widgets(applyGeometry(config.widgets, result));
     }
   };
+  const entries = (Object.keys(catalogue) as WidgetKind[])
+    .filter((kind) => admin || !['Updates', 'UpcomingSchedules'].includes(kind))
+    .map((kind) => ({
+      kind,
+      label: catalogue[kind].label,
+      description: catalogue[kind].description,
+      updates: false,
+    }));
+  entries.push({
+    kind: 'NeedsAttention',
+    label: 'Updates',
+    description: 'Resources with a recorded image or Git update.',
+    updates: true,
+  });
   const panelOpen = !!tile || libraryOpen;
   return (
     <div className="dashboard-builder">
@@ -283,7 +315,7 @@ export default function Editor({
               onMove={(layout) => widgets(applyGeometry(config.widgets, layout))}
               dragKind={dragKind}
               setDragKind={setDragKind}
-              drop={(kind, layout, item) => add(kind, undefined, layout, item.i)}
+              drop={(kind, layout, item) => add(kind, undefined, layout, item.i, updatesPreset.current)}
             />
           </div>
           {panelOpen && (
@@ -292,6 +324,35 @@ export default function Editor({
                 <h2 tabIndex={-1} id="widget-inspector-heading" className="text-sm font-semibold focus:outline-none">
                   {tile ? 'Widget settings' : 'Widget library'}
                 </h2>
+                {tile && (
+                  <div className="ml-auto flex items-center gap-1">
+                    {' '}
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="ml-auto"
+                      aria-label="Duplicate widget"
+                      disabled={
+                        config.widgets.length >= 24 ||
+                        (tile.settings.kind === 'Metrics' &&
+                          config.widgets.filter((w) => w.settings.kind === 'Metrics').length >= 8)
+                      }
+                      onClick={() => add(tile.settings.kind, tile)}>
+                      <Copy />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-destructive"
+                      aria-label="Remove widget"
+                      onClick={() => {
+                        widgets(config.widgets.filter((w) => w.id !== tile.id));
+                        catalogueFocus();
+                      }}>
+                      <Trash2 />
+                    </Button>
+                  </div>
+                )}
                 <Button
                   variant="ghost"
                   size="icon-sm"
@@ -318,15 +379,7 @@ export default function Editor({
                   <div className="flex shrink-0 flex-wrap items-center gap-2 border-t px-4 py-3">
                     <Button
                       size="sm"
-                      onClick={() => {
-                        const issue = widgetError(tile);
-                        setError(issue ?? '');
-                        if (!issue) catalogueFocus();
-                      }}>
-                      Apply
-                    </Button>
-                    <Button
-                      size="sm"
+                      className="flex-1"
                       variant="outline"
                       onClick={() => {
                         widgets(snapshot.current);
@@ -336,28 +389,14 @@ export default function Editor({
                       Cancel settings
                     </Button>
                     <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="ml-auto"
-                      aria-label="Duplicate widget"
-                      disabled={
-                        config.widgets.length >= 24 ||
-                        (tile.settings.kind === 'Metrics' &&
-                          config.widgets.filter((w) => w.settings.kind === 'Metrics').length >= 8)
-                      }
-                      onClick={() => add(tile.settings.kind, tile)}>
-                      <Copy />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-destructive"
-                      aria-label="Remove widget"
+                      size="sm"
+                      className="flex-1"
                       onClick={() => {
-                        widgets(config.widgets.filter((w) => w.id !== tile.id));
-                        catalogueFocus();
+                        const issue = widgetError(tile);
+                        setError(issue ?? '');
+                        if (!issue) catalogueFocus();
                       }}>
-                      <Trash2 />
+                      Apply
                     </Button>
                   </div>
                 </>
@@ -371,37 +410,73 @@ export default function Editor({
                     onChange={(e) => setSearch(e.target.value)}
                   />
                   {categories.map((category) => {
-                    const matching = (Object.keys(catalogue) as WidgetKind[]).filter(
-                      (k) =>
-                        catalogue[k].category === category &&
-                        (catalogue[k].label + ' ' + catalogue[k].description)
-                          .toLowerCase()
-                          .includes(search.toLowerCase()),
+                    const matching = entries.filter(
+                      ({ kind, label, description }) =>
+                        catalogue[kind].category === category &&
+                        (label + ' ' + description).toLowerCase().includes(search.toLowerCase()),
                     );
                     return (
                       matching.length > 0 && (
                         <section key={category} className="space-y-1">
                           <h3 className="text-xs font-medium text-muted-foreground">{category}</h3>
-                          {matching.map((kind) => {
-                            const { label, description, Icon } = catalogue[kind];
+                          {matching.map(({ kind, label, description, updates }) => {
+                            const { Icon, size } = catalogue[kind];
                             const disabled =
                               config.widgets.length >= 24 ||
                               (kind === 'Metrics' &&
                                 config.widgets.filter((w) => w.settings.kind === 'Metrics').length >= 8);
                             return (
                               <div
-                                key={kind}
+                                key={label}
                                 draggable={!disabled}
                                 onDragStart={(e) => {
                                   e.dataTransfer.setData('text/plain', label);
                                   e.dataTransfer.setData('application/x-citadel-widget', kind);
+                                  updatesPreset.current = updates;
                                   setDragKind(kind);
                                 }}
                                 onDragEnd={() => setDragKind(undefined)}
                                 className="group flex items-start gap-2 rounded-md p-2 hover:bg-muted/50">
-                                <Icon className="mt-1 size-4 shrink-0 text-muted-foreground" />
+                                <span
+                                  aria-hidden="true"
+                                  className="flex h-10 w-14 shrink-0 items-center justify-center gap-1 rounded-md border bg-muted/30">
+                                  {kind === 'FleetSummary' ? (
+                                    <>
+                                      <CitadelIcons.Platform className="size-3" />
+                                      <CitadelIcons.Stack className="size-3" />
+                                      <CitadelIcons.Alert className="size-3" />
+                                    </>
+                                  ) : kind === 'NeedsAttention' || kind === 'ResourceState' ? (
+                                    <span className="flex flex-col gap-1">
+                                      {[CitadelIcons.Platform, CitadelIcons.Deployment, CitadelIcons.Stack].map(
+                                        (RowIcon, i) => (
+                                          <span key={i} className="flex items-center gap-1">
+                                            <RowIcon className="size-2" />
+                                            <span className="h-1 w-4 rounded bg-muted-foreground/30" />
+                                            <span
+                                              className={
+                                                [
+                                                  'size-1.5 rounded-full bg-red-500',
+                                                  'size-1.5 rounded-full bg-amber-500',
+                                                  'size-1.5 rounded-full bg-blue-500',
+                                                ][i]
+                                              }
+                                            />
+                                          </span>
+                                        ),
+                                      )}
+                                    </span>
+                                  ) : (
+                                    <Icon className="size-5 text-muted-foreground" />
+                                  )}
+                                </span>
                                 <div className="min-w-0 grow">
-                                  <div className="text-sm">{label}</div>
+                                  <div className="text-sm font-medium">
+                                    {label}{' '}
+                                    <span className="text-xs font-normal text-muted-foreground">
+                                      {size.w} × {size.h}
+                                    </span>
+                                  </div>
                                   <p className="text-xs text-muted-foreground">{description}</p>
                                 </div>
                                 <Button
@@ -409,7 +484,7 @@ export default function Editor({
                                   size="icon-sm"
                                   aria-label={'Add ' + label}
                                   disabled={disabled}
-                                  onClick={() => add(kind)}>
+                                  onClick={() => add(kind, undefined, undefined, undefined, updates)}>
                                   <Plus />
                                 </Button>
                                 <GripVertical

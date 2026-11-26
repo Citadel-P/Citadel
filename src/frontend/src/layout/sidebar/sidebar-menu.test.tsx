@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { Link, useLocation } from 'react-router';
 import { PlatformType } from '@/api/generated/api.types';
 import { Sidebar as SidebarRoot, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
@@ -107,6 +107,41 @@ it('highlights the resource family on edit pages', () => {
   expect(screen.getByRole('link', { name: 'Platforms' })).not.toHaveAttribute('aria-current');
 });
 
+it('opens the home dashboard separately from the dashboard list and groups Build Pools under Providers', async () => {
+  const { user } = renderCitadel(<Harness />, { route: '/' });
+  const home = screen.getByRole('link', { name: 'Home' });
+  expect(home).toHaveAttribute('aria-current', 'page');
+  const dashboards = screen.getByRole('link', { name: 'Dashboards' });
+  await user.click(dashboards);
+  expect(screen.getByTestId('location')).toHaveTextContent(/^\/dashboards$/);
+  expect(dashboards).toHaveAttribute('aria-current', 'page');
+  expect(home).not.toHaveAttribute('aria-current');
+  expect(
+    within(screen.getByRole('group', { name: 'Providers' })).getByRole('link', { name: 'Build Pools' }),
+  ).toHaveAttribute('href', '/build-pools');
+  await user.click(home);
+  expect(screen.getByTestId('location')).toHaveTextContent(/^\/$/);
+});
+
+it.each([true, false])('lists resources as direct links with the sidebar open=%s', async (open) => {
+  const { user } = renderCitadel(<Harness open={open} />, { route: '/builds/edit/project-id' });
+  const resources = within(screen.getByRole('group', { name: 'Resources' }));
+  expect(resources.getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
+    'Dashboards',
+    'Platforms',
+    'Backups',
+    'Deployments',
+    'Stacks',
+    'Swarm Services',
+    'Scripts',
+    'Build Projects',
+  ]);
+  expect(resources.getByRole('link', { name: 'Build Projects' })).toHaveAttribute('aria-current', 'page');
+  await user.click(resources.getByRole('link', { name: 'Scripts' }));
+  expect(screen.getByTestId('location')).toHaveTextContent('/scripts');
+  expect(screen.getByTestId('sidebar-state')).toHaveTextContent(open ? 'expanded' : 'collapsed');
+});
+
 it('retains the selected platform and its collapse state on global pages', async () => {
   const { user } = renderCitadel(<Harness />, { route: '/platforms/one/containers/container-id' });
   await user.click(screen.getByRole('button', { name: 'Platform resources' }));
@@ -209,7 +244,7 @@ it('filters individual Configuration destinations by permission', async () => {
   expect(screen.queryByRole('menuitem', { name: 'Bindings' })).not.toBeInTheDocument();
 });
 
-it('opens utility menus inside mobile navigation and closes the drawer after selection', async () => {
+it('closes mobile navigation after a utility or resource is selected', async () => {
   vi.mocked(window.matchMedia).mockImplementation(
     (media) =>
       ({
@@ -228,5 +263,9 @@ it('opens utility menus inside mobile navigation and closes the drawer after sel
   expect(screen.getByTestId('location')).toHaveTextContent('/instance');
   expect(screen.getByTestId('sidebar-state')).toHaveTextContent('expanded:false');
   expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Open navigation' }));
+  await user.click(screen.getByRole('link', { name: 'Dashboards' }));
+  expect(screen.getByTestId('location')).toHaveTextContent('/dashboards');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

@@ -28,7 +28,9 @@ import {
   ServerPlus,
   Boxes,
   FileCode2,
-  ListChecks,
+  ListTodo,
+  Box,
+  HardDrive,
   LayoutDashboard,
 } from 'lucide-react';
 
@@ -47,7 +49,7 @@ export const DockerIcon = createLucideIcon('DockerIcon', [
   ['rect', { x: '15', y: '7', width: '3', height: '3', rx: '0.5' }],
 ]);
 
-export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ className?: string }>> = {
+export const CitadelIcons: Record<ResourceType, React.ComponentType<{ className?: string }>> = {
   Dashboard: LayoutDashboard,
   ['Updates']: RefreshCw,
   ['Instance']: ServerCog,
@@ -56,13 +58,13 @@ export const CitadelIcons: Record<Partial<ResourceType>, React.ComponentType<{ c
   ['Registry']: Cable,
   ['Platform']: Server,
   ['Stack']: Layers,
-  ['Container']: DockerIcon,
-  ['Image']: DockerIcon,
+  ['Container']: Box,
+  ['Image']: Layers,
   ['Network']: Network,
-  ['Volume']: DockerIcon,
-  ['Node']: Server,
+  ['Volume']: HardDrive,
+  ['Node']: Network,
   ['Service']: Boxes,
-  ['Task']: ListChecks,
+  ['Task']: ListTodo,
   ['Secret']: KeyRound,
   ['Config']: FileCode2,
   ['Alert']: TriangleAlert,

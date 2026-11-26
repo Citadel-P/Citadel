@@ -7,3 +7,5 @@ export function nextPosition(widgets: DashboardWidget[], width: number, height: 
         return { x, y, w: width, h: height };
     }
 }
+
+export const dashboardGrid = { rowHeight: 44, gap: 12 } as const;

@@ -1,4 +1,4 @@
-use crate::{DashboardContent, DashboardError, Layout, MetricSource, WidgetSettings};
+use crate::{DashboardContent, DashboardError, Layout, WidgetSettings};
 use std::collections::HashSet;
 
 pub const MAX_WIDGETS: usize = 24;
@@ -47,7 +47,7 @@ impl DashboardContent {
         if self.name.is_empty() || self.name.chars().count() > 128 || self.name.contains('\0') {
             return Err(invalid("Enter a dashboard name of 1 to 128 characters."));
         }
-        if config.schema_version != 1 {
+        if config.schema_version != 2 {
             return Err(invalid("This dashboard version cannot be edited."));
         }
         config.tags =
@@ -81,18 +81,31 @@ impl DashboardContent {
                 ));
             }
             match &widget.settings {
+                WidgetSettings::FleetSummary { measures }
+                    if measures.is_empty()
+                        || measures.iter().collect::<HashSet<_>>().len() != measures.len() =>
+                {
+                    return Err(invalid("Select distinct fleet measures."));
+                }
+                WidgetSettings::NeedsAttention { limit, kinds, .. }
+                    if !matches!(limit, 3 | 5 | 10)
+                        || kinds.iter().collect::<HashSet<_>>().len() != kinds.len() =>
+                {
+                    return Err(invalid(
+                        "Choose valid attention filters and 3, 5 or 10 rows.",
+                    ));
+                }
+                WidgetSettings::Watchlist { pins }
+                    if pins.is_empty()
+                        || pins.len() > 8
+                        || pins.iter().any(|p| p.id.is_nil())
+                        || pins.iter().enumerate().any(|(i, p)| pins[..i].contains(p)) =>
+                {
+                    return Err(invalid("Choose one to eight distinct resources."));
+                }
                 WidgetSettings::Metrics { source, .. } => {
                     metrics += 1;
-                    let valid = match source {
-                        MetricSource::Platform { id }
-                        | MetricSource::Deployment { id }
-                        | MetricSource::Stack { id }
-                        | MetricSource::SwarmService { id } => !id.is_nil(),
-                        MetricSource::Container { id, platform_id } => {
-                            !id.is_nil() && !platform_id.is_nil()
-                        }
-                    };
-                    if !valid || metrics > MAX_METRICS {
+                    if source.id.is_nil() || metrics > MAX_METRICS {
                         return Err(invalid(
                             "Select a resource for each of up to eight metric widgets.",
                         ));
@@ -111,9 +124,7 @@ impl DashboardContent {
                 {
                     return Err(invalid("Check the note length and its links."));
                 }
-                WidgetSettings::Platforms { limit }
-                | WidgetSettings::Workloads { limit, .. }
-                | WidgetSettings::OpenAlerts { limit }
+                WidgetSettings::OpenAlerts { limit }
                 | WidgetSettings::Backups { limit }
                 | WidgetSettings::RecentActivity { limit }
                 | WidgetSettings::UpcomingSchedules { limit }
@@ -143,7 +154,7 @@ mod tests {
         let mut board = DashboardContent {
             name: " Board ".into(),
             configuration: DashboardConfiguration {
-                schema_version: 1,
+                schema_version: 2,
                 tags: vec![],
                 range_minutes: 60,
                 widgets: vec![Widget {

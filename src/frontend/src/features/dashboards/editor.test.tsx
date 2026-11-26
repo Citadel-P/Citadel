@@ -12,6 +12,7 @@ it('cancels a new tile, retains pending settings after a conflict, and saves one
   const requests: unknown[] = [];
   let conflict = true;
   server.use(
+    http.get('*/api/v1/tags', () => HttpResponse.json({ tags: [] })),
     http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
     http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
     http.get('*/api/v1/application/info', () => HttpResponse.json({})),

@@ -12,6 +12,7 @@ import { audiences } from './visibility';
 import { DashboardView } from './view-controls';
 import { supportedConfiguration } from './catalogue';
 import { DashboardMenu } from './management';
+import { UnsupportedConfiguration } from './unsupported-configuration';
 const Editor = lazy(() => import('./editor'));
 
 export default function DashboardBoard() {
@@ -55,7 +56,7 @@ export function SavedDashboard({ id, home = false }: { id: string | undefined; h
           <DashboardView boardId={id} config={config} editing={!!edit} paused={paused} setPaused={setPaused} />
         </div>
       ) : (
-        <p>This dashboard uses an unsupported configuration.</p>
+        <UnsupportedConfiguration />
       )}
       {edit && (
         <Suspense fallback={<Loader />}>

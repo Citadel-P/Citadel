@@ -1,4 +1,4 @@
-import { Activity, MoveUpRight, SquareStack, RefreshCw, ServerCog } from 'lucide-react';
+import { Activity, MoveUpRight, SquareStack } from 'lucide-react';
 import { useMemo } from 'react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useActivitiesGroup } from './hooks/useActivitiesGroup';
@@ -10,29 +10,6 @@ import TaskSheet from '@/components/custom/task-sheet';
 import { Link } from 'react-router';
 import { CitadelIcons } from '@/lib/icons';
 import { useRead } from '@/lib/hooks';
-
-const activityResourceIcons = {
-  [ActivityResourceType.Deployment]: CitadelIcons.Deployment,
-  [ActivityResourceType.Registry]: CitadelIcons.Registry,
-  [ActivityResourceType.Platform]: CitadelIcons.Platform,
-  [ActivityResourceType.Stack]: CitadelIcons.Stack,
-  [ActivityResourceType.AlertRule]: CitadelIcons.Alert,
-  [ActivityResourceType.GitRepository]: CitadelIcons.GitRepository,
-  [ActivityResourceType.OidcProvider]: CitadelIcons.OidcProvider,
-  [ActivityResourceType.Script]: CitadelIcons.Script,
-  [ActivityResourceType.User]: CitadelIcons.User,
-  [ActivityResourceType.Team]: CitadelIcons.Team,
-  [ActivityResourceType.Role]: CitadelIcons.Role,
-  [ActivityResourceType.License]: CitadelIcons.License,
-  [ActivityResourceType.Updates]: RefreshCw,
-  [ActivityResourceType.Instance]: ServerCog,
-  [ActivityResourceType.Volume]: CitadelIcons.Volume,
-  [ActivityResourceType.Build]: CitadelIcons.Build,
-  [ActivityResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
-  [ActivityResourceType.BackupPolicy]: CitadelIcons.BackupPolicy,
-  [ActivityResourceType.SwarmService]: CitadelIcons.SwarmService,
-  [ActivityResourceType.ServiceAccount]: CitadelIcons.ServiceAccount,
-} satisfies Record<ActivityResourceType, any>;
 
 const activityEventPrefixes = {
   [ActivityResourceType.Deployment]: 'Deployment',
@@ -103,7 +80,7 @@ export const getActivityResourceOptions = (isAdministrator: boolean) =>
     .map((type) => ({
       value: type,
       label: activityResourceLabels[type] ?? type,
-      icon: activityResourceIcons[type],
+      icon: CitadelIcons[type],
     }));
 
 export const ActivityComponents: RequiredComponents = {

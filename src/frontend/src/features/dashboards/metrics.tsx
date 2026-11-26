@@ -22,9 +22,8 @@ import { useTaskStatsStream } from '@/features/swarm-resources/tasks/hooks/useTa
 import { useServiceStatsStream } from '@/features/swarm-resources/services/hooks/useServiceStats';
 import { usePlatformLiveStats } from '@/features/platforms/platform-series';
 import { useRealtimeContext } from '@/lib/context/realtime-context';
-import { RangeField, Choice, chartPalette } from './display-controls';
-import { STATS_PRESETS } from '@/lib/stats-range';
-import { HistoryRangeContext, RangeClock } from './range-clock';
+import { Choice, chartPalette } from './display-controls';
+import { RangeClock } from './range-clock';
 import { useStackSeries } from './stack-series';
 import { useAppContext } from '@/lib/context/app-context';
 import { latestLiveStat, mergeStatsBuckets } from '@/lib/stats-buckets';
@@ -288,7 +287,6 @@ export function MetricHistory({
   interval: number | false;
   manual: boolean;
 }) {
-  const setRange = useContext(HistoryRangeContext);
   const app = useAppContext();
   const canReadPlatform = app.platforms?.some((p) => p.id === row.platformId) === true;
   const query = statsRangeQuery({ kind: 'relative', minutes }, resolveStatsRange({ kind: 'relative', minutes }));
@@ -298,12 +296,8 @@ export function MetricHistory({
   const platformLive = usePlatformLiveStats(platformSource, seconds, minutes * 60);
   const allowedPlatform = !manual && canReadPlatform ? (row.platformId ?? '') : '';
   const taskLive = useTaskStatsStream(
-    source.kind === 'Container' || source.kind === 'Deployment' ? allowedPlatform : '',
-    source.kind === 'Container'
-      ? source.id
-      : source.kind === 'Deployment'
-        ? (row.containerProjectionId ?? undefined)
-        : undefined,
+    source.kind === 'Deployment' ? allowedPlatform : '',
+    row.containerProjectionId ?? undefined,
     seconds,
     minutes * 60,
   );
@@ -324,11 +318,6 @@ export function MetricHistory({
     { id: source.id, query },
     { ...opts, enabled: source.kind === 'Platform' },
   );
-  const container = useRead(
-    'getContainerStats',
-    { id: source.id, query },
-    { ...opts, enabled: source.kind === 'Container' },
-  );
   const deployment = useRead(
     'getDeploymentStats',
     { id: source.id, query },
@@ -343,7 +332,6 @@ export function MetricHistory({
   const read = {
     Platform: platform,
     Stack: stack,
-    Container: container,
     Deployment: deployment,
     SwarmService: service,
   }[source.kind];
@@ -357,7 +345,7 @@ export function MetricHistory({
   const live =
     source.kind === 'Platform'
       ? platformLive
-      : source.kind === 'Container' || source.kind === 'Deployment'
+      : source.kind === 'Deployment'
         ? taskLive
         : source.kind === 'SwarmService' && serviceLive.observedContainers === service.data?.data.expectedTasks
           ? serviceLive.stats
@@ -418,11 +406,6 @@ export function MetricHistory({
                 to={link}>
                 {row.name}
               </Link>
-              {setRange && !manual ? (
-                <RangeField value={minutes} change={setRange} />
-              ) : (
-                <span>History range · {STATS_PRESETS.find((p) => p.minutes === minutes)?.label}</span>
-              )}
               <Link className="table-link ml-auto" to={monitoringLink(link, source.kind, 'stats', minutes)}>
                 Full statistics
               </Link>

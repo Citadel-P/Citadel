@@ -8,6 +8,7 @@ import { supportedConfiguration } from './catalogue';
 import { CaptureContext, Tile, ViewOnlyContext } from './tile';
 import type { DashboardWidget } from '@/api/generated/api.types';
 import { dashboardRequirements } from './requirements';
+import { UnsupportedConfiguration } from './unsupported-configuration';
 
 export type SavedTile = DashboardWidget;
 const previewKey = (tile: DashboardWidget, tags: string[], range: number) =>
@@ -76,8 +77,7 @@ function DataGrid({
   const client = useQueryClient();
   const plan = useMemo(() => dashboardRequirements(tiles ?? [], tags, range), [tiles, tags, range]);
   const demand = plan.scope;
-  const globalPlatforms = !tags.length && plan.needsPlatforms;
-  const globalAlerts = !tags.length && ('ResourceSummary' in plan.limits || 'OpenAlerts' in plan.limits);
+  const globalAlerts = !tags.length && 'OpenAlerts' in plan.limits;
   // A scope lives as long as its data inputs, including while its observers are paused.
   const scope = useMemo(
     () => ({
@@ -89,10 +89,9 @@ function DataGrid({
         ...(globalAlerts
           ? [hashKey(['listAlertEvents', { query: { Page: 1, PageSize: 5, UnresolvedOnly: true } }])]
           : []),
-        ...(globalPlatforms ? [hashKey(['listPlatforms', {}])] : []),
       ]),
     }),
-    [boardId, demand, globalPlatforms, globalAlerts],
+    [boardId, demand, globalAlerts],
   );
   const { snapshots } = scope;
   const [observed, setObserved] = useState(refresh);
@@ -155,7 +154,7 @@ function DataGrid({
     if (!once) onSettled?.();
   }, [once, onSettled]);
   if (!visible || inactive) return null;
-  if (!tiles) return <p>This dashboard uses an unsupported configuration.</p>;
+  if (!tiles) return <UnsupportedConfiguration />;
   if (!tiles.length) return <p className="text-muted-foreground">This dashboard has no widgets yet.</p>;
   return (
     <ViewOnlyContext.Provider value={paused}>

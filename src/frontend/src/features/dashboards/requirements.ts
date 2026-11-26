@@ -1,17 +1,19 @@
-import type { DashboardWidget, DashboardMetricSource, DashboardWorkloadKind } from '@/api/generated/api.types';
+import type { DashboardWidget, DashboardMetricSource } from '@/api/generated/api.types';
 type TileOf<K extends DashboardWidget['settings']['kind']> = DashboardWidget & {
   settings: Extract<DashboardWidget['settings'], { kind: K }>;
 };
+export type FleetBoardTile = TileOf<'FleetSummary' | 'ResourceState' | 'NeedsAttention'>;
+export type WatchTile = TileOf<'Watchlist'>;
 export type MetricTile = TileOf<'Metrics'>;
-export type WorkloadTile = TileOf<'Workloads'>;
 function add<K, V>(groups: Map<K, V[]>, key: K, value: V) {
   const group = groups.get(key);
   if (group) group.push(value);
   else groups.set(key, [value]);
 }
 export function dashboardRequirements(tiles: DashboardWidget[], tags: string[], minutes: number) {
-  const workloads = new Map<DashboardWorkloadKind, WorkloadTile[]>();
   const metrics = new Map<DashboardMetricSource['kind'], MetricTile[]>();
+  const fleet: FleetBoardTile[] = [],
+    watches: WatchTile[] = [];
   const overview: DashboardWidget[] = [],
     maintenance: DashboardWidget[] = [],
     notes: TileOf<'Notes'>[] = [];
@@ -22,18 +24,19 @@ export function dashboardRequirements(tiles: DashboardWidget[], tags: string[], 
     const limit = 'limit' in s ? s.limit : 0;
     let source = '';
     switch (s.kind) {
+      case 'FleetSummary':
+      case 'ResourceState':
+      case 'NeedsAttention':
+        fleet.push(tile as FleetBoardTile);
+        source = JSON.stringify(s);
+        break;
+      case 'Watchlist':
+        watches.push(tile as WatchTile);
+        source = JSON.stringify(s.pins);
+        break;
       case 'Metrics':
         add(metrics, s.source.kind, tile as MetricTile);
-        source = JSON.stringify([
-          s.source.kind,
-          s.source.id,
-          s.source.kind === 'Container' ? s.source.platformId : null,
-          minutes,
-        ]);
-        break;
-      case 'Workloads':
-        add(workloads, s.resourceKind, tile as WorkloadTile);
-        source = s.resourceKind;
+        source = JSON.stringify([s.source.kind, s.source.id, minutes]);
         break;
       case 'UpcomingSchedules':
       case 'Updates':
@@ -50,8 +53,8 @@ export function dashboardRequirements(tiles: DashboardWidget[], tags: string[], 
     demand.set(key, Math.max(demand.get(key) ?? 0, limit));
   }
   return {
-    needsPlatforms: 'Platforms' in limits || 'ResourceSummary' in limits,
-    workloads,
+    fleet,
+    watches,
     metrics,
     overview,
     maintenance,

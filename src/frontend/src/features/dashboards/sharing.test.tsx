@@ -26,7 +26,7 @@ function setup(isAdministrator: boolean, team: boolean) {
     http.get(api + '/dashboards/:id', ({ params }) =>
       HttpResponse.json({
         summary: params.id === 'mine' ? privateBoard : getBoard(),
-        configuration: { schemaVersion: 1, tags: [], rangeMinutes: 60, widgets: [] },
+        configuration: { schemaVersion: 2, tags: [], rangeMinutes: 60, widgets: [] },
       }),
     ),
   );
@@ -47,7 +47,7 @@ function openPage(route: string, queryClient = createQueryClient()) {
 it('waits for current access before showing a previously opened board', async () => {
   const client = createQueryClient();
   client.setQueryData(resourceQueryKey('getDashboard', { id: 'board' }), {
-    data: { summary: board, configuration: { schemaVersion: 1, tags: [], rangeMinutes: 60, widgets: [] } },
+    data: { summary: board, configuration: { schemaVersion: 2, tags: [], rangeMinutes: 60, widgets: [] } },
   });
   server.use(http.get(api + '/dashboards/board', () => HttpResponse.json({ status: 404 }, { status: 404 })));
   openPage('/dashboards/board', client);

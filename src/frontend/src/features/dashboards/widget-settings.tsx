@@ -1,9 +1,13 @@
 import { useState, type ReactNode } from 'react';
 import {
+  DashboardFleetKind,
+  DashboardStateKind,
+  DashboardSourceKind,
+  DashboardAttentionTab,
+  DashboardFleetMeasure,
   DashboardChartColor,
   DashboardChartStyle,
   DashboardMetric,
-  DashboardWorkloadKind,
   type DashboardWidget,
   type DashboardMetricSource,
   type DashboardWidgetSettings,
@@ -15,6 +19,7 @@ import { ResourceSelectorField } from '@/components/custom/common';
 import { useDebounce } from '@/hooks/useDebounce';
 import { CitadelIcons } from '@/lib/icons';
 import { useRead } from '@/lib/hooks';
+import { ResourceMultiFilter } from '@/components/custom/resource-filter';
 import { Choice, chartPalette } from './display-controls';
 import { TagNameFilter, useResolvedTagFilter } from '@/features/tags/components';
 
@@ -43,7 +48,9 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 export function MetricSourcePicker({
   source,
   change,
+  fixedKind = false,
 }: {
+  fixedKind?: boolean;
   source: DashboardMetricSource;
   change: (s: DashboardMetricSource) => void;
 }) {
@@ -64,17 +71,21 @@ export function MetricSourcePicker({
   const selected = items.find((i) => i.id === source.id) ?? pinned.data?.data.find((i) => i.id === source.id);
   return (
     <>
-      <Choice
-        label="Resource type"
-        value={source.kind}
-        options={['Platform', 'Deployment', 'Stack', 'SwarmService', 'Container']}
-        icons={CitadelIcons}
-        labels={{ SwarmService: 'Swarm service' }}
-        change={(kind) => {
-          setSearch('');
-          change(kind === 'Container' ? { kind, id: '', platformId: '' } : { kind, id: '' });
-        }}
-      />
+      {fixedKind ? (
+        <span className="text-xs text-muted-foreground">{source.kind}</span>
+      ) : (
+        <Choice
+          label="Resource type"
+          value={source.kind}
+          options={Object.values(DashboardSourceKind)}
+          icons={CitadelIcons}
+          labels={{ SwarmService: 'Swarm service' }}
+          change={(kind) => {
+            setSearch('');
+            change({ kind, id: '' });
+          }}
+        />
+      )}
 
       <div className="grid gap-1 text-sm">
         <span>Target resource</span>
@@ -98,16 +109,59 @@ export function MetricSourcePicker({
           }
           allowClear={false}
           onSelect={(item) => {
-            if (item)
-              change(
-                source.kind === 'Container'
-                  ? { kind: 'Container', id: item.id, platformId: item.platformId ?? '' }
-                  : { kind: source.kind, id: item.id },
-              );
+            if (item) change({ kind: source.kind, id: item.id });
           }}
         />
       </div>
     </>
+  );
+}
+function Pins({ pins, change }: { pins: DashboardMetricSource[]; change: (pins: DashboardMetricSource[]) => void }) {
+  const [choice, setChoice] = useState<DashboardMetricSource>({ kind: DashboardSourceKind.Platform, id: '' });
+  return (
+    <div className="space-y-3">
+      {pins.map((p, i) => (
+        <div key={p.kind + p.id} className="space-y-1 border-b py-2">
+          <MetricSourcePicker
+            source={p}
+            fixedKind
+            change={(v) => {
+              if (v.id && !pins.some((p, j) => j !== i && p.kind === v.kind && p.id === v.id))
+                change(pins.map((old, j) => (j === i ? v : old)));
+            }}
+          />
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={i === 0}
+              onClick={() => {
+                const next = [...pins];
+                [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                change(next);
+              }}>
+              Move up
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => change(pins.filter((_, j) => j !== i))}>
+              Remove
+            </Button>
+          </div>
+        </div>
+      ))}
+      {pins.length < 8 && (
+        <MetricSourcePicker
+          source={choice}
+          change={(p) => {
+            if (!p.id) {
+              setChoice(p);
+              return;
+            }
+            if (!pins.some((v) => v.kind === p.kind && v.id === p.id)) change([...pins, p]);
+            setChoice({ ...p, id: '' });
+          }}
+        />
+      )}
+    </div>
   );
 }
 export function WidgetSettings({
@@ -126,7 +180,67 @@ export function WidgetSettings({
       <Field label="Widget title">
         <Input value={widget.title} maxLength={128} onChange={(e) => change({ ...widget, title: e.target.value })} />
       </Field>
-      {'limit' in s && (
+      {s.kind === 'ResourceState' && (
+        <Choice
+          label="Resource type"
+          value={s.resourceKind}
+          options={Object.values(DashboardStateKind)}
+          icons={CitadelIcons}
+          change={(resourceKind) => settings({ ...s, resourceKind })}
+        />
+      )}
+      {s.kind === 'NeedsAttention' && (
+        <>
+          <div className="grid gap-1.5 text-sm">
+            <span>Default tab</span>
+            <SegmentedControl
+              aria-label="Default tab"
+              value={s.tab}
+              options={Object.values(DashboardAttentionTab).map((value) => ({ value, label: value }))}
+              onValueChange={(tab) => settings({ ...s, tab: tab as DashboardAttentionTab })}
+            />
+          </div>
+          <ResourceMultiFilter
+            label="Resource type"
+            icon={CitadelIcons.Dashboard}
+            options={Object.values(DashboardFleetKind).map((value) => {
+              const Icon = CitadelIcons[value];
+              return { value, label: value, icon: <Icon /> };
+            })}
+            selected={s.kinds}
+            onChange={(kinds) => settings({ ...s, kinds: kinds as DashboardFleetKind[] })}
+          />
+          <div className="grid gap-1.5 text-sm">
+            <span>Visible rows</span>
+            <SegmentedControl
+              aria-label="Visible rows"
+              value={String(s.limit)}
+              options={['3', '5', '10'].map((value) => ({ value, label: value }))}
+              onValueChange={(v) => settings({ ...s, limit: Number(v) })}
+            />
+          </div>
+        </>
+      )}
+      {s.kind === 'FleetSummary' && (
+        <ResourceMultiFilter
+          label="Measure"
+          icon={CitadelIcons.Dashboard}
+          selected={s.measures}
+          options={Object.values(DashboardFleetMeasure).map((value) => ({ value, label: value }))}
+          onChange={(v) => settings({ ...s, measures: v as DashboardFleetMeasure[] })}
+        />
+      )}
+      {s.kind === 'Watchlist' && <Pins pins={s.pins} change={(pins) => settings({ ...s, pins })} />}
+      {(s.kind === 'Backups' || s.kind === 'RecentActivity') && (
+        <Choice
+          label="Activity preset"
+          value={s.kind}
+          labels={{ RecentActivity: 'General', Backups: 'Backup activity' }}
+          options={['RecentActivity', 'Backups']}
+          change={(kind) => settings({ kind, limit: s.limit })}
+        />
+      )}
+      {'limit' in s && s.kind !== 'NeedsAttention' && (
         <Field label="Rows">
           <Input
             type="number"
@@ -136,16 +250,6 @@ export function WidgetSettings({
             onChange={(e) => settings({ ...s, limit: Number(e.target.value) })}
           />
         </Field>
-      )}
-      {s.kind === 'Workloads' && (
-        <Choice
-          label="Workload type"
-          value={s.resourceKind}
-          options={Object.values(DashboardWorkloadKind)}
-          icons={CitadelIcons}
-          labels={{ SwarmService: 'Swarm service' }}
-          change={(resourceKind) => settings({ ...s, resourceKind })}
-        />
       )}
       {s.kind === 'Metrics' && (
         <>
@@ -247,22 +351,26 @@ export function WidgetSettings({
           </Button>
         </>
       )}
-      <h3 className="border-t pt-5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Layout</h3>
-      <div className="grid grid-cols-2 gap-2">
-        {(['x', 'y', 'w', 'h'] as const).map((k, i) => (
-          <Field key={k} label={['Column', 'Row', 'Width', 'Height'][i]}>
-            <Input
-              type="number"
-              value={widget.layout[k]}
-              min={i < 2 ? 0 : 2}
-              max={[10, 512, 12, 24][i]}
-              onChange={(e) => {
-                if (e.target.value) place({ ...widget.layout, [k]: Number(e.target.value) });
-              }}
-            />
-          </Field>
-        ))}
-      </div>
+      <details className="border-t pt-4">
+        <summary className="mb-3 cursor-pointer font-medium">
+          Position &amp; size · {widget.layout.w} × {widget.layout.h}
+        </summary>
+        <div className="grid grid-cols-2 gap-2">
+          {(['x', 'y', 'w', 'h'] as const).map((k, i) => (
+            <Field key={k} label={['Column', 'Row', 'Width', 'Height'][i]}>
+              <Input
+                type="number"
+                value={widget.layout[k]}
+                min={i < 2 ? 0 : 2}
+                max={[10, 512, 12, 24][i]}
+                onChange={(e) => {
+                  if (e.target.value) place({ ...widget.layout, [k]: Number(e.target.value) });
+                }}
+              />
+            </Field>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { ResourceSelectorField } from '@/components/custom/common';
-import { Plus, Trash2 } from 'lucide-react';
+import { FolderOpen, Plus, Trash2 } from 'lucide-react';
+import { CitadelIcons } from '@/lib/icons';
 import {
   SwarmServiceConfigReference,
   SwarmServiceMount,
@@ -152,8 +153,14 @@ export const ServiceMountsField = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-background">
-              <SelectItem value={MountKind.Volume}>Volume</SelectItem>
-              <SelectItem value={MountKind.Bind}>Bind</SelectItem>
+              <SelectItem value={MountKind.Volume}>
+                <CitadelIcons.Volume aria-hidden="true" className="size-4 text-muted-foreground" />
+                Volume
+              </SelectItem>
+              <SelectItem value={MountKind.Bind}>
+                <FolderOpen aria-hidden="true" className="size-4 text-muted-foreground" />
+                Bind
+              </SelectItem>
             </SelectContent>
           </Select>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

@@ -85,16 +85,12 @@ async fn read(
 }
 
 impl DashboardRepository for PostgresDashboardRepository {
-    fn workloads(
+    fn fleet(
         &self,
         viewer: DashboardViewer,
-        kind: citadel_dashboards::WorkloadKind,
-        tags: Vec<String>,
-        limit: i64,
-    ) -> ResultFuture<'_, Vec<citadel_dashboards::DashboardWorkload>> {
-        Box::pin(super::sources::workloads(
-            &self.pool, viewer, kind, tags, limit,
-        ))
+        filter: citadel_dashboards::FleetFilter,
+    ) -> ResultFuture<'_, citadel_dashboards::FleetPage> {
+        Box::pin(super::fleet::read(&self.pool, viewer, filter))
     }
     fn sources(
         &self,
@@ -198,8 +194,9 @@ impl DashboardRepository for PostgresDashboardRepository {
             if !serde_json::from_value::<citadel_dashboards::DashboardConfiguration>(
                 saved.configuration,
             )
-            .is_ok_and(|configuration| configuration.schema_version == 1)
-            {
+            .is_ok_and(|configuration| {
+                configuration.schema_version == content.configuration.schema_version
+            }) {
                 return Err(Error::Invalid(
                     "This dashboard contains unsupported settings.".into(),
                 ));

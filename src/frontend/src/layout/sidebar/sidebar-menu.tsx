@@ -18,13 +18,14 @@ import { isSidebarRouteActive } from './sidebar-routes';
 export const SidebarMenu = () => {
   const { pathname } = useLocation();
   const { unresolvedAlertCount } = useAppContext();
-  const { state, isMobile } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const sidebarMinimized = state === 'collapsed' && !isMobile;
+  const onNavigate = isMobile ? () => setOpenMobile(false) : undefined;
   return (
     <>
       <SidebarPlatforms />
       {MenuItems.map((menu) => (
-        <SidebarGroup key={menu.group} className="py-1">
+        <SidebarGroup role="group" aria-label={menu.group} key={menu.group} className="py-1">
           <SidebarGroupLabel className="h-6 text-[11px] font-medium text-muted-foreground">
             {menu.group}
           </SidebarGroupLabel>
@@ -33,8 +34,9 @@ export const SidebarMenu = () => {
               {menu.items.map((item) => (
                 <SidebarMenuItem key={item.route ?? item.label}>
                   <SidebarRow
+                    onNavigate={onNavigate}
                     item={{ ...item, active: isSidebarRouteActive(pathname, item.route) }}
-                    minimized={!!sidebarMinimized}
+                    minimized={sidebarMinimized}
                     badgeCount={item.route === '/alerts' ? unresolvedAlertCount : undefined}
                   />
                 </SidebarMenuItem>
@@ -47,7 +49,17 @@ export const SidebarMenu = () => {
   );
 };
 
-function SidebarRow({ item, minimized, badgeCount }: { item: ISubMenuItem; minimized: boolean; badgeCount?: number }) {
+function SidebarRow({
+  item,
+  minimized,
+  badgeCount,
+  onNavigate,
+}: {
+  item: ISubMenuItem;
+  minimized: boolean;
+  badgeCount?: number;
+  onNavigate?: () => void;
+}) {
   const hasBadge = !!badgeCount;
   const badgeLabel = badgeCount && badgeCount > 99 ? '99+' : badgeCount?.toString();
   const icon = (
@@ -67,7 +79,11 @@ function SidebarRow({ item, minimized, badgeCount }: { item: ISubMenuItem; minim
   return (
     <>
       <SidebarMenuButton asChild tooltip={item.label} isActive={item.active} className={clsx(hasBadge && 'pr-10')}>
-        <Link to={item.route ?? '/'} aria-label={item.label} aria-current={item.active ? 'page' : undefined}>
+        <Link
+          onClick={onNavigate}
+          to={item.route ?? '/'}
+          aria-label={item.label}
+          aria-current={item.active ? 'page' : undefined}>
           {icon}
           <span data-sidebar-label className="truncate">
             {item.label}

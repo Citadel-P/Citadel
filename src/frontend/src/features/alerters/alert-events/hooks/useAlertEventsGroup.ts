@@ -8,7 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 export function useAlertEventsGroup() {
   const queryClient = useQueryClient();
-  const { data: unresolvedEventsData, isError } = useRead('listAlertEvents', {
+  const { data: unresolvedEventsData } = useRead('listAlertEvents', {
     query: { UnresolvedOnly: true, Page: 1, PageSize: 5 },
   });
 
@@ -126,21 +126,12 @@ export function useAlertEventsGroup() {
   return useMemo(
     () => ({
       alertFeedConnected: isConnected,
-      alertCountAvailable: !isError && (liveUnresolvedAlertCount !== null || unresolvedEventsData !== undefined),
       unresolvedAlertCount: isConnected
         ? unresolvedAlertCount
         : Number(unresolvedEventsData?.data.pagedResult.totalCount ?? 0),
       liveAlertEvents: alertEvents,
       receivedAlertEventIds: recent.received,
     }),
-    [
-      isConnected,
-      unresolvedAlertCount,
-      liveUnresolvedAlertCount,
-      unresolvedEventsData,
-      isError,
-      alertEvents,
-      recent.received,
-    ],
+    [isConnected, unresolvedAlertCount, unresolvedEventsData, alertEvents, recent.received],
   );
 }

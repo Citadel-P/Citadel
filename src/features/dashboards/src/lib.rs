@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 
 mod configuration;
+mod fleet;
+pub use fleet::*;
 mod model;
 mod repository;
 mod sources;

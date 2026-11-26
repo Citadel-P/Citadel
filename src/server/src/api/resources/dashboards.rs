@@ -119,7 +119,7 @@ pub struct SetDashboardVisibility {
 #[derive(Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct DashboardSourceQuery {
-    #[param(value_type=String)]
+    #[param(value_type=super::schema_models::dashboards::DashboardSourceKindSchema)]
     pub kind: citadel_dashboards::SourceKind,
     pub search: Option<String>,
     /// Comma-separated pinned resource IDs of the selected kind.
@@ -138,6 +138,7 @@ pub struct DashboardSourceView {
     pub docker_service_id: Option<String>,
     pub matches_tags: bool,
     pub exceeds_chart_series_limit: bool,
+    pub can_view_logs: bool,
 }
 
 impl From<citadel_dashboards::DashboardSource> for DashboardSourceView {
@@ -151,30 +152,20 @@ impl From<citadel_dashboards::DashboardSource> for DashboardSourceView {
             docker_service_id: row.docker_service_id,
             matches_tags: row.matches_tags,
             exceeds_chart_series_limit: row.exceeds_chart_series_limit,
+            can_view_logs: row.can_view_logs,
         }
     }
 }
 
 #[derive(Deserialize, utoipa::IntoParams)]
-#[into_params(parameter_in = Query)]
-pub struct DashboardWorkloadQuery {
-    #[param(value_type=super::schema_models::dashboards::DashboardWorkloadKindSchema)]
-    pub kind: citadel_dashboards::WorkloadKind,
+#[into_params(parameter_in=Query)]
+pub struct DashboardFleetQuery {
+    #[param(value_type=String)]
+    pub read: citadel_dashboards::FleetRead,
+    pub kinds: Option<String>,
+    pub state: Option<String>,
+    #[param(value_type=Option<String>)]
+    pub tab: Option<citadel_dashboards::AttentionTab>,
+    pub offset: Option<u32>,
     pub limit: Option<u8>,
-}
-
-#[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct DashboardWorkloadView {
-    pub id: Uuid,
-    pub name: String,
-    pub platform_id: Uuid,
-    pub status: String,
-    pub processing: bool,
-    #[schema(value_type=Vec<super::platforms::workload_health_views::HealthStatus>)]
-    pub observed_probes: Vec<citadel_primitives::health::HealthStatus>,
-    pub more_probes: bool,
-    #[schema(value_type=Option<super::schema_models::backups::BackupCoverageStatusSchema>)]
-    pub backup_status: Option<citadel_backups::BackupCoverageStatus>,
-    pub can_view_logs: bool,
 }

@@ -1,5 +1,7 @@
 import {
-  DashboardWorkloadKind,
+  DashboardFleetMeasure,
+  DashboardStateKind,
+  DashboardAttentionTab,
   DashboardMetric,
   type DashboardConfiguration,
   type DashboardWidgetSettings,
@@ -10,36 +12,50 @@ type StarterWidget = { title: string; settings: DashboardWidgetSettings; size?: 
 
 import { nextPosition } from './layout';
 import { catalogue, metricSettings } from './catalogue';
+const fleet: StarterWidget = {
+  title: 'Fleet summary',
+  settings: { kind: 'FleetSummary', measures: Object.values(DashboardFleetMeasure) },
+};
+const attention: StarterWidget = {
+  title: 'Needs attention',
+  settings: { kind: 'NeedsAttention', kinds: [], limit: 5, tab: DashboardAttentionTab.All },
+};
+const states = (kind: DashboardStateKind): StarterWidget => ({
+  title: 'Resource state',
+  settings: { kind: 'ResourceState', resourceKind: kind },
+});
+const activity: StarterWidget = {
+  title: 'Recent activity',
+  settings: { kind: 'RecentActivity', limit: 5 },
+  size: { w: 12, h: 5 },
+};
 const templates = {
   Blank: [],
-  Overview: [
-    { title: 'Resource summary', settings: { kind: 'ResourceSummary' } },
-    { title: 'Platforms', settings: { kind: 'Platforms', limit: 5 } },
-    { title: 'Open alerts', settings: { kind: 'OpenAlerts', limit: 5 } },
-    { title: 'Backup activity', settings: { kind: 'Backups', limit: 5 } },
-    { title: 'Recent activity', settings: { kind: 'RecentActivity', limit: 5 } },
-  ],
+  Overview: [fleet, attention, states(DashboardStateKind.Deployment), activity],
   'Infrastructure and capacity': [
-    { title: 'Platforms', settings: { kind: 'Platforms', limit: 5 } },
+    fleet,
+    attention,
+    states(DashboardStateKind.Platform),
     { title: 'CPU usage', settings: metricSettings(DashboardMetric.Cpu) },
     { title: 'Memory usage', settings: metricSettings(DashboardMetric.Memory) },
-    { title: 'Network traffic', settings: metricSettings(DashboardMetric.Network) },
   ],
   Application: [
-    { title: 'Workloads', settings: { kind: 'Workloads', resourceKind: DashboardWorkloadKind.Deployment, limit: 5 } },
+    attention,
+    states(DashboardStateKind.Deployment),
+    activity,
     { title: 'Application CPU', settings: metricSettings(DashboardMetric.Cpu) },
-    { title: 'Open alerts', settings: { kind: 'OpenAlerts', limit: 5 } },
-    { title: 'Backup activity', settings: { kind: 'Backups', limit: 5 } },
-    { title: 'Recent activity', settings: { kind: 'RecentActivity', limit: 5 } },
   ],
   Maintenance: [
-    { title: 'Backup activity', settings: { kind: 'Backups', limit: 5 } },
-    { title: 'Upcoming schedules', size: { w: 6, h: 4 }, settings: { kind: 'UpcomingSchedules', limit: 5 } },
-    { title: 'Updates', size: { w: 6, h: 4 }, settings: { kind: 'Updates' } },
-    { title: 'Recent activity', settings: { kind: 'RecentActivity', limit: 5 } },
+    {
+      ...attention,
+      title: 'Updates',
+      settings: { kind: 'NeedsAttention', kinds: [], limit: 5, tab: DashboardAttentionTab.Updates },
+    },
+    { title: 'Backup activity', settings: { kind: 'Backups', limit: 5 }, size: { w: 5, h: 7 } },
+    { title: 'Upcoming schedules', settings: { kind: 'UpcomingSchedules', limit: 5 }, size: { w: 6, h: 4 } },
+    { title: 'Instance updates', settings: { kind: 'Updates' }, size: { w: 6, h: 4 } },
   ],
 } satisfies Record<string, StarterWidget[]>;
-
 export type DashboardTemplate = keyof typeof templates;
 
 export function fromTemplate(template: DashboardTemplate): DashboardConfiguration {
@@ -51,7 +67,7 @@ export function fromTemplate(template: DashboardTemplate): DashboardConfiguratio
     if (!layout) throw new Error('Dashboard template exceeds grid bounds');
     widgets.push({ id: randomUuid(), title, settings: { ...settings }, layout });
   }
-  return { schemaVersion: 1, tags: [], rangeMinutes: 60, widgets };
+  return { schemaVersion: 2, tags: [], rangeMinutes: 60, widgets };
 }
 
 export const dashboardTemplates = Object.keys(templates) as DashboardTemplate[];

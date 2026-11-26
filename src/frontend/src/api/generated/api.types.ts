@@ -737,17 +737,25 @@ export enum DatabaseInstallationView {
   Unknown = "Unknown",
 }
 
-export enum DashboardWorkloadKind {
-  Container = "Container",
-  Deployment = "Deployment",
-  Stack = "Stack",
-  SwarmService = "SwarmService",
-}
-
 export enum DashboardVisibility {
   Private = "Private",
   InstanceShared = "InstanceShared",
   Restricted = "Restricted",
+}
+
+export enum DashboardStateKind {
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  SwarmService = "SwarmService",
+  Container = "Container",
+}
+
+export enum DashboardSourceKind {
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  SwarmService = "SwarmService",
 }
 
 export enum DashboardSharingMode {
@@ -762,6 +770,25 @@ export enum DashboardMetric {
   DiskIo = "DiskIo",
 }
 
+export enum DashboardFleetMeasure {
+  Platforms = "Platforms",
+  Workloads = "Workloads",
+  Alerts = "Alerts",
+}
+
+export enum DashboardFleetKind {
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  SwarmService = "SwarmService",
+  BackupPolicy = "BackupPolicy",
+  Build = "Build",
+  BuildAgentPool = "BuildAgentPool",
+  Registry = "Registry",
+  GitRepository = "GitRepository",
+  Script = "Script",
+}
+
 export enum DashboardChartStyle {
   Line = "Line",
   Area = "Area",
@@ -774,6 +801,12 @@ export enum DashboardChartColor {
   Amber = "Amber",
   Violet = "Violet",
   Cyan = "Cyan",
+}
+
+export enum DashboardAttentionTab {
+  All = "All",
+  Problems = "Problems",
+  Updates = "Updates",
 }
 
 export enum CurrentProfileAuthenticationType {
@@ -3117,6 +3150,40 @@ export interface DashboardDefault {
   dashboardId?: string | null;
 }
 
+export interface DashboardFleetPage {
+  /** @format int64 */
+  alerts: number;
+  /** @format int64 */
+  problems: number;
+  rows: DashboardFleetRow[];
+  states: DashboardStateCount[];
+  /** @format int64 */
+  total: number;
+  /** @format int64 */
+  updates: number;
+}
+
+export interface DashboardFleetReason {
+  code: string;
+  evidence?: string | null;
+  observedAt?: string | null;
+  /** @format int64 */
+  occurrences: number;
+  /** @format uuid */
+  target?: string | null;
+}
+
+export interface DashboardFleetRow {
+  /** @format uuid */
+  id: string;
+  kind: string;
+  name: string;
+  /** @format uuid */
+  platformId?: string | null;
+  reasons: DashboardFleetReason[];
+  state: string;
+}
+
 export interface DashboardLayout {
   /**
    * @format int32
@@ -3144,34 +3211,11 @@ export interface DashboardList {
   dashboards: DashboardSummaryView[];
 }
 
-export type DashboardMetricSource =
-  | {
-      /** @format uuid */
-      id: string;
-      kind: "Platform";
-    }
-  | {
-      /** @format uuid */
-      id: string;
-      kind: "Container";
-      /** @format uuid */
-      platformId: string;
-    }
-  | {
-      /** @format uuid */
-      id: string;
-      kind: "Deployment";
-    }
-  | {
-      /** @format uuid */
-      id: string;
-      kind: "Stack";
-    }
-  | {
-      /** @format uuid */
-      id: string;
-      kind: "SwarmService";
-    };
+export interface DashboardMetricSource {
+  /** @format uuid */
+  id: string;
+  kind: DashboardSourceKind;
+}
 
 export interface DashboardNoteLink {
   href: string;
@@ -3179,6 +3223,7 @@ export interface DashboardNoteLink {
 }
 
 export interface DashboardSourceView {
+  canViewLogs: boolean;
   /** @format uuid */
   containerProjectionId?: string | null;
   dockerServiceId?: string | null;
@@ -3190,6 +3235,13 @@ export interface DashboardSourceView {
   /** @format uuid */
   platformId?: string | null;
   status: string;
+}
+
+export interface DashboardStateCount {
+  /** @format int64 */
+  count: number;
+  kind: string;
+  state: string;
 }
 
 export interface DashboardSummaryView {
@@ -3213,24 +3265,26 @@ export interface DashboardWidget {
 
 export type DashboardWidgetSettings =
   | {
-      kind: "ResourceSummary";
+      kind: "FleetSummary";
+      measures: DashboardFleetMeasure[];
     }
   | {
-      kind: "Platforms";
+      kind: "NeedsAttention";
+      kinds: DashboardFleetKind[];
       /**
        * @format int32
        * @min 0
        */
       limit: number;
+      tab: DashboardAttentionTab;
     }
   | {
-      kind: "Workloads";
-      /**
-       * @format int32
-       * @min 0
-       */
-      limit: number;
-      resourceKind: DashboardWorkloadKind;
+      kind: "ResourceState";
+      resourceKind: DashboardStateKind;
+    }
+  | {
+      kind: "Watchlist";
+      pins: DashboardMetricSource[];
     }
   | {
       color: DashboardChartColor;
@@ -3280,20 +3334,6 @@ export type DashboardWidgetSettings =
       links: DashboardNoteLink[];
       text: string;
     };
-
-export interface DashboardWorkloadView {
-  backupStatus?: BackupCoverageStatus | null;
-  canViewLogs: boolean;
-  /** @format uuid */
-  id: string;
-  moreProbes: boolean;
-  name: string;
-  observedProbes: HealthStatus[];
-  /** @format uuid */
-  platformId: string;
-  processing: boolean;
-  status: string;
-}
 
 export interface DatabaseConnectionsView {
   /**
@@ -13300,6 +13340,52 @@ export class Api<
      * No description
      *
      * @tags Dashboards
+     * @name GetDashboardFleet
+     * @summary Count or investigate readable resources in the selected scope
+     * @request GET:/api/v1/dashboards/fleet
+     * @secure
+     * @response `200` `DashboardFleetPage` Scoped counts and bounded resource rows
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getDashboardFleet: (
+      query: {
+        read: string;
+        kinds?: string;
+        state?: string;
+        tab?: string;
+        /**
+         * @format int32
+         * @min 0
+         */
+        offset?: number;
+        /**
+         * @format int32
+         * @min 0
+         */
+        limit?: number;
+        /** Match all owner tags */
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<DashboardFleetPage, ProblemDetails>({
+        path: `/api/v1/dashboards/fleet`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
      * @name ListDashboardSources
      * @summary Find readable monitoring sources and check pinned resource tag membership
      * @request GET:/api/v1/dashboards/sources
@@ -13314,7 +13400,7 @@ export class Api<
      */
     listDashboardSources: (
       query: {
-        kind: string;
+        kind: DashboardSourceKind;
         search?: string;
         /** Comma-separated pinned resource IDs of the selected kind. */
         ids?: string;
@@ -13330,44 +13416,6 @@ export class Api<
     ) =>
       this.request<DashboardSourceView[], ProblemDetails>({
         path: `/api/v1/dashboards/sources`,
-        method: "GET",
-        query: query,
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Dashboards
-     * @name ListDashboardWorkloads
-     * @summary List readable workloads with persisted monitoring and backup coverage
-     * @request GET:/api/v1/dashboards/workloads
-     * @secure
-     * @response `200` `(DashboardWorkloadView)[]` Bounded workload rows
-     * @response `400` `ProblemDetails` Bad Request
-     * @response `401` `ProblemDetails` Unauthorized
-     * @response `403` `ProblemDetails` Forbidden
-     * @response `429` `ProblemDetails` Too Many Requests
-     * @response `500` `ProblemDetails` Internal Server Error
-     * @response `default` `ProblemDetails` Request failed
-     */
-    listDashboardWorkloads: (
-      query: {
-        kind: DashboardWorkloadKind;
-        /**
-         * @format int32
-         * @min 0
-         */
-        limit?: number;
-        /** Match all resource tag names */
-        tags?: string[];
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<DashboardWorkloadView[], ProblemDetails>({
-        path: `/api/v1/dashboards/workloads`,
         method: "GET",
         query: query,
         secure: true,

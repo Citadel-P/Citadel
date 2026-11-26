@@ -17,13 +17,6 @@ enum_schema!(
 );
 
 enum_schema!(
-    DashboardWorkloadKindSchema,
-    "DashboardWorkloadKind",
-    domain::WorkloadKind,
-    [Container, Deployment, Stack, SwarmService]
-);
-
-enum_schema!(
     DashboardMetricSchema,
     "DashboardMetric",
     domain::Metric,
@@ -97,39 +90,22 @@ schema_model! {
     }
 }
 
-#[derive(serde::Serialize, utoipa::ToSchema)]
-#[serde(tag = "kind", deny_unknown_fields)]
-#[schema(as = DashboardMetricSource)]
-pub enum DashboardMetricSourceSchema {
-    Platform {
-        id: Uuid,
-    },
-    Container {
-        id: Uuid,
-        #[serde(rename = "platformId")]
-        platform_id: Uuid,
-    },
-    Deployment {
-        id: Uuid,
-    },
-    Stack {
-        id: Uuid,
-    },
-    SwarmService {
-        id: Uuid,
-    },
-}
-impl From<domain::MetricSource> for DashboardMetricSourceSchema {
-    fn from(value: domain::MetricSource) -> Self {
-        match value {
-            domain::MetricSource::Platform { id } => Self::Platform { id },
-            domain::MetricSource::Container { id, platform_id } => {
-                Self::Container { id, platform_id }
-            }
-            domain::MetricSource::Deployment { id } => Self::Deployment { id },
-            domain::MetricSource::Stack { id } => Self::Stack { id },
-            domain::MetricSource::SwarmService { id } => Self::SwarmService { id },
-        }
+enum_schema!(
+    DashboardSourceKindSchema,
+    "DashboardSourceKind",
+    domain::SourceKind,
+    [Platform, Deployment, Stack, SwarmService]
+);
+
+schema_model! {
+    domain::MetricSource =>
+    #[derive(serde::Serialize, utoipa::ToSchema)]
+    #[serde(deny_unknown_fields)]
+    #[schema(as = DashboardMetricSource)]
+    pub struct DashboardMetricSourceSchema {
+        #[schema(value_type = crate::api::resources::schema_models::dashboards::DashboardSourceKindSchema)]
+        pub kind: domain::SourceKind,
+        pub id: Uuid,
     }
 }
 
@@ -137,16 +113,27 @@ impl From<domain::MetricSource> for DashboardMetricSourceSchema {
 #[serde(tag = "kind", deny_unknown_fields)]
 #[schema(as = DashboardWidgetSettings)]
 pub enum DashboardWidgetSettingsSchema {
-    ResourceSummary,
-    Platforms {
+    FleetSummary {
+        #[schema(value_type=Vec<crate::api::resources::schema_models::dashboards::DashboardFleetMeasureSchema>)]
+        measures: Vec<domain::FleetMeasure>,
+    },
+    NeedsAttention {
+        #[schema(value_type=crate::api::resources::schema_models::dashboards::DashboardAttentionTabSchema)]
+        tab: domain::AttentionTab,
+        #[schema(value_type=Vec<crate::api::resources::schema_models::dashboards::DashboardFleetKindSchema>)]
+        kinds: Vec<domain::FleetKind>,
         limit: u8,
     },
-    Workloads {
+    ResourceState {
         #[serde(rename = "resourceKind")]
-        #[schema(value_type = crate::api::resources::schema_models::dashboards::DashboardWorkloadKindSchema)]
-        resource_kind: domain::WorkloadKind,
-        limit: u8,
+        #[schema(value_type=crate::api::resources::schema_models::dashboards::DashboardStateKindSchema)]
+        resource_kind: domain::StateKind,
     },
+    Watchlist {
+        #[schema(value_type=Vec<crate::api::resources::schema_models::dashboards::DashboardMetricSourceSchema>)]
+        pins: Vec<domain::MetricSource>,
+    },
+
     Metrics {
         #[schema(value_type = crate::api::resources::schema_models::dashboards::DashboardMetricSourceSchema)]
         source: domain::MetricSource,
@@ -180,15 +167,14 @@ pub enum DashboardWidgetSettingsSchema {
 impl From<domain::WidgetSettings> for DashboardWidgetSettingsSchema {
     fn from(value: domain::WidgetSettings) -> Self {
         match value {
-            domain::WidgetSettings::ResourceSummary => Self::ResourceSummary,
-            domain::WidgetSettings::Platforms { limit } => Self::Platforms { limit },
-            domain::WidgetSettings::Workloads {
-                resource_kind,
-                limit,
-            } => Self::Workloads {
-                resource_kind,
-                limit,
-            },
+            domain::WidgetSettings::FleetSummary { measures } => Self::FleetSummary { measures },
+            domain::WidgetSettings::NeedsAttention { tab, kinds, limit } => {
+                Self::NeedsAttention { tab, kinds, limit }
+            }
+            domain::WidgetSettings::ResourceState { resource_kind } => {
+                Self::ResourceState { resource_kind }
+            }
+            domain::WidgetSettings::Watchlist { pins } => Self::Watchlist { pins },
             domain::WidgetSettings::Metrics {
                 source,
                 metric,
@@ -213,3 +199,69 @@ impl From<domain::WidgetSettings> for DashboardWidgetSettingsSchema {
         }
     }
 }
+enum_schema!(
+    DashboardFleetMeasureSchema,
+    "DashboardFleetMeasure",
+    domain::FleetMeasure,
+    [Platforms, Workloads, Alerts]
+);
+enum_schema!(
+    DashboardAttentionTabSchema,
+    "DashboardAttentionTab",
+    domain::AttentionTab,
+    [All, Problems, Updates]
+);
+enum_schema!(
+    DashboardFleetKindSchema,
+    "DashboardFleetKind",
+    domain::FleetKind,
+    [
+        Platform,
+        Deployment,
+        Stack,
+        SwarmService,
+        BackupPolicy,
+        Build,
+        BuildAgentPool,
+        Registry,
+        GitRepository,
+        Script
+    ]
+);
+enum_schema!(
+    DashboardStateKindSchema,
+    "DashboardStateKind",
+    domain::StateKind,
+    [Platform, Deployment, Stack, SwarmService, Container]
+);
+schema_model! { domain::FleetReason => #[derive(serde::Serialize,utoipa::ToSchema)] #[serde(rename_all="camelCase")] #[schema(as=DashboardFleetReason)] pub struct DashboardFleetReasonSchema {
+pub code: String,
+    pub occurrences:i64,
+pub target: Option<Uuid>,
+pub observed_at: Option<String>,
+pub evidence: Option<String>,
+}}
+schema_model! { domain::FleetRow => #[derive(serde::Serialize,utoipa::ToSchema)] #[serde(rename_all="camelCase")] #[schema(as=DashboardFleetRow)] pub struct DashboardFleetRowSchema {
+pub kind: String,
+pub id: Uuid,
+pub platform_id: Option<Uuid>,
+pub name: String,
+pub state: String,
+#[schema(value_type=Vec<crate::api::resources::schema_models::dashboards::DashboardFleetReasonSchema>)]
+pub reasons: Vec<domain::FleetReason>,
+}}
+schema_model! { domain::StateCount => #[derive(serde::Serialize,utoipa::ToSchema)] #[serde(rename_all="camelCase")] #[schema(as=DashboardStateCount)] pub struct DashboardStateCountSchema {
+pub kind: String,
+pub state: String,
+pub count: i64,
+}}
+schema_model! { domain::FleetPage => #[derive(serde::Serialize,utoipa::ToSchema)] #[serde(rename_all="camelCase")] #[schema(as=DashboardFleetPage)] pub struct DashboardFleetPageSchema {
+#[schema(value_type=Vec<crate::api::resources::schema_models::dashboards::DashboardStateCountSchema>)]
+pub states: Vec<domain::StateCount>,
+pub alerts: i64,
+pub total: i64,
+pub problems: i64,
+pub updates: i64,
+#[schema(value_type=Vec<crate::api::resources::schema_models::dashboards::DashboardFleetRowSchema>)]
+pub rows: Vec<domain::FleetRow>,
+}}

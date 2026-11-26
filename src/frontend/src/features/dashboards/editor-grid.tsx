@@ -11,6 +11,7 @@ import {
 import 'react-grid-layout/css/styles.css';
 import './editor.css';
 import 'react-resizable/css/styles.css';
+import { dashboardGrid } from './layout';
 import { OverviewTiles } from './overview';
 import { dashboardRequirements } from './requirements';
 import { focusManager } from '@tanstack/react-query';
@@ -139,7 +140,12 @@ export function EditorGrid({
         width={width}
         layout={layout}
         compactor={dashboardCompactor}
-        gridConfig={{ cols: 12, rowHeight: 44, margin: [20, 20], maxRows: 536 }}
+        gridConfig={{
+          cols: 12,
+          rowHeight: dashboardGrid.rowHeight,
+          margin: [dashboardGrid.gap, dashboardGrid.gap],
+          maxRows: 536,
+        }}
         style={{
           minHeight: 240,
           ...({

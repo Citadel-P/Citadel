@@ -1,11 +1,11 @@
 import { RegularResourceComponents } from '@/pages/types';
 import { getTaskName } from '@/lib/utils';
-import { ListTodo } from 'lucide-react';
+import { CitadelIcons } from '@/lib/icons';
 import { useTasksGroup } from './hooks/useTasksGroup';
 import { TasksTable } from './table';
 
 export const TaskComponents: RegularResourceComponents = {
-  Icon: ListTodo,
+  Icon: CitadelIcons.Task,
   header: {
     title: 'Tasks',
     subtitle: 'Current scheduler-owned tasks. Tasks are read-only.',

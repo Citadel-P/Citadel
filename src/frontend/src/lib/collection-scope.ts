@@ -29,7 +29,12 @@ export function hasQueryTagFilter(queryKey: readonly unknown[]) {
 
 export async function reconcileTaggedEventPages(
   client: QueryClient,
-  resource: 'listAlertEvents' | 'listRecentActivities' | 'listDashboardSources' | 'getUpcomingSchedules',
+  resource:
+    | 'listAlertEvents'
+    | 'listRecentActivities'
+    | 'listDashboardSources'
+    | 'getDashboardFleet'
+    | 'getUpcomingSchedules',
 ) {
   // Paused dashboards retain their last rendered values after removing observers.
   // Invalidate those snapshots without starting background reads.

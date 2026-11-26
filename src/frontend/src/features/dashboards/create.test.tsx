@@ -80,7 +80,7 @@ it('creates a personal board from Overview and safely retries the same definitio
   await screen.findByRole('heading', { name: 'On call' });
   expect(writes[0]).toMatchObject({ name: 'On call', visibility: 'Private' });
   expect(writes[1]).toEqual(writes[0]);
-  expect(new Set(writes[0].configuration.widgets.map(({ id }) => id)).size).toBe(5);
+  expect(new Set(writes[0].configuration.widgets.map(({ id }) => id)).size).toBe(4);
   expect(screen.getByText('Recent activity')).toBeInTheDocument();
 });
 

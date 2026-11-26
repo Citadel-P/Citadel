@@ -20,8 +20,6 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct DashboardsHttpState {
-    pub backup_coverage:
-        Option<Arc<crate::api::resources::backups::coverage::BackupCoverageService>>,
     pub dashboards: Arc<dyn DashboardRepository>,
     pub entitlements: Arc<dyn EntitlementService>,
 }
@@ -56,8 +54,8 @@ pub fn router(state: DashboardsHttpState) -> Router {
 
 pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<DashboardsHttpState> {
     utoipa_axum::router::OpenApiRouter::new()
+        .normalized_routes(utoipa_axum::routes!(fleet))
         .normalized_routes(utoipa_axum::routes!(sources))
-        .normalized_routes(utoipa_axum::routes!(workloads))
         .normalized_routes(utoipa_axum::routes!(list))
         .normalized_routes(utoipa_axum::routes!(get))
         .normalized_routes(utoipa_axum::routes!(create))
@@ -358,67 +356,75 @@ async fn sources(
     ))
 }
 
-#[utoipa::path(get, path="/api/v1/dashboards/workloads", operation_id="listDashboardWorkloads", tag="Dashboards",
-    summary="List readable workloads with persisted monitoring and backup coverage",
-    params(DashboardWorkloadQuery, ("tags"=Option<Vec<String>>, Query, description="Match all resource tag names")),
-    responses((status=200,description="Bounded workload rows",body=Vec<DashboardWorkloadView>),crate::openapi::errors::AccessErrors),
-    security(("Bearer"=[])), extensions(("x-citadel-principal"=json!("human")),("x-citadel-public"=json!(false)),("x-citadel-setup-exempt"=json!(false))))]
-async fn workloads(
+#[utoipa::path(get,path="/api/v1/dashboards/fleet",operation_id="getDashboardFleet",tag="Dashboards",
+ summary="Count or investigate readable resources in the selected scope",
+ params(DashboardFleetQuery, ("tags"=Option<Vec<String>>,Query,description="Match all owner tags")),
+ responses((status=200,description="Scoped counts and bounded resource rows",body=crate::api::resources::schema_models::dashboards::DashboardFleetPageSchema),crate::openapi::errors::AccessErrors),
+ security(("Bearer"=[])),extensions(("x-citadel-principal"=json!("human")),("x-citadel-public"=json!(false)),("x-citadel-setup-exempt"=json!(false))))]
+async fn fleet(
     State(state): State<DashboardsHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
-    ApiQuery(query): ApiQuery<DashboardWorkloadQuery>,
+    ApiQuery(q): ApiQuery<DashboardFleetQuery>,
     axum::extract::RawQuery(raw): axum::extract::RawQuery,
 ) -> HttpResult {
-    let principal = api_result(require_human(principal), &headers)?;
+    let actor = viewer(principal, &headers)?;
     let tags = api_result(
         crate::api::request_validation::parse_tag_filters(raw.as_deref()),
         &headers,
     )?;
-    let limit = query.limit.unwrap_or(5);
-    if !(1..=10).contains(&limit) {
+    let kinds: Vec<_> = q
+        .kinds
+        .as_deref()
+        .into_iter()
+        .flat_map(|s| s.split(','))
+        .map(str::to_owned)
+        .collect();
+    let limit = q.limit.unwrap_or(5);
+    if !(1..=25).contains(&limit)
+        || kinds.len() > 12
+        || kinds.iter().any(|s| {
+            !matches!(
+                s.as_str(),
+                "Platform"
+                    | "Deployment"
+                    | "Stack"
+                    | "SwarmService"
+                    | "Container"
+                    | "BackupPolicy"
+                    | "Build"
+                    | "BuildAgentPool"
+                    | "Registry"
+                    | "GitRepository"
+                    | "Script"
+            )
+        })
+        || q.state.as_ref().is_some_and(|s| s.len() > 64)
+    {
         return api_result(
             Err(ApiError::Validation(
-                "Request between one and ten workloads.".into(),
+                "Invalid dashboard fleet filter.".into(),
             )),
             &headers,
         );
     }
-    let viewer = DashboardViewer {
-        actor: principal.actor_id,
-        administrator: principal.is_administrator(),
-    };
-    let rows = api_result(
+    let page = api_result(
         state
             .dashboards
-            .workloads(viewer, query.kind, tags, limit.into())
+            .fleet(
+                actor,
+                citadel_dashboards::FleetFilter {
+                    read: q.read,
+                    tags,
+                    kinds,
+                    tab: q.tab.unwrap_or(citadel_dashboards::AttentionTab::All),
+                    state: q.state,
+                    limit: i64::from(limit),
+                    offset: i64::from(q.offset.unwrap_or(0)),
+                },
+            )
             .await,
         &headers,
     )?;
-    let mut statuses = match &state.backup_coverage {
-        Some(service) => {
-            service
-                .dashboard_statuses(&principal, query.kind, &rows)
-                .await
-        }
-        None => Default::default(),
-    };
-    Ok(no_store(
-        Json(
-            rows.into_iter()
-                .map(|r| DashboardWorkloadView {
-                    id: r.id,
-                    name: r.name,
-                    platform_id: r.platform_id,
-                    status: r.status,
-                    processing: r.processing,
-                    observed_probes: r.probes,
-                    more_probes: r.more_probes,
-                    backup_status: statuses.remove(&r.id),
-                    can_view_logs: r.can_view_logs,
-                })
-                .collect::<Vec<_>>(),
-        )
-        .into_response(),
-    ))
+    Ok(no_store(Json(page).into_response()))
 }

@@ -15,7 +15,7 @@ test('dropping a widget creates one draft tile and saves once', async ({ page, r
       name: 'Builder ' + id,
       visibility: 'Private',
       configuration: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         tags: [],
         rangeMinutes: 60,
         widgets: [],

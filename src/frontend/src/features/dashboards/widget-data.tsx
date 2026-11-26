@@ -2,91 +2,94 @@ import Loader from '@/components/ui/loader';
 import { ArrowRight, CalendarClock } from 'lucide-react';
 import { monitoringLink } from '@/lib/monitoring-link';
 import { Link } from 'react-router';
-import { lazy, Suspense, useMemo } from 'react';
-import type { DashboardWidget, DashboardMetricSource, DashboardWorkloadKind } from '@/api/generated/api.types';
+import { lazy, Suspense, useMemo, type ReactNode } from 'react';
+import type { DashboardWidget, DashboardMetricSource, DashboardSourceView } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { WorkloadTable } from './resource-rows';
+import { FleetTile } from './fleet';
+import { StateIndicator } from '@/components/custom/state-indicator';
+import { CitadelIcons } from '@/lib/icons';
+import { HealthCard } from '@/components/custom/health-card';
+import { Activity } from 'lucide-react';
+import { ResourceMenu, WorkloadDetail } from './resource-rows';
 import { Timestamp } from '@/components/custom/timestamp';
 import { useAppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { resourceLink } from '@/features/instance/schedules/presentation';
 import { validLink } from './catalogue';
-import type { MetricTile, WorkloadTile, DashboardRequirements } from './requirements';
+import type { MetricTile, DashboardRequirements } from './requirements';
 import { sourcePath } from './source-path';
 const MetricHistory = lazy(() => import('./metrics').then((m) => ({ default: m.MetricHistory })));
 import { DashboardRangeClock } from './range-clock';
 import { Tile, WidgetNotice } from './tile';
 
 type Options = { tags: string[]; range: number; enabled: boolean; interval: number | false };
-function WorkloadRows({
-  kind,
-  tiles,
-  tags,
+type Resolved = {
+  kind: DashboardMetricSource['kind'];
+  ids: string[];
+  rows: DashboardSourceView[];
+  pending: boolean;
+  failed: boolean;
+};
+function SourceReads({
+  batches,
   enabled,
+  tags,
   interval,
-}: { kind: DashboardWorkloadKind; tiles: WorkloadTile[] } & Options) {
-  const limit = Math.max(...tiles.map((t) => t.settings.limit));
-  const rows = useRead(
-    'listDashboardWorkloads',
-    { query: { kind, tags, limit } },
+  children,
+  collected = [],
+}: {
+  batches: { kind: Resolved['kind']; ids: string[] }[];
+  collected?: Resolved[];
+  children: (data: Resolved[]) => ReactNode;
+} & Omit<Options, 'range'>) {
+  const [batch, ...rest] = batches;
+  const read = useRead(
+    'listDashboardSources',
+    { query: { kind: batch.kind, tags, ids: batch.ids.join(','), limit: batch.ids.length } },
     { enabled, staleTime: interval ? 15000 : 0, refetchInterval: interval, retry: false },
   );
-  return (
-    <>
-      {tiles.map((tile) => (
-        <Tile key={tile.id} tile={tile}>
-          {rows.isError ? (
-            <WidgetNotice>Unavailable</WidgetNotice>
-          ) : !rows.data ? (
-            <Loader />
-          ) : rows.data.data.length ? (
-            <WorkloadTable kind={kind} rows={rows.data.data.slice(0, tile.settings.limit)} />
-          ) : (
-            <p className="text-muted-foreground">No matching workloads.</p>
-          )}
-        </Tile>
-      ))}
-    </>
+  const data = [
+    ...collected,
+    {
+      ...batch,
+      rows: read.isError ? [] : (read.data?.data ?? []),
+      pending: !enabled || read.isLoading,
+      failed: read.isError,
+    },
+  ];
+  return rest.length ? (
+    <SourceReads batches={rest} enabled={enabled} tags={tags} interval={interval} collected={data}>
+      {children}
+    </SourceReads>
+  ) : (
+    children(data)
   );
 }
 function MetricSources({
   kind,
   tiles,
-  tags,
+  data,
   range,
-  enabled,
   interval,
-}: { kind: DashboardMetricSource['kind']; tiles: MetricTile[] } & Options) {
-  const ids = useMemo(() => [...new Set(tiles.map((t) => t.settings.source.id))].sort(), [tiles]);
-  const meta = useRead(
-    'listDashboardSources',
-    { query: { kind, tags, ids: ids.join(','), limit: ids.length } },
-    { enabled, staleTime: interval ? 15000 : 0, refetchInterval: interval, retry: false },
-  );
+  enabled,
+}: { kind: Resolved['kind']; tiles: MetricTile[]; data: Resolved[] } & Options) {
+  const ids = [...new Set(tiles.map((t) => t.settings.source.id))];
   return (
     <>
       {ids.map((id) => {
         const subset = tiles.filter((t) => t.settings.source.id === id);
-        const row = meta.isError ? undefined : meta.data?.data.find((r) => r.id === id);
-        const matching = subset.filter(
-          (w) => w.settings.source.kind !== 'Container' || w.settings.source.platformId === row?.platformId,
-        );
-        const missing = subset.filter((w) => !matching.includes(w));
-        const placeholder = meta.isLoading
-          ? 'Loading…'
-          : !row
-            ? 'Resource unavailable.'
-            : !row.matchesTags
-              ? 'Outside current filter.'
-              : 'Resource unavailable.';
-        if (!row || !row.matchesTags)
+        const batch = data.find((b) => b.kind === kind && b.ids.includes(id));
+        const row = batch?.rows.find((r) => r.id === id);
+        if (!row || !row.matchesTags) {
+          const placeholder = batch?.pending ? 'Loading…' : row ? 'Outside current filter.' : 'Resource unavailable.';
           return subset.map((w) => (
-            <Tile key={w.id} tile={w} pending={!enabled || meta.isLoading}>
+            <Tile key={w.id} tile={w} pending={!enabled || batch?.pending}>
               <p>{placeholder}</p>
             </Tile>
           ));
+        }
         if (row.exceedsChartSeriesLimit)
           return subset.map((tile) => (
             <Tile key={tile.id} tile={tile}>
@@ -97,30 +100,22 @@ function MetricSources({
             </Tile>
           ));
         return (
-          <div className="contents" key={id}>
-            {missing.map((w) => (
-              <Tile key={w.id} tile={w}>
-                <WidgetNotice>Resource unavailable.</WidgetNotice>
+          <Suspense
+            key={id}
+            fallback={subset.map((w) => (
+              <Tile key={w.id} tile={w} pending>
+                Loading…
               </Tile>
-            ))}
-            {matching.length > 0 && (
-              <Suspense
-                fallback={matching.map((w) => (
-                  <Tile key={w.id} tile={w} pending>
-                    Loading…
-                  </Tile>
-                ))}>
-                <MetricHistory
-                  tiles={matching}
-                  source={matching[0].settings.source}
-                  row={row}
-                  minutes={range}
-                  interval={interval}
-                  manual={!interval}
-                />
-              </Suspense>
-            )}
-          </div>
+            ))}>
+            <MetricHistory
+              tiles={subset}
+              source={subset[0].settings.source}
+              row={row}
+              minutes={range}
+              interval={interval}
+              manual={!interval}
+            />
+          </Suspense>
         );
       })}
     </>
@@ -223,9 +218,49 @@ function Maintenance({ tiles, tags, enabled, interval }: Options & { tiles: Dash
   );
 }
 export function SupplementalTiles({ plan, ...options }: Options & { plan: DashboardRequirements }) {
-  const { workloads, metrics, notes, maintenance } = plan;
+  const { metrics, notes, maintenance, fleet, watches } = plan;
+  const previewLimits = new Map<string, number>();
+  for (const { settings } of fleet) {
+    if (settings.kind === 'NeedsAttention') {
+      const key = [...settings.kinds].sort().join(',');
+      previewLimits.set(key, Math.max(settings.limit, previewLimits.get(key) ?? 0));
+    }
+  }
+  const batches = useMemo(() => {
+    const pins = [
+      ...[...metrics.values()].flat().map((t) => t.settings.source),
+      ...watches.flatMap((w) => w.settings.pins),
+    ];
+    const groups = new Map<Resolved['kind'], Set<string>>();
+    for (const p of pins) {
+      const set = groups.get(p.kind) ?? new Set<string>();
+      set.add(p.id);
+      groups.set(p.kind, set);
+    }
+    return [...groups]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([kind, set]) => {
+        const ids = [...set].sort();
+        return Array.from({ length: Math.ceil(ids.length / 8) }, (_, i) => ({
+          kind,
+          ids: ids.slice(i * 8, i * 8 + 8),
+        }));
+      });
+  }, [metrics, watches]);
   return (
     <>
+      {fleet.map((tile) => (
+        <FleetTile
+          key={tile.id}
+          tile={tile}
+          {...options}
+          previewLimit={
+            tile.settings.kind === 'NeedsAttention'
+              ? previewLimits.get([...tile.settings.kinds].sort().join(','))
+              : undefined
+          }
+        />
+      ))}
       {notes.map((w) => (
         <Tile key={w.id} tile={w}>
           <p className="whitespace-pre-wrap break-words">{w.settings.text}</p>
@@ -248,15 +283,74 @@ export function SupplementalTiles({ plan, ...options }: Options & { plan: Dashbo
           </ul>
         </Tile>
       ))}
-      {[...workloads].map(([kind, tiles]) => (
-        <WorkloadRows {...options} key={kind} kind={kind} tiles={tiles} />
-      ))}
-      {metrics.size > 0 && (
-        <DashboardRangeClock minutes={options.range} live={!!options.interval}>
-          {[...metrics].map(([kind, tiles]) => (
-            <MetricSources {...options} key={kind} kind={kind} tiles={tiles} />
-          ))}
-        </DashboardRangeClock>
+      {batches.length > 0 && (
+        <SourceReads {...options} batches={batches}>
+          {(data) => (
+            <>
+              {watches.map((tile) => {
+                const groups = tile.settings.pins.map((p) =>
+                  data.find((b) => b.kind === p.kind && b.ids.includes(p.id)),
+                );
+                return (
+                  <Tile tile={tile} key={tile.id} pending={groups.some((b) => b?.pending)}>
+                    <ul className="divide-y">
+                      {tile.settings.pins.map((pin, i) => {
+                        const batch = groups[i];
+                        const row = batch?.rows.find((r) => r.id === pin.id);
+                        const Icon = CitadelIcons[pin.kind];
+                        return (
+                          <li className="group flex min-h-10 items-center gap-2 py-1" key={pin.kind + pin.id}>
+                            <Icon className="size-4" />
+                            {!row ? (
+                              batch?.pending ? (
+                                'Loading…'
+                              ) : batch?.failed ? (
+                                'Source read unavailable.'
+                              ) : (
+                                'Resource unavailable.'
+                              )
+                            ) : !row.matchesTags ? (
+                              'Outside current filter.'
+                            ) : (
+                              <>
+                                <Link className="table-link flex-1 truncate" to={sourcePath(pin.kind, row)}>
+                                  {row.name}
+                                </Link>
+                                <StateIndicator value={row.status} />
+                                {row.status}
+                                {pin.kind !== 'Platform' && row.platformId && (
+                                  <HealthCard
+                                    title="Workload health"
+                                    resourceName={row.name}
+                                    triggerLabel={'View health for ' + row.name}
+                                    trigger={<Activity className="size-4" />}
+                                    status={null}
+                                    summary={<WorkloadDetail kind={pin.kind} id={row.id} />}
+                                  />
+                                )}
+                                <ResourceMenu
+                                  path={sourcePath(pin.kind, row)}
+                                  kind={pin.kind}
+                                  range={options.range}
+                                  logs={row.canViewLogs}
+                                />
+                              </>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </Tile>
+                );
+              })}
+              <DashboardRangeClock minutes={options.range} live={!!options.interval}>
+                {[...metrics].map(([kind, tiles]) => (
+                  <MetricSources {...options} data={data} key={kind} kind={kind} tiles={tiles} />
+                ))}
+              </DashboardRangeClock>
+            </>
+          )}
+        </SourceReads>
       )}
       {maintenance.length > 0 && <Maintenance {...options} tiles={maintenance} />}
     </>

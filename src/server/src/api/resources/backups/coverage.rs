@@ -323,57 +323,6 @@ impl BackupCoverageService {
                 .evaluate(platform, &targets, None, true, c.scheduling_available),
         )
     }
-    pub(crate) async fn dashboard_statuses(
-        &self,
-        principal: &ActorPrincipal,
-        kind: citadel_dashboards::WorkloadKind,
-        rows: &[citadel_dashboards::DashboardWorkload],
-    ) -> BTreeMap<Uuid, BackupCoverageStatus> {
-        use citadel_dashboards::WorkloadKind;
-        if rows.is_empty() {
-            return BTreeMap::new();
-        }
-        let ids = rows.iter().map(|r| r.id).collect();
-        let mut selection = CoverageSelection::default();
-        match kind {
-            WorkloadKind::Deployment => selection.deployments = ids,
-            WorkloadKind::Stack => selection.stacks = ids,
-            WorkloadKind::Container => selection.containers = ids,
-            WorkloadKind::SwarmService => selection.services = ids,
-        }
-        let platforms = rows
-            .iter()
-            .map(|r| r.platform_id)
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        let Some(context) = self.context(principal, &platforms, &selection).await else {
-            return BTreeMap::new();
-        };
-        rows.iter()
-            .filter_map(|r| {
-                let summary = match kind {
-                    WorkloadKind::Deployment => {
-                        context.workload(BackupPreviewKind::Deployment, r.id, r.platform_id)
-                    }
-                    WorkloadKind::Stack => {
-                        context.workload(BackupPreviewKind::Stack, r.id, r.platform_id)
-                    }
-                    WorkloadKind::SwarmService => {
-                        context.workload(BackupPreviewKind::SwarmService, r.id, r.platform_id)
-                    }
-                    WorkloadKind::Container if !r.stale => context.container(
-                        r.platform_id,
-                        r.node_id.as_deref(),
-                        r.docker_id.as_deref()?,
-                    ),
-                    WorkloadKind::Container => return None,
-                };
-                summary.status.map(|s| (r.id, s))
-            })
-            .collect()
-    }
-
     pub async fn enrich_deployments(
         &self,
         principal: &ActorPrincipal,

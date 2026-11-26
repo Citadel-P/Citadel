@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
+import { Timestamp } from '@/components/custom/timestamp';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import { Pause, Play, RefreshCw, Tags } from 'lucide-react';
-import { HistoryRangeContext } from './range-clock';
+import { ClearScopeContext } from './tile';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RangeField } from './display-controls';
@@ -30,9 +32,14 @@ export function DashboardView({
   const setRange = (range: number) => setRangeOverride({ base: config.rangeMinutes, range });
   const [generation, refresh] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const settled = useCallback(() => setRefreshing(false), []);
+  const [pausedAt, setPausedAt] = useState<number>();
+  const format = useProfileDateTimeFormatter();
+  const settled = useCallback(() => {
+    setRefreshing(false);
+    setPausedAt(Date.now());
+  }, []);
   return (
-    <HistoryRangeContext.Provider value={setRange}>
+    <ClearScopeContext.Provider value={() => setTags([])}>
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
         <Popover>
           <PopoverTrigger asChild>
@@ -48,9 +55,21 @@ export function DashboardView({
         {config.widgets.some((w) => w.settings.kind === 'Metrics') && <RangeField value={range} change={setRange} />}
         <div className="ml-auto flex items-center gap-1">
           <span className="mr-2 text-xs text-muted-foreground" role="status">
-            {refreshing ? 'Refreshing…' : paused ? 'Paused' : 'Auto'}
+            {refreshing ? (
+              'Refreshing…'
+            ) : paused ? (
+              <>Paused {pausedAt && <Timestamp value={pausedAt} formatDateTime={format} />}</>
+            ) : (
+              'Auto'
+            )}
           </span>
-          <Button size="sm" variant="outline" onClick={() => setPaused(!paused)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              if (!paused) setPausedAt(Date.now());
+              setPaused(!paused);
+            }}>
             {paused ? <Play /> : <Pause />}
             {paused ? 'Resume' : 'Pause'}
           </Button>
@@ -74,6 +93,6 @@ export function DashboardView({
         paused={paused || editing}
         inactive={editing}
       />
-    </HistoryRangeContext.Provider>
+    </ClearScopeContext.Provider>
   );
 }

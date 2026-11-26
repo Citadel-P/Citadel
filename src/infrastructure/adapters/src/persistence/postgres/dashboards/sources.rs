@@ -5,35 +5,22 @@ use citadel_dashboards::{
 use citadel_primitives::{PermissionLevel, ResourceType};
 use sqlx::{PgPool, Row};
 
-async fn visible(
+pub(super) async fn read(
     pool: &PgPool,
     viewer: DashboardViewer,
     filter: SourceFilter,
-    workload: bool,
-) -> Result<Vec<sqlx::postgres::PgRow>, DashboardError> {
-    // Docker containers inherit platform access and have no independent tag assignment.
-    let (resource, owner, table, status, platform, docker_id, tag_type) = match filter.kind {
+) -> Result<Vec<DashboardSource>, DashboardError> {
+    let (resource, table, status, platform, docker_id, tag_type) = match filter.kind {
         SourceKind::Platform => (
             ResourceType::Platform,
-            "r.id",
             "platforms r",
             "r.status",
             "r.id",
             "NULL::text",
             "Platform",
         ),
-        SourceKind::Container => (
-            ResourceType::Platform,
-            "r.platformid",
-            "containers r",
-            "r.state",
-            "r.platformid",
-            "NULL::text",
-            "",
-        ),
         SourceKind::Deployment => (
             ResourceType::Deployment,
-            "r.id",
             "deployments r",
             "r.status",
             "r.platformid",
@@ -42,7 +29,6 @@ async fn visible(
         ),
         SourceKind::Stack => (
             ResourceType::Stack,
-            "r.id",
             "stacks r JOIN stackreleases release ON release.id=r.currentstackreleaseid",
             "release.status",
             "release.platformid",
@@ -51,7 +37,6 @@ async fn visible(
         ),
         SourceKind::SwarmService => (
             ResourceType::SwarmService,
-            "r.id",
             "swarmservices r",
             "r.health",
             "r.platformid",
@@ -77,41 +62,38 @@ async fn visible(
     } else {
         "FALSE"
     };
-    let mut columns = String::new();
-    let mut joins = "";
-    let mut projection = "v.*".to_owned();
-    if workload {
-        let identity = match filter.kind {
-            SourceKind::Container => {
-                "r.dockercontainerid AS runtime_id,r.dockernodeid AS node_id,r.projectionstalesince IS NOT NULL AS stale"
-            }
-            _ => "NULL::text AS runtime_id,NULL::text AS node_id,FALSE AS stale",
-        };
-        columns = format!(
-            ",{identity},coalesce(r.controlstate='Processing',false) AS processing,{owner} AS owner"
-        );
-        let effective_status = if matches!(filter.kind, SourceKind::SwarmService) {
-            joins = " JOIN platforms p ON p.id=v.platform_id JOIN swarmservices s ON s.id=v.id LEFT JOIN swarmserviceprojections projection ON projection.platformid=v.platform_id AND projection.dockerserviceid=v.docker_id";
-            include_str!("../swarm_services/effective_health.sql")
+    let pinned_workload = !filter.ids.is_empty() && !matches!(filter.kind, SourceKind::Platform);
+    let (joins, effective_status) = if pinned_workload {
+        if matches!(filter.kind, SourceKind::SwarmService) {
+            (
+                " JOIN platforms p ON p.id=v.platform_id JOIN swarmservices s ON s.id=v.id LEFT JOIN swarmserviceprojections projection ON projection.platformid=v.platform_id AND projection.dockerserviceid=v.docker_id",
+                include_str!("../swarm_services/effective_health.sql"),
+            )
         } else {
-            joins = " JOIN platforms p ON p.id=v.platform_id";
-            "v.status"
-        };
-        let probes = super::probes::selected(filter.kind);
-        projection = format!("v.*, {effective_status} AS workload_status, p.status='Online' AS online,{probes} AS probes,
-            ($4 OR EXISTS(SELECT FROM actor_scope s JOIN actorroles ar ON ar.actorid=s.actorid JOIN permissions p ON p.roleid=ar.roleid WHERE p.resourcetype=$2 AND (p.specificpermissions & $10)<>0)
-            OR EXISTS(SELECT FROM actor_scope s JOIN resourceaccesses a ON a.actorid=s.actorid WHERE a.resourcetype=$2 AND a.resourceid=v.owner AND (a.specificpermissions & $10)<>0)) AS logs");
-    }
+            (" JOIN platforms p ON p.id=v.platform_id", "v.status")
+        }
+    } else {
+        ("", "v.status")
+    };
+    let logs = "($4 OR EXISTS(SELECT FROM actor_scope s JOIN actorroles ar ON ar.actorid=s.actorid JOIN permissions p ON p.roleid=ar.roleid WHERE p.resourcetype=$2 AND (p.specificpermissions & $10)<>0)
+          OR EXISTS(SELECT FROM actor_scope s JOIN resourceaccesses a ON a.actorid=s.actorid WHERE a.resourcetype=$2 AND a.resourceid=v.id AND (a.specificpermissions & $10)<>0))";
+    let projection = if pinned_workload {
+        format!(
+            "v.*, {effective_status} AS source_status, (p.status='Online' AND v.matches_tags AND {logs}) AS logs"
+        )
+    } else {
+        "v.*, v.status AS source_status, FALSE AS logs".to_owned()
+    };
     let sql = format!(
         r#"{AUTHORIZED_BY_LEVELS_CTE}, visible AS (
-        SELECT r.id,r.name,{status} AS status,{platform} AS platform_id,{docker_id} AS docker_id,{container} AS container_id,{exceeds_budget} AS exceeds_budget{columns},
+        SELECT r.id,r.name,{status} AS status,{platform} AS platform_id,{docker_id} AS docker_id,{container} AS container_id,{exceeds_budget} AS exceeds_budget,
         NOT EXISTS (SELECT FROM unnest($6::text[]) requested(name) WHERE NOT EXISTS (
             SELECT FROM resourcetags link JOIN tags t ON t.id=link.tagid WHERE link.resourceid=r.id
             AND link.resourcetype=$5 AND t.normalizedname=lower(requested.name))) AS matches_tags
         FROM {table} WHERE EXISTS(SELECT FROM enabled_actor)
         AND ($4 OR (SELECT allowed FROM global_access) OR EXISTS (
           SELECT FROM actor_scope s JOIN resourceaccesses a ON a.actorid=s.actorid
-          WHERE a.resourcetype=$2 AND a.resourceid={owner} AND a.permissionlevel=ANY($3)))
+          WHERE a.resourcetype=$2 AND a.resourceid=r.id AND a.permissionlevel=ANY($3)))
         AND (cardinality($7::uuid[])=0 OR r.id=ANY($7))
         AND ($8='' OR strpos(lower(r.name),lower($8))>0)
     ) SELECT {projection} FROM (SELECT * FROM visible WHERE matches_tags OR cardinality($7::uuid[])>0 ORDER BY name,id LIMIT $9) v{joins} ORDER BY v.name,v.id"#
@@ -126,92 +108,27 @@ async fn visible(
         .bind(filter.ids)
         .bind(filter.search)
         .bind(filter.limit);
-    if workload {
+    if pinned_workload {
         query = query.bind(citadel_primitives::SpecificPermission::Logs as i32);
     }
-    query
+    let rows = query
         .fetch_all(pool)
         .await
-        .map_err(|e| DashboardError::Storage(e.to_string()))
-}
-
-pub(super) async fn read(
-    pool: &PgPool,
-    viewer: DashboardViewer,
-    filter: SourceFilter,
-) -> Result<Vec<DashboardSource>, DashboardError> {
-    let rows = visible(pool, viewer, filter, false).await?;
+        .map_err(|e| DashboardError::Storage(e.to_string()))?;
     rows.iter()
         .map(|r| {
             Ok(DashboardSource {
                 id: r.try_get("id")?,
                 name: r.try_get("name")?,
-                status: r.try_get("status")?,
+                status: r.try_get("source_status")?,
                 platform_id: r.try_get("platform_id")?,
                 container_projection_id: r.try_get("container_id")?,
                 docker_service_id: r.try_get("docker_id")?,
+                can_view_logs: r.try_get("logs")?,
                 matches_tags: r.try_get("matches_tags")?,
                 exceeds_chart_series_limit: r.try_get("exceeds_budget")?,
             })
         })
         .collect::<Result<Vec<_>, sqlx::Error>>()
-        .map_err(|e| DashboardError::Storage(e.to_string()))
-}
-
-pub(super) async fn workloads(
-    pool: &PgPool,
-    viewer: DashboardViewer,
-    kind: citadel_dashboards::WorkloadKind,
-    tags: Vec<String>,
-    limit: i64,
-) -> Result<Vec<citadel_dashboards::DashboardWorkload>, DashboardError> {
-    use citadel_primitives::health::{ContainerHealthObservation, observed_status};
-    let rows = visible(
-        pool,
-        viewer,
-        SourceFilter {
-            kind: kind.into(),
-            tags,
-            limit,
-            ids: vec![],
-            search: String::new(),
-        },
-        true,
-    )
-    .await?;
-    let now = chrono::Utc::now().timestamp_millis();
-    rows.iter()
-        .map(|r| {
-            let online: bool = r.try_get("online")?;
-            #[derive(serde::Deserialize)]
-            struct Probe {
-                observation: Option<ContainerHealthObservation>,
-                state: String,
-                available: bool,
-            }
-            let sqlx::types::Json(observed): sqlx::types::Json<Vec<Probe>> = r.try_get("probes")?;
-            let more_probes = observed.len() > 16;
-            let probes = observed
-                .iter()
-                .take(16)
-                .map(|p| {
-                    observed_status(p.observation.as_ref(), &p.state, online && p.available, now)
-                })
-                .collect();
-            Ok(citadel_dashboards::DashboardWorkload {
-                id: r.try_get("id")?,
-                name: r.try_get("name")?,
-                status: r.try_get("workload_status")?,
-                platform_id: r.try_get("platform_id")?,
-                processing: r.try_get("processing")?,
-                probes,
-                more_probes,
-                docker_id: r.try_get("runtime_id")?,
-                node_id: r.try_get("node_id")?,
-                stale: r.try_get("stale")?,
-                can_view_logs: online && r.try_get::<bool, _>("logs")?,
-            })
-        })
-        .collect::<Result<_, sqlx::Error>>()
         .map_err(|e| DashboardError::Storage(e.to_string()))
 }

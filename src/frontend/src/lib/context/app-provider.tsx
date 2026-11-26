@@ -20,11 +20,7 @@ const AppProviderContent: React.FC<{
     refetch,
     isFetching,
   } = useRead('getPlatfom', { id: selectedPlatformId });
-  const {
-    platformsMessage,
-    isLoading: platformsIsLoading,
-    error: platformListError,
-  } = usePlatformsGroup({ useTagFilter: false });
+  const { platformsMessage, isLoading: platformsIsLoading } = usePlatformsGroup({ useTagFilter: false });
   const alertEventsGroup = useAlertEventsGroup();
 
   const currentPlatform = useMemo(() => {
@@ -39,7 +35,6 @@ const AppProviderContent: React.FC<{
   const contextValue = useMemo(
     () => ({
       isLoading: platformIsLoading || platformsIsLoading,
-      platformListError,
       platformRead: { error, refetch, isFetching },
       currentPlatform,
       platforms: platformsMessage,
@@ -49,7 +44,6 @@ const AppProviderContent: React.FC<{
     [
       platformIsLoading,
       platformsIsLoading,
-      platformListError,
       currentPlatform,
       platformsMessage,
       applicationInfo,

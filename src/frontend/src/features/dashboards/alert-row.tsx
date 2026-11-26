@@ -1,4 +1,10 @@
-import { useContext } from 'react';
+import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { PaginationControls } from '@/components/custom/common';
+import { useAlertPage } from '@/features/alerters/alert-events/hooks/useAlertEventsList';
+import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
+import Loader from '@/components/ui/loader';
+import { type ReactNode, useContext, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQueryClient, useIsMutating } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -88,5 +94,49 @@ export function AlertRow({
         />
       }
     />
+  );
+}
+
+export function ScopedAlerts({ tags, children }: { tags: string[]; children: ReactNode }) {
+  return (
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button variant="ghost" className="h-auto w-fit justify-start gap-2 px-1 text-left">
+          {children}
+        </Button>
+      </SheetTrigger>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>Open alerts</SheetTitle>
+        </SheetHeader>
+        <ScopedAlertList tags={tags} />
+      </SheetContent>
+    </Sheet>
+  );
+}
+function ScopedAlertList({ tags }: { tags: string[] }) {
+  const [page, setPage] = useState(1);
+  const format = useProfileDateTimeFormatter();
+  const { error, pagedAlertEvents: result } = useAlertPage(
+    { page, pageSize: 25, resourceId: undefined, resourceType: 'All', alertType: 'All', unresolvedOnly: true },
+    undefined,
+    tags.length ? tags : undefined,
+  );
+  if (error) return <p>Open alerts unavailable.</p>;
+  if (!result) return <Loader />;
+  const pages = Math.ceil(result.totalCount / 25);
+  return (
+    <div className="min-h-0 overflow-auto px-4">
+      {result.items.length ? (
+        <ul>
+          {result.items.map((row) => (
+            <AlertRow key={row.id} row={row} format={format} />
+          ))}
+        </ul>
+      ) : (
+        <p>No open alerts.</p>
+      )}
+      {pages > 1 && <PaginationControls currentPage={page} onPageChange={setPage} totalPages={pages} />}
+    </div>
   );
 }

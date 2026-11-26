@@ -2,7 +2,7 @@ import { withContainerGroupHealth } from './group-health';
 import { ContainerHealthFilter, useContainerHealthFilter, useHealthClock } from './health';
 import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-policies/table-coverage';
 import { filterContainers } from './container-search';
-import { Box } from 'lucide-react';
+import { CitadelIcons } from '@/lib/icons';
 import { ContainersTable } from './table';
 import { ContainerColumnsButton, containerColumnsAtom } from './table-columns';
 import { useAtomValue } from 'jotai';
@@ -24,7 +24,7 @@ const groupedContainerActions = Object.values(ContainerGroupActions).filter(
 );
 
 export const ContainerComponents: RegularResourceComponents = {
-  Icon: Box,
+  Icon: CitadelIcons.Container,
 
   Content: ContainersTable,
 

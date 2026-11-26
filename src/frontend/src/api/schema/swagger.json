@@ -7371,6 +7371,14 @@
         ],
         "type": "object"
       },
+      "DashboardAttentionTab": {
+        "enum": [
+          "All",
+          "Problems",
+          "Updates"
+        ],
+        "type": "string"
+      },
       "DashboardChartColor": {
         "enum": [
           "Blue",
@@ -7436,6 +7444,143 @@
         },
         "type": "object"
       },
+      "DashboardFleetKind": {
+        "enum": [
+          "Platform",
+          "Deployment",
+          "Stack",
+          "SwarmService",
+          "BackupPolicy",
+          "Build",
+          "BuildAgentPool",
+          "Registry",
+          "GitRepository",
+          "Script"
+        ],
+        "type": "string"
+      },
+      "DashboardFleetMeasure": {
+        "enum": [
+          "Platforms",
+          "Workloads",
+          "Alerts"
+        ],
+        "type": "string"
+      },
+      "DashboardFleetPage": {
+        "properties": {
+          "alerts": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "problems": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardFleetRow"
+            },
+            "type": "array"
+          },
+          "states": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardStateCount"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updates": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "states",
+          "alerts",
+          "total",
+          "problems",
+          "updates",
+          "rows"
+        ],
+        "type": "object"
+      },
+      "DashboardFleetReason": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occurrences": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "target": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "occurrences"
+        ],
+        "type": "object"
+      },
+      "DashboardFleetRow": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platformId": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardFleetReason"
+            },
+            "type": "array"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "name",
+          "state",
+          "reasons"
+        ],
+        "type": "object"
+      },
       "DashboardLayout": {
         "additionalProperties": false,
         "properties": {
@@ -7492,108 +7637,21 @@
         "type": "string"
       },
       "DashboardMetricSource": {
-        "oneOf": [
-          {
-            "properties": {
-              "id": {
-                "format": "uuid",
-                "type": "string"
-              },
-              "kind": {
-                "enum": [
-                  "Platform"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "kind"
-            ],
-            "type": "object"
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
           },
-          {
-            "properties": {
-              "id": {
-                "format": "uuid",
-                "type": "string"
-              },
-              "kind": {
-                "enum": [
-                  "Container"
-                ],
-                "type": "string"
-              },
-              "platformId": {
-                "format": "uuid",
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "platformId",
-              "kind"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "id": {
-                "format": "uuid",
-                "type": "string"
-              },
-              "kind": {
-                "enum": [
-                  "Deployment"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "kind"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "id": {
-                "format": "uuid",
-                "type": "string"
-              },
-              "kind": {
-                "enum": [
-                  "Stack"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "kind"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "id": {
-                "format": "uuid",
-                "type": "string"
-              },
-              "kind": {
-                "enum": [
-                  "SwarmService"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "kind"
-            ],
-            "type": "object"
+          "kind": {
+            "$ref": "#/components/schemas/DashboardSourceKind"
           }
-        ]
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "type": "object"
       },
       "DashboardNoteLink": {
         "additionalProperties": false,
@@ -7618,8 +7676,20 @@
         ],
         "type": "string"
       },
+      "DashboardSourceKind": {
+        "enum": [
+          "Platform",
+          "Deployment",
+          "Stack",
+          "SwarmService"
+        ],
+        "type": "string"
+      },
       "DashboardSourceView": {
         "properties": {
+          "canViewLogs": {
+            "type": "boolean"
+          },
           "containerProjectionId": {
             "format": "uuid",
             "type": [
@@ -7662,9 +7732,40 @@
           "name",
           "status",
           "matchesTags",
-          "exceedsChartSeriesLimit"
+          "exceedsChartSeriesLimit",
+          "canViewLogs"
         ],
         "type": "object"
+      },
+      "DashboardStateCount": {
+        "properties": {
+          "count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "state",
+          "count"
+        ],
+        "type": "object"
+      },
+      "DashboardStateKind": {
+        "enum": [
+          "Platform",
+          "Deployment",
+          "Stack",
+          "SwarmService",
+          "Container"
+        ],
+        "type": "string"
       },
       "DashboardSummaryView": {
         "properties": {
@@ -7738,12 +7839,19 @@
             "properties": {
               "kind": {
                 "enum": [
-                  "ResourceSummary"
+                  "FleetSummary"
                 ],
                 "type": "string"
+              },
+              "measures": {
+                "items": {
+                  "$ref": "#/components/schemas/DashboardFleetMeasure"
+                },
+                "type": "array"
               }
             },
             "required": [
+              "measures",
               "kind"
             ],
             "type": "object"
@@ -7752,17 +7860,28 @@
             "properties": {
               "kind": {
                 "enum": [
-                  "Platforms"
+                  "NeedsAttention"
                 ],
                 "type": "string"
+              },
+              "kinds": {
+                "items": {
+                  "$ref": "#/components/schemas/DashboardFleetKind"
+                },
+                "type": "array"
               },
               "limit": {
                 "format": "int32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "tab": {
+                "$ref": "#/components/schemas/DashboardAttentionTab"
               }
             },
             "required": [
+              "tab",
+              "kinds",
               "limit",
               "kind"
             ],
@@ -7772,22 +7891,37 @@
             "properties": {
               "kind": {
                 "enum": [
-                  "Workloads"
+                  "ResourceState"
                 ],
                 "type": "string"
               },
-              "limit": {
-                "format": "int32",
-                "minimum": 0,
-                "type": "integer"
-              },
               "resourceKind": {
-                "$ref": "#/components/schemas/DashboardWorkloadKind"
+                "$ref": "#/components/schemas/DashboardStateKind"
               }
             },
             "required": [
               "resourceKind",
-              "limit",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "Watchlist"
+                ],
+                "type": "string"
+              },
+              "pins": {
+                "items": {
+                  "$ref": "#/components/schemas/DashboardMetricSource"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "pins",
               "kind"
             ],
             "type": "object"
@@ -7946,69 +8080,6 @@
             "type": "object"
           }
         ]
-      },
-      "DashboardWorkloadKind": {
-        "enum": [
-          "Container",
-          "Deployment",
-          "Stack",
-          "SwarmService"
-        ],
-        "type": "string"
-      },
-      "DashboardWorkloadView": {
-        "properties": {
-          "backupStatus": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/BackupCoverageStatus"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "canViewLogs": {
-            "type": "boolean"
-          },
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "moreProbes": {
-            "type": "boolean"
-          },
-          "name": {
-            "type": "string"
-          },
-          "observedProbes": {
-            "items": {
-              "$ref": "#/components/schemas/HealthStatus"
-            },
-            "type": "array"
-          },
-          "platformId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "processing": {
-            "type": "boolean"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "platformId",
-          "status",
-          "processing",
-          "observedProbes",
-          "moreProbes",
-          "canViewLogs"
-        ],
-        "type": "object"
       },
       "DatabaseConnectionsView": {
         "properties": {
@@ -46061,6 +46132,161 @@
         "x-citadel-setup-exempt": false
       }
     },
+    "/api/v1/dashboards/fleet": {
+      "get": {
+        "operationId": "getDashboardFleet",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "read",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kinds",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tab",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Match all owner tags",
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardFleetPage"
+                }
+              }
+            },
+            "description": "Scoped counts and bounded resource rows"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request failed"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Count or investigate readable resources in the selected scope",
+        "tags": [
+          "Dashboards"
+        ],
+        "x-citadel-principal": "human",
+        "x-citadel-public": false,
+        "x-citadel-setup-exempt": false
+      }
+    },
     "/api/v1/dashboards/sources": {
       "get": {
         "operationId": "listDashboardSources",
@@ -46070,7 +46296,7 @@
             "name": "kind",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DashboardSourceKind"
             }
           },
           {
@@ -46194,130 +46420,6 @@
           }
         ],
         "summary": "Find readable monitoring sources and check pinned resource tag membership",
-        "tags": [
-          "Dashboards"
-        ],
-        "x-citadel-principal": "human",
-        "x-citadel-public": false,
-        "x-citadel-setup-exempt": false
-      }
-    },
-    "/api/v1/dashboards/workloads": {
-      "get": {
-        "operationId": "listDashboardWorkloads",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "kind",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/DashboardWorkloadKind"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "format": "int32",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Match all resource tag names",
-            "in": "query",
-            "name": "tags",
-            "required": false,
-            "schema": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/DashboardWorkloadView"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Bounded workload rows"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "Request failed"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "List readable workloads with persisted monitoring and backup coverage",
         "tags": [
           "Dashboards"
         ],

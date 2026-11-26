@@ -19,7 +19,7 @@ import { useMutate, useRead } from '@/lib/hooks';
 import { requestErrorMessage } from '@/lib/request-error';
 import { randomUuid } from '@/lib/utils';
 import { dashboardTemplates, fromTemplate, type DashboardTemplate } from './templates';
-import { MetricSourcePicker } from './widget-settings';
+import { MetricSourcePicker, ScopeField } from './widget-settings';
 import { widgetError } from './catalogue';
 import { audiences } from './visibility';
 
@@ -64,8 +64,18 @@ export function CreateDashboardDialog({
   const trimmed = name.trim();
   const nameLength = [...trimmed].length;
   const metric = configuration.widgets.find((w) => w.settings.kind === 'Metrics')?.settings;
+  const content = copy
+    ? configuration
+    : {
+        ...configuration,
+        widgets: configuration.widgets.filter(
+          (w) =>
+            (w.settings.kind !== 'Metrics' || !!w.settings.source.id) &&
+            (admin || (w.settings.kind !== 'UpcomingSchedules' && w.settings.kind !== 'Updates')),
+        ),
+      };
   const canSubmit =
-    !configuration.widgets.some(widgetError) && permitted && nameLength > 0 && nameLength <= 128 && !create.isPending;
+    !content.widgets.some(widgetError) && permitted && nameLength > 0 && nameLength <= 128 && !create.isPending;
   return (
     <Dialog
       open
@@ -81,7 +91,7 @@ export function CreateDashboardDialog({
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
-            if (canSubmit) create.mutate({ data: { id, name: trimmed, visibility: audience, configuration } });
+            if (canSubmit) create.mutate({ data: { id, name: trimmed, visibility: audience, configuration: content } });
           }}>
           <div className="space-y-2">
             <Label htmlFor="dashboard-name">Name</Label>
@@ -110,6 +120,9 @@ export function CreateDashboardDialog({
                 </SelectContent>
               </Select>
             </div>
+          )}
+          {!copy && template === 'Application' && (
+            <ScopeField value={configuration.tags} change={(tags) => setConfiguration({ ...configuration, tags })} />
           )}
           {!copy && metric?.kind === 'Metrics' && (
             <MetricSourcePicker

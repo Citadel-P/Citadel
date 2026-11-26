@@ -48,7 +48,7 @@ export function Choice<T extends string>({
 export function RangeField({ value, change }: { value: number; change: (v: number) => void }) {
   return (
     <div className="flex items-center gap-2 text-sm">
-      History range
+      Chart range
       <StatsRangePicker
         showLabel={false}
         includeCalendarDays={false}

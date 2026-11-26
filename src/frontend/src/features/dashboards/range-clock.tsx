@@ -19,5 +19,3 @@ export function DashboardRangeClock({
   }, [live, minutes]);
   return <RangeClock.Provider value={now}>{children}</RangeClock.Provider>;
 }
-
-export const HistoryRangeContext = createContext<((minutes: number) => void) | undefined>(undefined);
