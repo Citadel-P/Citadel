@@ -16,6 +16,7 @@ import time
 
 
 IDENTITY = ("channel", "version", "core", "agent")
+POSTGRES_MAJOR = 19
 
 
 def order(value, channel):
@@ -217,14 +218,28 @@ def deploy(directory, payload):
         def run(*args, timeout):
             subprocess.run([*compose, *args], cwd=directory, env=env, check=True,
                            stdout=sys.stderr, timeout=timeout)
+        database = ""
+        if (directory / "docker-compose.yml").exists():
+            database = subprocess.check_output(
+                [*compose, "ps", "--all", "--quiet", "pg_db"], cwd=directory,
+                env=dict(env, CITADEL_IMAGE=payload["core"], CITADEL_EDGE_AGENT_IMAGE=payload["agent"]),
+                text=True, timeout=30,
+            ).strip()
+        if database:
+            output = subprocess.check_output(
+                [*docker, "exec", database, "postgres", "--version"],
+                env=env, text=True, timeout=30,
+            ).strip()
+            version = re.fullmatch(r"postgres \(PostgreSQL\) ([0-9]+)\.[0-9]+(?: \([^\r\n]*\))?", output)
+            if not version:
+                raise ValueError("Cannot verify the installed PostgreSQL major version before deployment")
+            major = int(version[1])
+            if major != POSTGRES_MAJOR:
+                return {"status": "skipped-incompatible-database", **identity,
+                        "postgresMajor": major, "requiredPostgresMajor": POSTGRES_MAJOR}
+
         def replace():
             original, _ = setup.read_environment(directory / ".env")
-            database = ""
-            if (directory / "docker-compose.yml").exists():
-                database = subprocess.check_output([*compose, "ps", "--quiet", "pg_db"],
-                                                   cwd=directory, env=dict(env, CITADEL_IMAGE=payload["core"],
-                                                                           CITADEL_EDGE_AGENT_IMAGE=payload["agent"]),
-                                                   text=True, timeout=30).strip()
             pins = {"CITADEL_IMAGE": payload["core"], "CITADEL_EDGE_AGENT_IMAGE": payload["agent"]}
             if database:
                 # Keep the currently deployed database image when the shipped

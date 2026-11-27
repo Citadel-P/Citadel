@@ -151,7 +151,7 @@ def main():
         ], input=json.dumps(payload), text=True, stdout=subprocess.PIPE, check=True, timeout=1800)
         outcome = json.loads(result.stdout)
         identity = {key: payload[key] for key in ("channel", "version", "core", "agent")}
-        if (outcome.get("status") not in ("deployed", "skipped-older-release")
+        if (outcome.get("status") not in ("deployed", "skipped-older-release", "skipped-incompatible-database")
                 or any(outcome.get(key) != value for key, value in identity.items())):
             raise ValueError("Unexpected remote deployment result")
         if outcome["status"] == "deployed":
