@@ -3,8 +3,14 @@ use super::*;
 /// Local updater diagnostic only. Never creates identity, initializes setup or
 /// applies migrations; a registration must bind to an already initialized Core.
 pub async fn read_instance_identity(pool: &PgPool) -> Result<Uuid, UpdateError> {
+    let unavailable =
+        || UpdateError::Unavailable("Cannot read an initialized Citadel instance identity.".into());
+    let mut connection = pool.acquire().await.map_err(|_| unavailable())?;
+    citadel_database::server_version(&mut connection)
+        .await
+        .map_err(|e| UpdateError::Conflict(e.to_string()))?;
     let id: Option<Uuid> = sqlx::query_scalar("SELECT instanceid FROM citadelinstanceidentity WHERE id=1 AND EXISTS(SELECT 1 FROM instancesetupstates WHERE id=1 AND initializedat IS NOT NULL)")
-        .fetch_optional(pool).await.map_err(storage)?;
+        .fetch_optional(&mut *connection).await.map_err(|_| unavailable())?;
     id.filter(|id| !id.is_nil()).ok_or_else(|| {
         UpdateError::Unavailable(
             "Citadel instance identity is unavailable or setup is incomplete.".into(),

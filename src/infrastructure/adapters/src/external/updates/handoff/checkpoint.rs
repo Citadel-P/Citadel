@@ -57,6 +57,19 @@ impl OwnedUpdateHelper {
             return Err(conflict());
         }
         let source = self.checkpoint_source(process, cancellation).await?;
+        crate::external::backups::system_recovery::verify_backup_tools(
+            &source.pg_dump,
+            &source.pg_restore,
+            cancellation,
+        )
+        .await
+        .map_err(|error| {
+            if cancellation.is_cancelled() {
+                UpdateError::Cancelled
+            } else {
+                UpdateError::Conflict(error.to_string())
+            }
+        })?;
         let pool = connect(&source.database_url, cancellation).await?;
         let result = async {
             crate::persistence::postgres::updates::check_checkpoint_source(&pool, &journal).await?;
@@ -85,7 +98,8 @@ impl OwnedUpdateHelper {
         let builder = PgDumpSystemBackupBuilder::new(
             pool.clone(),
             source.database_url,
-            "pg_dump",
+            source.pg_dump,
+            source.pg_restore,
             self.state.path().into(),
             64 * 1024,
             journal.operation.plan.source.version.clone(),
@@ -186,6 +200,8 @@ impl OwnedUpdateHelper {
         url.set_path(env["PG_DATABASE"].as_str().ok_or_else(conflict)?);
         Ok(CheckpointSource {
             database_url: url.to_string(),
+            pg_dump: packaged_tool(external("CITADEL_PG_DUMP_PATH"), "pg_dump")?,
+            pg_restore: packaged_tool(external("CITADEL_PG_RESTORE_PATH"), "pg_restore")?,
             assets: RecoveryAssets {
                 core_data_path: root.into(),
                 jwt_key_is_external: external("CITADEL_JWT_KEY").is_some(),
@@ -195,7 +211,21 @@ impl OwnedUpdateHelper {
     }
 }
 
+// The update executor holds the Docker socket. Only execute immutable image tools
+// there, including when Core has configured a custom tool for ordinary backups.
+fn packaged_tool(configured: Option<&str>, name: &str) -> Result<std::ffi::OsString, UpdateError> {
+    let packaged = format!("/usr/local/bin/{name}");
+    if configured.is_some_and(|path| path != name && path != packaged) {
+        return Err(UpdateError::Conflict(format!(
+            "Installer checkpoints require the packaged {name} at {packaged}."
+        )));
+    }
+    Ok(packaged.into())
+}
+
 struct CheckpointSource {
+    pg_dump: std::ffi::OsString,
+    pg_restore: std::ffi::OsString,
     database_url: String,
     assets: RecoveryAssets,
 }

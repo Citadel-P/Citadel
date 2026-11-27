@@ -133,7 +133,7 @@ export function DatabaseUpdateAvailability({ data }: { data?: UpdateStatusView }
           rel="noreferrer">
           {data?.databaseInstallation === 'Bundled' && data.installationUnavailableReason
             ? 'Set up in-app updates'
-            : 'Database upgrade guide'}
+            : 'PostgreSQL maintenance'}
         </a>
       </p>
     </div>

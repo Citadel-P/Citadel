@@ -110,7 +110,7 @@ Server validates configuration, constructs typed dependencies once and passes
 narrow handles to routes and workers. Constructors receive settings explicitly.
 `composition/` owns wiring; `workers/` owns execution and shutdown, not SQL queries.
 
-Startup checks retained update/recovery ownership before ordinary migrations.
+Startup verifies the live PostgreSQL major is exactly 19 before initializing keys, identity or migration history. It then checks retained update/recovery ownership before ordinary migrations.
 Core applies migrations and acquires one background-job lease per database before
 starting workers. Every spawned task has an owner, cancellation policy and shutdown
 behavior. Shutdown cancels listeners/workers, drains tracked work, then closes
@@ -276,7 +276,7 @@ target receipt before releasing maintenance ownership. Never delete journals,
 clear claims, replace keys or refresh registration merely to bypass a failure.
 
 PostgreSQL engine updates are separately reviewed operations; Core updates retain
-the database image. The current executor supports qualified PostgreSQL 18 minor
+the database image. The current executor supports qualified PostgreSQL 19 minor
 updates for its registered Alpine layout, not major upgrades, replication,
 external tablespaces or externally managed databases. Review, approval and
 execution recheck eligibility. Unsupported/ambiguous states preserve evidence and

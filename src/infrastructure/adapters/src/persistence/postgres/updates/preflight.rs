@@ -14,6 +14,9 @@ pub async fn read_update_database_state(
         let mut tx = pool.begin().await.map_err(unavailable)?;
         sqlx::raw_sql("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY; SET LOCAL statement_timeout = '5s'; SET LOCAL lock_timeout = '2s';")
             .execute(&mut *tx).await.map_err(unavailable)?;
+        citadel_database::server_version(&mut tx)
+            .await
+            .map_err(|e| UpdateError::Conflict(e.to_string()))?;
         let instance: Option<Uuid> = sqlx::query_scalar("SELECT instanceid FROM public.citadelinstanceidentity WHERE id=1 AND EXISTS(SELECT 1 FROM public.instancesetupstates WHERE id=1 AND initializedat IS NOT NULL)")
             .fetch_optional(&mut *tx).await.map_err(unavailable)?;
         let instance_id = instance

@@ -14,7 +14,7 @@ mod swarm;
 const PASSWORD: &str = "citadel-acceptance-fixture-password";
 const DIND: &str = "docker@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0";
 const POSTGRES: &str =
-    "postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5";
+    "postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f";
 const REGISTRY: &str =
     "registry@sha256:325b4b29b041e82803abeb703e201655e4e23ab83264ec1a7c9ddb0a5b14a6e0";
 

@@ -47,12 +47,17 @@ impl OwnedUpdateHelper {
             compose_files: reg.compose_files.clone(),
         };
         let (descriptor, configuration) = if let Some(database) = &plan.database {
-            super::super::compose::validate_database_update(database)?;
+            super::super::compose::QUALIFIED.validate(database)?;
             self.prepare_database(process, cancellation).await?;
             (
                 None,
                 inputs
-                    .prepare_database_replacement(database, process, cancellation)
+                    .prepare_database_replacement(
+                        super::super::compose::QUALIFIED,
+                        database,
+                        process,
+                        cancellation,
+                    )
                     .await?
                     .checked,
             )
@@ -160,7 +165,7 @@ impl ExecutionJournal {
         }
         match (&plan.database, &receipt.descriptor) {
             (Some(database), None) if plan.source == plan.target => {
-                super::super::compose::validate_database_update(database)?
+                super::super::compose::QUALIFIED.validate(database)?
             }
             (None, Some(descriptor)) => descriptor.validate_transition(
                 &plan.source,

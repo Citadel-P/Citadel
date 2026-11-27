@@ -187,6 +187,8 @@ async fn unsafe_ambiguous_and_changing_installations_never_write_registration() 
         "changed-daemon",
         "changed-inputs",
         "missing-identity",
+        "old-database",
+        "unknown-database",
         "cancel",
         "tool-failure",
     ] {

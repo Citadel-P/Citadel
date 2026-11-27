@@ -28,11 +28,14 @@ fn postgres_tools_decode_url_components_without_treating_plus_as_space() {
 }
 
 #[test]
-fn postgres_tools_reject_decoded_nul_before_spawning() {
+fn postgres_tools_reject_ambiguous_destinations_before_spawning() {
     for url in [
         "postgres://user:pass%00word@db/data",
         "postgres://us%00er:pass@db/data",
         "postgres://user:pass@db/da%00ta",
+        "postgres://user:pass@db/data?host=elsewhere",
+        "postgres://user:pass@db/data?port=1234",
+        "postgres://user:pass@db/data?dbname=other",
     ] {
         assert!(pg_dump_request(url, Path::new("dump")).is_err());
         assert!(pg_restore_request(url, Path::new("dump")).is_err());

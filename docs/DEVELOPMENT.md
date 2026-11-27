@@ -78,7 +78,7 @@ a mounted executable and is not an in-app updater installation; use the
 | `deploy/.env.development` | Ignored development configuration, created once from the example |
 | `deploy/.env` | Separate release-style Compose configuration |
 | `~/.local/share/citadel-wsl/` | Default development runtime state, keys and staged executable |
-| `citadel-wsl_postgres-data` | Development PostgreSQL volume |
+| `citadel-wsl_postgres-data` | Development PostgreSQL 19 volume |
 | `target/` | Disposable Cargo output, not application state |
 
 Environment files contain literal `KEY=value` entries, without shell expansion.

@@ -55,11 +55,8 @@ in Updates. `RUST_LOG` module filters remain deployment managed.
 | <code id="citadel-http-openapi-enabled" className="scroll-mt-24">CITADEL_HTTP_OPENAPI_ENABLED</code> | Optional | Exposes Swagger and the full/public OpenAPI documents; false by default |
 
 For explicit [PostgreSQL maintenance](/operations/upgrade-and-rollback#postgresql-engine-maintenance),
-`PG_IMAGE` selects an official PostgreSQL image digest and `PG_DATA` selects its data
-directory (default `/var/lib/postgresql/18/docker`). These are Compose controls,
-not application settings. Changing the major image version alone does not upgrade
-the data. The optional maintenance overlay uses `PG_UPGRADE_IMAGE` for the locally
-built helper and `PG_SOURCE_DATA` for its source directory.
+`PG_IMAGE` selects a qualified official PostgreSQL 19 image digest (bundled version 19.0) and `PG_DATA` must match
+`/var/lib/postgresql/19/docker`. The installer refuses incompatible retained storage.
 
 `CITADEL_IMAGE`, `COMPOSE_PROJECT_NAME`, and host port settings control Compose.
 The application settings must reach the Core container; the supplied Compose
@@ -101,7 +98,7 @@ database password in `.env` does not reset the password of an existing database.
 | `CITADEL_DATA_ROOT` | `/app/data` | Persistent Core data and generated recovery keys; match the container's data mount |
 | `CITADEL_HOST_ROOT` | `/host` | Read-only host mount used for Docker storage filesystem metrics |
 | `CITADEL_PG_DUMP_PATH` | `pg_dump` | PostgreSQL dump executable for control-plane backups |
-| `CITADEL_PG_RESTORE_PATH` | `pg_restore` | PostgreSQL restore executable used by offline `restore-system` |
+| `CITADEL_PG_RESTORE_PATH` | `pg_restore` | PG19 executable for inspecting backup archives and restoring a system |
 
 Preserve original keys and verify the database target before
 [control-plane recovery](/operations/control-plane-recovery). A new Compose

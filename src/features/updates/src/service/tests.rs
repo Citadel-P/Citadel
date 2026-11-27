@@ -345,8 +345,8 @@ async fn database_version_reports_the_connected_engine_without_claiming_availabi
     let (service, store, source, _) = fixture();
     for (number, expected) in [
         (170011, Some("17.11")),
-        (180006, Some("18.6")),
-        (180000, Some("18.0")),
+        (190001, Some("19.1")),
+        (190000, Some("19.0")),
         (0, None),
         (90624, None),
         (1000000, None),

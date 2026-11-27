@@ -66,6 +66,7 @@ pub(super) fn build(
                             pool.clone(),
                             config.database_url.clone(),
                             config.execution.tools.pg_dump.clone(),
+                            config.execution.tools.pg_restore.clone(),
                             options.settings.working_directory.join("citadel-system"),
                             options.maximum_log_bytes,
                             env!("CITADEL_BUILD_VERSION").to_owned(),

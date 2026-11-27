@@ -1,6 +1,23 @@
 services:
   postgres:
-    image: postgres:17.5-alpine
+    image: postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f
+    entrypoint:
+      - /bin/bash
+      - -ec
+      - |
+        refuse() { echo "Citadel requires a dedicated PostgreSQL 19 volume at /var/lib/postgresql/19/docker. Inspect and preserve existing storage." >&2; exit 1; }
+        [[ $$PG_MAJOR == 19 && $$PGDATA == /var/lib/postgresql/19/docker ]] || refuse
+        cd /var/lib/postgresql
+        shopt -s nullglob dotglob
+        for path in * 19/*; do
+          [[ ( $$path == 19 || $$path == 19/docker ) && -d $$path && ! -L $$path ]] || refuse
+        done
+        if [[ -e 19 ]]; then
+          [[ -f 19/docker/PG_VERSION && ! -L 19/docker/PG_VERSION ]] && cmp -s 19/docker/PG_VERSION <(printf '19\n') || refuse
+        fi
+        exec docker-entrypoint.sh "$$@"
+      - --
+    command: ["postgres"]
     environment:
       POSTGRES_USER: citadel
       POSTGRES_PASSWORD: citadel-e2e
@@ -11,7 +28,7 @@ services:
       timeout: 5s
       retries: 30
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql
     networks:
       - citadel-e2e
 

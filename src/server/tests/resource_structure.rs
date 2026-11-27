@@ -228,7 +228,8 @@ fn architectural_groups_enforce_inward_dependencies() {
                 );
             }
             // Small infrastructure utilities must not grow dependencies on business
-            // features or adapters. Process execution implements its one feature port.
+            // features or adapters. Allow only the execution port and the shared
+            // PostgreSQL version policy for their respective infrastructure crates.
             let package_name = package["name"].as_str().unwrap();
             if package_name == "citadel-identity" {
                 assert_ne!(
@@ -245,9 +246,14 @@ fn architectural_groups_enforce_inward_dependencies() {
                 "citadel-processes",
             ]
             .contains(&package_name);
+            let allowed_dependency = match package_name {
+                "citadel-processes" => Some(("citadel-execution", "execution")),
+                "citadel-database" => Some(("citadel-primitives", "primitives")),
+                _ => None,
+            };
             if foundational && name.starts_with("citadel-") {
                 assert!(
-                    package_name == "citadel-processes" && name == "citadel-execution",
+                    allowed_dependency.is_some_and(|(package, _)| name == package),
                     "{package_name} is foundational infrastructure but depends on {name}"
                 );
             }
@@ -255,7 +261,8 @@ fn architectural_groups_enforce_inward_dependencies() {
                 let target = Path::new(path).canonicalize().unwrap();
                 if foundational {
                     assert!(
-                        package_name == "citadel-processes" && target == features.join("execution"),
+                        allowed_dependency
+                            .is_some_and(|(_, directory)| target == features.join(directory)),
                         "{package_name} must not depend on {}",
                         target.display()
                     );

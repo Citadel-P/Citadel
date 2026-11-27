@@ -327,9 +327,9 @@ impl ProcessRunner for DatabaseResolver {
                 std::fs::read_to_string(request.current_directory.as_ref().unwrap().join(".env"))
                     .unwrap();
             let mut value = resolved();
-            let target = env.contains("PG_DATA=/var/lib/postgresql/18/docker");
+            let target = env.contains("PG_DATA=/var/lib/postgresql/19/docker");
             value["services"]["pg_db"]["environment"]["PGDATA"] =
-                json!("/var/lib/postgresql/18/docker");
+                json!("/var/lib/postgresql/19/docker");
             if target {
                 let image = env
                     .lines()
@@ -338,7 +338,7 @@ impl ProcessRunner for DatabaseResolver {
                 value["services"]["pg_db"]["image"] = json!(image);
                 value["services"]["server"]["environment"]["PG_IMAGE"] = json!(image);
                 value["services"]["server"]["environment"]["PG_DATA"] =
-                    json!("/var/lib/postgresql/18/docker");
+                    json!("/var/lib/postgresql/19/docker");
                 if self.change_password {
                     value["services"]["server"]["environment"]["PG_PASSWORD"] = json!("changed");
                     value["services"]["pg_db"]["environment"]["POSTGRES_PASSWORD"] =
@@ -362,10 +362,11 @@ async fn database_replacement_changes_only_engine_selectors_and_preserves_core()
         let fixture = Fixture::new(true);
         let path = fixture.inputs.directory.join(".env");
         let before = std::fs::read(&path).unwrap();
-        let plan = super::database::database_update(180001).unwrap().unwrap();
+        let plan = super::SYNTHETIC.update(190000).unwrap().unwrap();
         let candidate = fixture
             .inputs
             .prepare_database_replacement(
+                super::SYNTHETIC,
                 &plan,
                 &DatabaseResolver { change_password },
                 &CancellationToken::new(),

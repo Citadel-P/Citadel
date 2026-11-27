@@ -529,10 +529,10 @@ manifest records that dependency. Preserve the external value separately or
 the recovered installation will not be able to authenticate existing sessions
 or decrypt stored credentials.
 
-The official Citadel Core image includes `pg_dump`. Native installations and
-custom images must provide a PostgreSQL client that supports the configured
-server version. Set `CITADEL_PG_DUMP_PATH` when `pg_dump` is not available
-on `PATH`.
+The official Core image includes PG19 `pg_dump` and `pg_restore`. Native
+installations and custom images need both PG19 tools to create and verify a
+system backup. Use `CITADEL_PG_DUMP_PATH` and `CITADEL_PG_RESTORE_PATH`
+when they are outside `PATH`.
 
 ## Docker Platform Backups
 

@@ -30,6 +30,11 @@ pub(super) async fn reserve(
     }
     let mut tx = pool.begin().await.map_err(storage)?;
     lock_identity_mutations(&mut tx).await.map_err(storage)?;
+    if schedule.include_core {
+        citadel_database::server_version(&mut tx)
+            .await
+            .map_err(|e| UpdateError::Conflict(e.to_string()))?;
+    }
     let changed = sqlx::query("UPDATE agentupdatesettings SET lastscheduledminute=$2 WHERE id=1 AND schedule=$1 AND (lastscheduledminute IS NULL OR lastscheduledminute<$2) AND date_trunc('minute',now())=$2")
         .bind(sqlx::types::Json(schedule)).bind(minute).execute(&mut *tx).await.map_err(storage)?.rows_affected();
     if changed == 0 {
@@ -191,6 +196,9 @@ pub(super) async fn claim_core(
             "Installation identity changed.".into(),
         ));
     }
+    citadel_database::server_version(&mut tx)
+        .await
+        .map_err(|e| UpdateError::Conflict(e.to_string()))?;
     let op = UpdateOperation::approve(
         plan.clone(),
         ActorId::new(SYSTEM_ACTOR_ID),

@@ -46,7 +46,7 @@ export function CoreReviewDetails({ review }: { review: UpdateReviewView }) {
       </div>
       {review.component === 'Database' && (
         <p className="text-sm text-muted-foreground">
-          This updates PostgreSQL within its current major version and keeps the existing data directory. Core and Agent
+          This updates PostgreSQL to a newer qualified 19.x minor and keeps the existing data directory. Core and Agent
           versions do not change.
         </p>
       )}

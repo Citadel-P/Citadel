@@ -14,6 +14,7 @@ pub(crate) async fn recover_source(
     };
     use citadel_updates::{UpdateInstallationRuntime, UpdateRepository};
     let database = citadel_server::config::DatabaseConfig::from_env()?;
+    let version = citadel_database::admit_database(&database.database_url).await?;
     let pool =
         connection::connect_pool(&database.database_url, 1, std::time::Duration::from_secs(5))
             .await?;
@@ -22,7 +23,12 @@ pub(crate) async fn recover_source(
         .active()
         .await?
         .ok_or("No update retains installation ownership.")?;
-    if operation.id != operation_id
+    if operation
+        .plan
+        .database
+        .as_ref()
+        .is_some_and(|p| p.source_version != version)
+        || operation.id != operation_id
         || operation.plan.source.catalog_sha256
             != citadel_database::MigrationRunner::catalog_sha256()?
     {

@@ -68,7 +68,7 @@ it('updates the saved frequency through the existing installation realtime notif
 });
 
 it('refreshes the database version through the existing update notification', async () => {
-  let databaseVersion = '17.11';
+  let databaseVersion = '19.0';
   const fake = new FakeRealtimeConnection();
   server.use(
     http.get('http://localhost/api/v1/profile', () => HttpResponse.json({ authorization: { isAdministrator: true } })),
@@ -101,11 +101,11 @@ it('refreshes the database version through the existing update notification', as
       groups: { connectionFactory: () => fake, startConnection: (connection) => connection.start() },
     },
   );
-  expect(await screen.findByText('PostgreSQL 17.11')).toBeVisible();
-  databaseVersion = '18.6';
+  expect(await screen.findByText('PostgreSQL 19.0')).toBeVisible();
+  databaseVersion = '19.1';
   act(() => fake.emit('ApplicationInfoChanged'));
-  expect(await screen.findByText('PostgreSQL 18.6')).toBeVisible();
-  expect(screen.queryByText('PostgreSQL 17.11')).not.toBeInTheDocument();
+  expect(await screen.findByText('PostgreSQL 19.1')).toBeVisible();
+  expect(screen.queryByText('PostgreSQL 19.0')).not.toBeInTheDocument();
 });
 
 it('receives scoped activity events without refreshing the history list', async () => {

@@ -132,6 +132,7 @@ impl Fixture {
             pool,
             url.into(),
             executable,
+            std::env::var_os("CITADEL_PG_RESTORE").unwrap_or_else(|| "pg_restore".into()),
             self.root.path().join("unused"),
             4096,
             "0.1.1".into(),
@@ -377,7 +378,7 @@ async fn checkpoint_builds_real_bundle_and_preserves_failed_or_interrupted_attem
         let body = match case {
             0 => "echo private-checkpoint-fixture >&2; exit 1",
             1 => "echo started > started; exec /bin/sleep 30",
-            2 => "echo PG_PASSWORD=changed >> ../../installer/.env; printf PGDMPfixture > \"$5\"",
+            2 => "echo PG_PASSWORD=changed >> ../../installer/.env; exec pg_dump \"$@\"",
             3 => "exit 99",
             _ => "printf invalid > \"$5\"",
         };
@@ -387,7 +388,7 @@ async fn checkpoint_builds_real_bundle_and_preserves_failed_or_interrupted_attem
             "../../installer/.env",
             f.root.path().join("installer/.env").to_str().unwrap(),
         );
-        fs::write(&script, format!("#!/bin/sh\n{body}\n")).unwrap();
+        fs::write(&script, format!("#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'pg_dump (PostgreSQL) 19.0'; exit 0; fi\n{body}\n")).unwrap();
         fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
         let builder = f.builder(pool.clone(), &url, script.into_os_string());
         let token = CancellationToken::new();

@@ -4,7 +4,8 @@ set -euo pipefail
 # Exercise the packaged binaries against disposable services and data.
 image="${1:-citadel-rust:local}"
 bash "$(dirname "${BASH_SOURCE[0]}")/test-script-sdk-image.sh" "$image"
-postgres_image=postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5
+bash "$(dirname "${BASH_SOURCE[0]}")/test-postgres-storage.sh"
+postgres_image=postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f
 fixture="citadel-runtime-test-$$-$RANDOM"
 core="$fixture-core"
 database="$fixture-db"
@@ -64,6 +65,9 @@ docker exec --user 65532:0 -i "$core" sh -s <<'SH'
 set -eu
 wget -qO /tmp/index.html http://127.0.0.1:18443/
 cmp /tmp/index.html /app/wwwroot/index.html
+for tool in pg_dump pg_restore psql createdb; do
+  "$tool" --version | grep -E "^$tool \(PostgreSQL\) 19\.[0-9]+$"
+done
 export PGPASSWORD=runtime-test-only PGHOST=postgres PGUSER=citadel
 pg_dump --format=custom --no-owner --no-privileges -f /tmp/core.dump citadel
 createdb restored

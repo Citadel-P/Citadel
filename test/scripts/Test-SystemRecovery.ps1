@@ -1,6 +1,8 @@
 param(
     [string]$DevContainer = 'citadel_devcontainer-workspace-1',
-    [string]$PostgresImage = 'postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af'
+    # The Rust test binary built in the workspace requires a GNU client runtime.
+    [string]$ClientImage = 'postgres@sha256:4ea94de574c17f0372722806c949757050fbb1cd7648410fe45d6bba275cc00e',
+    [string]$PostgresImage = 'postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,7 +39,7 @@ try {
         --volume "$($target.Name):/target:ro" --entrypoint $testBinary `
         --env "CITADEL_RECOVERY_SOURCE_DATABASE_URL=postgres://citadel:citadel@${database}:5432/source" `
         --env "CITADEL_RECOVERY_TARGET_DATABASE_URL=postgres://citadel:citadel@${database}:5432/target" `
-        $PostgresImage --ignored --nocapture
+        $ClientImage --ignored --nocapture
     if ($LASTEXITCODE -ne 0) { throw 'Citadel system backup/restore acceptance failed.' }
 } finally {
     & docker rm --force --volumes $database | Out-Null

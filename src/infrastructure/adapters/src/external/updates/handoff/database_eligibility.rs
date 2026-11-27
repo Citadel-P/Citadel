@@ -44,7 +44,12 @@ pub(in crate::external::updates) async fn check_replacement_eligibility(
         return Ok(());
     };
     inputs
-        .prepare_database_replacement(database, process, cancellation)
+        .prepare_database_replacement(
+            super::super::compose::QUALIFIED,
+            database,
+            process,
+            cancellation,
+        )
         .await?;
     let home = super::runtime::private_home()?;
     let docker = LocalDocker {
@@ -53,7 +58,7 @@ pub(in crate::external::updates) async fn check_replacement_eligibility(
         home: home.path(),
         deadline: Instant::now() + Duration::from_secs(60),
     };
-    check_database_source(&docker, &reg, database).await?;
+    check_database_source(&docker, &reg, database, super::super::compose::QUALIFIED).await?;
     Ok(())
 }
 
@@ -61,8 +66,9 @@ pub(super) async fn check_database_source(
     docker: &LocalDocker<'_>,
     registration: &RegisteredComposeInstallation,
     plan: &DatabaseUpdatePlan,
+    qualified: super::super::compose::QualifiedDatabase,
 ) -> Result<Value, UpdateError> {
-    super::super::compose::validate_database_update(plan)?;
+    qualified.validate(plan)?;
     let database = verification::container(docker, &registration.database_container_id).await?;
     verification::database_running(&database)?;
     let source_data = format!("/var/lib/postgresql/{}/docker", plan.source_version / 10000);

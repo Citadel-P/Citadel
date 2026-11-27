@@ -66,7 +66,12 @@ impl OwnedUpdateHelper {
         };
         let candidate = if let Some(database) = &self.intent.operation.plan.database {
             inputs
-                .prepare_database_replacement(database, process, cancellation)
+                .prepare_database_replacement(
+                    super::super::compose::QUALIFIED,
+                    database,
+                    process,
+                    cancellation,
+                )
                 .await?
         } else {
             inputs
@@ -92,7 +97,14 @@ impl OwnedUpdateHelper {
             return Err(conflict());
         }
         let database_intent = if self.intent.operation.plan.database.is_some() {
-            Some(super::database::DatabaseReplacement::prepare(&docker, &self.intent).await?)
+            Some(
+                super::database::DatabaseReplacement::prepare(
+                    &docker,
+                    &self.intent,
+                    super::super::compose::QUALIFIED,
+                )
+                .await?,
+            )
         } else {
             None
         };
@@ -150,7 +162,8 @@ impl OwnedUpdateHelper {
         same_runtime(&database, &current)?;
         verification::database_running(&current)?;
         if self.intent.operation.plan.database.is_some() {
-            self.replace_database(&docker, &mut execution).await?;
+            self.replace_database(&docker, &mut execution, super::super::compose::QUALIFIED)
+                .await?;
         }
         let mut args = vec![
             "compose",

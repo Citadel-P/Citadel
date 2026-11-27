@@ -7,6 +7,7 @@ use serde_json::Value;
 const SERVICE_FIELDS: &[&str] = &[
     "image",
     "command",
+    "entrypoint",
     "cpus",
     "mem_limit",
     "memswap_limit",
@@ -150,7 +151,7 @@ pub(super) fn validate_resolved(config: &Value) -> Result<(), UpdateError> {
     if core["depends_on"]["pg_db"]["condition"] != "service_healthy"
         || database["environment"]
             .get("PGDATA")
-            .is_some_and(|path| path != "/var/lib/postgresql/18/docker")
+            .is_some_and(|path| path != "/var/lib/postgresql/19/docker")
         || database
             .get("ports")
             .is_some_and(|v| v.as_array().is_none_or(|v| !v.is_empty()))
@@ -240,6 +241,21 @@ pub(super) fn validate_resolved(config: &Value) -> Result<(), UpdateError> {
 // Allow the packaged buffer budget and literal operator sizing, without opening
 // the installation profile to shell commands or external PostgreSQL config files.
 fn validate_database_command(name: &str, service: &Value) -> Result<(), UpdateError> {
+    if let Some(entry) = service.get("entrypoint").filter(|v| !v.is_null()) {
+        let guard = include_str!("postgres-entrypoint.sh");
+        let Some(args) = entry.as_array() else {
+            return Err(invalid());
+        };
+        if name != "pg_db"
+            || args.len() != 4
+            || args[0] != "/bin/bash"
+            || args[1] != "-ec"
+            || args[3] != "--"
+            || !(args[2] == guard || args[2] == guard.replace('$', "$$"))
+        {
+            return Err(invalid());
+        }
+    }
     // Compose emits null for the image's default command even when the source
     // file has no command key. That is not an executable override.
     let Some(command) = service.get("command").filter(|value| !value.is_null()) else {

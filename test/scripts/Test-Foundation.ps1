@@ -1,5 +1,5 @@
 param(
-    [string]$PostgresImage = 'postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5'
+    [string]$PostgresImage = 'postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f'
 )
 
 $ErrorActionPreference = 'Stop'

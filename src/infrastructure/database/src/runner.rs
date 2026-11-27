@@ -13,6 +13,8 @@ const ADVISORY_LOCK_RETRY: Duration = Duration::from_millis(100);
 
 #[derive(Debug, thiserror::Error)]
 pub enum MigrationError {
+    #[error("{0}")]
+    Version(String),
     #[error("invalid embedded migration manifest: {0}")]
     InvalidManifest(String),
     #[error(
@@ -104,6 +106,7 @@ impl MigrationRunner {
                     operation: "connection",
                     timeout: CONNECTION_TIMEOUT,
                 })??;
+        crate::server_version(&mut connection).await?;
         acquire_advisory_lock(&mut connection).await?;
         sqlx::raw_sql("SET lock_timeout = '30s'; SET statement_timeout = '15min';")
             .execute(&mut connection)
@@ -378,7 +381,8 @@ mod tests {
                 .map(|migration| migration.id)
                 .collect::<Vec<_>>(),
             [
-                "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010"
+                "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010",
+                "0011"
             ],
             "the release catalog ends at the consolidated migration"
         );

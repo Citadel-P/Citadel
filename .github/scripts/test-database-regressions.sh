@@ -36,7 +36,7 @@ docker create --name "$container" \
   --env POSTGRES_USER=citadel_test \
   --env POSTGRES_PASSWORD=citadel_test \
   --env POSTGRES_DB=citadel_authorization \
-  postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5 \
+  postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f \
   -c shared_preload_libraries=pg_stat_statements
 owned=true
 timeout --kill-after=5s 60s docker start "$container"

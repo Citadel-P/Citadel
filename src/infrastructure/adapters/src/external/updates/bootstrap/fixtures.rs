@@ -205,6 +205,15 @@ impl ProcessRunner for Runner {
             }
             let value = match args.as_slice() {
                 ["compose", ..] => self.config.clone(),
+                ["exec", DATABASE, "sh", "-ec", command]
+                    if command.contains("SHOW server_version_num") =>
+                {
+                    match self.mode {
+                        "old-database" => json!(180006),
+                        "unknown-database" => json!(null),
+                        _ => json!(190000),
+                    }
+                }
                 ["info", ..] => {
                     let n = self.observations.fetch_add(1, Ordering::SeqCst);
                     json!({"ID":if self.mode=="changed-daemon" && n%2==1 {"other"} else {"daemon"}, "OSType":"linux","DockerRootDir": if self.mode=="rootless" {"/home/citadel-demo/.local/share/docker"} else {"/var/lib/docker"}, "SecurityOptions": if self.mode=="rootless" {json!(["name=rootless"])} else {json!(["name=seccomp"])}})

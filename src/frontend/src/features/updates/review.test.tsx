@@ -14,7 +14,7 @@ import { ReviewUpdates } from './review';
 const status: UpdateStatusView = {
   instanceId: 'instance',
   installedVersion: '0.1.1',
-  databaseVersion: '18.6',
+  databaseVersion: '19.0',
   databaseAvailable: null,
   databaseManaged: false,
   databaseInstallation: DatabaseInstallationView.Unknown,
@@ -129,8 +129,8 @@ it('reviews a database-only upgrade through the existing confirmation dialog', a
       return HttpResponse.json({
         id: 'database-review',
         component: 'Database',
-        installedVersion: '17.11',
-        targetVersion: '18.6',
+        installedVersion: '19.0',
+        targetVersion: '19.1',
         expiresAt: '2099-01-01T00:00:00Z',
       });
     }),
@@ -140,17 +140,17 @@ it('reviews a database-only upgrade through the existing confirmation dialog', a
       status={{
         ...status,
         available: null,
-        databaseVersion: '17.11',
+        databaseVersion: '19.0',
         databaseManaged: true,
-        databaseAvailable: '18.6',
+        databaseAvailable: '19.1',
       }}
     />,
   );
   await user.click(screen.getByRole('button', { name: 'Review and update' }));
   const dialog = await screen.findByRole('dialog');
-  expect(await within(dialog).findByText('17.11')).toBeVisible();
+  expect(await within(dialog).findByText('19.0')).toBeVisible();
   expect(within(dialog).getByRole('heading', { name: 'Update PostgreSQL' })).toBeVisible();
-  expect(review).toHaveBeenCalledExactlyOnceWith({ version: '18.6', database: true });
+  expect(review).toHaveBeenCalledExactlyOnceWith({ version: '19.1', database: true });
   expect(within(dialog).getByRole('button', { name: 'Update and restart' })).toBeEnabled();
 });
 

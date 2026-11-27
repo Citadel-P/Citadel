@@ -216,12 +216,12 @@ mod tests {
             UpdateError::Validation(reason.into()),
         ] {
             view.set_database_update(Ok(Some(DatabaseUpdatePlan {
-                source_version: 180001,
-                target_version: 180006,
+                source_version: 190000,
+                target_version: 190001,
                 target_image: format!("postgres@sha256:{}", "a".repeat(64)),
             })));
             assert!(view.database_managed);
-            assert_eq!(view.database_available.as_deref(), Some("18.6"));
+            assert_eq!(view.database_available.as_deref(), Some("19.1"));
             assert!(view.database_update_reason.is_none());
 
             view.set_database_update(Err(error));

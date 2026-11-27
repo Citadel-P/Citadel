@@ -84,7 +84,7 @@ pub(in crate::external::updates) fn profile_fixture(config: &mut Value) {
         config["services"][role]["healthcheck"] = json!({"test": ["CMD", "healthcheck"]});
     }
     config["services"]["server"]["depends_on"] = json!({"pg_db": {"condition":"service_healthy"}});
-    config["services"]["pg_db"]["image"] = json!("postgres:18.6");
+    config["services"]["pg_db"]["image"] = json!("postgres:19.0");
     config["services"]["server"]["volumes"] = json!([
         {"type":"volume", "source":"citadel_data", "target":"/app/data"},
         {"type":"bind", "source":"/", "target":"/host", "read_only":true},
@@ -528,7 +528,7 @@ fn database_buffer_budget_preserves_the_restricted_command_profile() {
 fn explicit_installer_database_path_preserves_the_supported_volume_layout() {
     let fixture = Fixture::new(false);
     let mut config = resolved();
-    config["services"]["pg_db"]["environment"]["PGDATA"] = json!("/var/lib/postgresql/18/docker");
+    config["services"]["pg_db"]["environment"]["PGDATA"] = json!("/var/lib/postgresql/19/docker");
     assert!(
         fixture
             .inputs

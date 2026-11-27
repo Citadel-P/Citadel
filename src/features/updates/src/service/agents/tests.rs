@@ -1173,7 +1173,7 @@ impl ReleaseSource for Fixture {
 }
 impl ReleaseCheckRepository for Fixture {
     fn database_version(&self) -> BoxFuture<'_, Result<u32, UpdateError>> {
-        Box::pin(async { Ok(180006) })
+        Box::pin(async { Ok(190000) })
     }
 
     fn observe_core_availability<'a>(

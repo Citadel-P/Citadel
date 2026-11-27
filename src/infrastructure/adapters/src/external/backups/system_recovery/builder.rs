@@ -21,6 +21,7 @@ pub struct PgDumpSystemBackupBuilder {
     pool: PgPool,
     database_url: String,
     pg_dump: OsString,
+    pg_restore: OsString,
     staging_root: PathBuf,
     maximum_output: usize,
     recovery_assets: Option<RecoveryAssets>,
@@ -42,6 +43,7 @@ impl PgDumpSystemBackupBuilder {
         pool: PgPool,
         database_url: String,
         pg_dump: impl Into<OsString>,
+        pg_restore: impl Into<OsString>,
         staging_root: PathBuf,
         maximum_output: usize,
         source_core_version: String,
@@ -54,6 +56,7 @@ impl PgDumpSystemBackupBuilder {
             pool,
             database_url,
             pg_dump: pg_dump.into(),
+            pg_restore: pg_restore.into(),
             staging_root,
             maximum_output,
             recovery_assets: None,
@@ -134,6 +137,16 @@ impl PgDumpSystemBackupBuilder {
     ) -> Result<(), BackupError> {
         // Ordinary first backups initialize identity before taking the snapshot.
         // Update checkpoints must only observe the already approved identity.
+        let database_dir = directory.join("database");
+        let dump = database_dir.join("citadel.dump");
+        let (arguments, environment) = pg_dump_request(&self.database_url, &dump)?;
+        let server_version_num = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return Err(BackupError::External("Backup cancelled.".into())),
+            result = citadel_database::admit_database(&self.database_url) => result.map_err(|e| BackupError::Validation(e.to_string()))?,
+        };
+        let dump_tool_version_num =
+            super::verify_backup_tools(&self.pg_dump, &self.pg_restore, cancellation).await?;
         let instance_id = match self.expected_instance {
             Some(expected) => {
                 let read = existing_instance_id(&self.pool);
@@ -152,13 +165,10 @@ impl PgDumpSystemBackupBuilder {
             }
             None => instance_id(&self.pool).await?,
         };
-        let database_dir = directory.join("database");
         tokio::fs::create_dir(&database_dir)
             .await
             .map_err(storage)?;
         set_private_directory(&database_dir)?;
-        let dump = database_dir.join("citadel.dump");
-        let (arguments, environment) = pg_dump_request(&self.database_url, &dump)?;
         let mut request = ProcessRequest::new(self.pg_dump.clone())
             .args(arguments)
             .current_dir(directory)
@@ -182,6 +192,14 @@ impl PgDumpSystemBackupBuilder {
         }
         validate_dump(&dump).await?;
         set_private_file(&dump)?;
+        super::versions::verify_archive(
+            &self.pg_restore,
+            &dump,
+            server_version_num,
+            dump_tool_version_num,
+            cancellation,
+        )
+        .await?;
 
         let mut checksums = BTreeMap::new();
         checksums.insert(
@@ -196,12 +214,14 @@ impl PgDumpSystemBackupBuilder {
             ),
         };
         let manifest = RecoveryManifest {
-            format_version: 1,
+            format_version: 2,
             product: "citadel",
             core_version: &self.source_core_version,
             instance_id,
             created_at: chrono::Utc::now(),
             database: DatabaseManifest {
+                server_version_num,
+                dump_tool_version_num,
                 engine: "PostgreSQL",
                 path: "database/citadel.dump",
                 sha256: checksums["database/citadel.dump"].clone(),

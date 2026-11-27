@@ -2,7 +2,7 @@ param(
     [string]$WorkspaceContainer = 'citadel_devcontainer-workspace-1',
     [string]$ForgejoImage = 'codeberg.org/forgejo/forgejo@sha256:71863f6b6c5837a27b3a2d133c3161c78a432aa878d57798d74b1d917ff842be',
     [string]$VaultImage = 'hashicorp/vault@sha256:3fd53308acccd9e4e83fde3e6c6cf5b15e0f7fac1ff7510780b8b23f5e4c3de7',
-    [string]$PostgresImage = 'postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5'
+    [string]$PostgresImage = 'postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f'
 )
 $ErrorActionPreference = 'Stop'
 $workspace = (& docker inspect $WorkspaceContainer | ConvertFrom-Json)[0]

@@ -252,8 +252,9 @@ class LocalUpgradeTests(unittest.TestCase):
         local = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(local)
         fixture = local.LocalUpgrade('unused', Path('/unused'))
-        response = dict(databaseInstallation='Bundled', databaseManaged=True, databaseAvailable='18.6',
-                        component='Database', targetVersion='18.6', id='operation',
+        fixture.database_target = '19.1'  # Synthetic response for the failure boundary.
+        response = dict(databaseInstallation='Bundled', databaseManaged=True, databaseAvailable='19.1',
+                        component='Database', targetVersion='19.1', id='operation',
                         phase='Succeeded', operation=None)
         with (patch.object(fixture, 'setup_installation', return_value=(
                 dict(coreContainerId='core', databaseContainerId='db'), None, 'password')),

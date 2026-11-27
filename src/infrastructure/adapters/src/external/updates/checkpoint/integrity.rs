@@ -93,7 +93,12 @@ pub(super) async fn verify_checkpoint_artifacts(
         () = cancellation.cancelled() => return Err(UpdateError::Cancelled),
         value = inspect_recovery_bundle(&receipt.bundle) => value.map_err(|_| failed())?,
     };
-    if bundle.instance_id != operation.instance_id
+    if operation
+        .plan
+        .database
+        .as_ref()
+        .is_some_and(|plan| plan.source_version != bundle.server_version_num)
+        || bundle.instance_id != operation.instance_id
         || bundle.core_version != receipt.source.version
         || bundle.checksums_sha256 != receipt.bundle_checksums_sha256
         || bundle.required_external_configuration != receipt.required_external_configuration

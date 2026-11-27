@@ -74,6 +74,7 @@ async fn local_restart_reconciles_exact_helpers_and_fences_late_starts() {
         pool.clone(),
         url.clone(),
         "missing-citadel-test-pg-dump",
+        "pg_restore",
         staging.clone(),
         16384,
         "0.1.1".into(),

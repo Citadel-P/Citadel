@@ -74,7 +74,7 @@ fn checkpoint(helper: &OwnedUpdateHelper) -> JournalDirectory {
     write(&bundle.join("database/citadel.dump"), dump);
     let signing = [8_u8; 32];
     write(&bundle.join("recovery/agent/signing-key"), &signing);
-    let manifest = serde_json::to_vec(&json!({"formatVersion":1,"product":"citadel","coreVersion":op.plan.source.version,"instanceId":op.instance_id,"createdAt":chrono::Utc::now(),"database":{"engine":"PostgreSQL","path":"database/citadel.dump","sha256":hash(dump)},"requiredExternalConfiguration":["CITADEL_JWT_KEY","CITADEL_SECRETS_ENCRYPTION_KEY"],"recoveryFiles":["recovery/agent/signing-key"]})).unwrap();
+    let manifest = serde_json::to_vec(&json!({"formatVersion":2,"product":"citadel","coreVersion":op.plan.source.version,"instanceId":op.instance_id,"createdAt":chrono::Utc::now(),"database":{"engine":"PostgreSQL","serverVersionNum":190000,"dumpToolVersionNum":190000,"path":"database/citadel.dump","sha256":hash(dump)},"requiredExternalConfiguration":["CITADEL_JWT_KEY","CITADEL_SECRETS_ENCRYPTION_KEY"],"recoveryFiles":["recovery/agent/signing-key"]})).unwrap();
     write(&bundle.join("manifest.json"), &manifest);
     let checksums = serde_json::to_vec(
         &json!({"manifest.json":hash(&manifest),"database/citadel.dump":hash(dump),"recovery/agent/signing-key":hash(&signing)}),

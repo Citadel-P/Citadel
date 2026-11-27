@@ -35,7 +35,7 @@ vi.mock('@/lib/use-profile-date-time', () => ({ useProfileDateTimeFormatter: () 
 const status = {
   instanceId: '019a0000-0000-7000-8000-000000000001',
   installedVersion: '0.1.1',
-  databaseVersion: '18.6',
+  databaseVersion: '19.0',
   databaseAvailable: null,
   databaseManaged: false,
   databaseInstallation: 'External',
@@ -388,7 +388,7 @@ it('keeps current Agents visible and updates only the selected outdated Agent wh
   const info = await screen.findByRole('region', { name: 'Update information' });
   expect(info).toHaveTextContent('Citadel CoreUp to date');
   expect(info).toHaveTextContent('DatabaseIn-app updates unavailable');
-  expect(within(info).getByText('PostgreSQL 18.6')).toBeVisible();
+  expect(within(info).getByText('PostgreSQL 19.0')).toBeVisible();
   expect(info).toHaveTextContent('1 Agent needs attention');
   expect(within(info).queryByText('Agent C')).not.toBeInTheDocument();
   const expand = within(info).getByRole('button', { name: /Agents.*1 Agent needs attention/ });
@@ -630,11 +630,11 @@ it('lets an expired Team disable the retained scope while keeping the saved fiel
 it('shows the live database version without claiming an engine update is available', async () => {
   server.use(
     http.get('http://localhost/api/v1/updates', () =>
-      HttpResponse.json({ ...status, available: null, databaseVersion: '17.11' }),
+      HttpResponse.json({ ...status, available: null, databaseVersion: '19.0' }),
     ),
   );
   renderCitadel(<UpdatesPage />, { route: '/updates' });
-  expect(await screen.findByText('PostgreSQL 17.11')).toBeVisible();
+  expect(await screen.findByText('PostgreSQL 19.0')).toBeVisible();
   expect(screen.getByText('In-app updates unavailable')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Review and update' })).toBeDisabled();
 });
@@ -714,7 +714,7 @@ it.each([
     'In-app updates not configured',
     'Register the installation',
   ],
-  ['Bundled', 'This PostgreSQL major version requires a manual migration.', 'Update blocked', null],
+  ['Bundled', 'Citadel requires PostgreSQL 19.x. Observed PostgreSQL major 18.', 'Update blocked', null],
   ['Unknown', 'Could not verify how PostgreSQL is deployed.', 'Status unavailable', 'Register the installation'],
 ])(
   'distinguishes %s database eligibility from externally managed databases',

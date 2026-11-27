@@ -85,8 +85,9 @@ transport or durable recovery behavior.
 
 ## Test fixture settings
 
-Use PostgreSQL compatible with the current catalog. Set only the variables needed
-by the selected suite, pointing to **disposable** databases:
+Use a disposable PostgreSQL 19.x server and PG19 client tools. Set only the variables needed
+by the selected suite, pointing to **disposable** databases. The negative
+startup test uses a separate, empty older-major database via `CITADEL_UNSUPPORTED_DATABASE_URL`.
 
 | Fixture | Variable |
 | --- | --- |
@@ -213,9 +214,9 @@ With the local Core runtime image built:
 
 ```bash
 python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local
-python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --database-source 18
+python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --database-source 19
 # Optional real rootless daemon:
-python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --database-source 18 --rootless
+python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --database-source 19 --rootless
 # Retain a fixture for manual browser approval:
 python3 test/scripts/test-instance-upgrade-local.py --runtime-image citadel-core:local --browser --port 18081
 ```
@@ -225,8 +226,7 @@ toolchain, then exercises real review, approval, replacement, interruption recov
 and checkpoint restoration. Its release discovery/trust fixture is private and
 never shipped. Use `--source-tree /path/to/separate/checkout --scenario upgrade`
 for a specific source revision. Run `--help` for individual interruption scenarios.
-Database mode qualifies the supported PostgreSQL 18 minor replacement, not a major
-upgrade or PostgreSQL 17 transition.
+Database mode requires two distinct released PG19 minors. With 19.0 as the qualified target it exits with status 77 (not runnable). Core update scenarios can run on 19.0.
 
 Browser mode needs installed frontend dependencies, prints its own login and leaves
 approval to you. Ctrl+C cleans up its installation; private failure evidence stays

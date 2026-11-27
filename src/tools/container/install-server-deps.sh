@@ -17,7 +17,7 @@ esac
 # Apply fixes to packages inherited from the pinned Deno image too.
 apk upgrade --no-cache
 apk add --no-cache \
-  bash ca-certificates cosign git openssh-client postgresql18-client restic setpriv tini
+  bash ca-certificates cosign git openssh-client libedit lz4-libs zstd-libs krb5-libs libldap restic setpriv tini
 apk add --no-cache --virtual .fetch-deps curl
 
 archive_path=$(mktemp)
@@ -38,6 +38,8 @@ docker compose version
 docker buildx version
 deno --version
 shoutrrr --version
-pg_dump --version
+for tool in pg_dump pg_restore psql createdb; do
+  "$tool" --version | grep -E "^$tool \(PostgreSQL\) 19\.[0-9]+$"
+done
 restic version
 cosign version

@@ -13,10 +13,9 @@ pub struct DatabaseUpdatePlan {
 
 impl DatabaseUpdatePlan {
     pub fn validate(&self) -> Result<(), UpdateError> {
-        let source_major = self.source_version / 10000;
-        let target_major = self.target_version / 10000;
-        if source_major != 18
-            || target_major != 18
+        use citadel_primitives::postgres::require_supported;
+        if require_supported(self.source_version).is_err()
+            || require_supported(self.target_version).is_err()
             || self.source_version >= self.target_version
             || !self
                 .target_image

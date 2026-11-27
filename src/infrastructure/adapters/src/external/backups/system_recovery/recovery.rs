@@ -38,8 +38,20 @@ pub async fn restore_citadel_system(
             "Restore requires the original CITADEL_SECRETS_ENCRYPTION_KEY (32 decoded bytes) before modifying PostgreSQL.".into(),
         ));
     }
-    let dump = validate_recovery_bundle(&options.bundle).await?;
-    let (arguments, environment) = pg_restore_request(&options.database_url, &dump)?;
+    let bundle = inspect_recovery_bundle(&options.bundle).await?;
+    super::versions::tool_version(&options.pg_restore, "pg_restore", cancellation).await?;
+    super::versions::verify_archive(
+        &options.pg_restore,
+        &bundle.dump,
+        bundle.server_version_num,
+        bundle.dump_tool_version_num,
+        cancellation,
+    )
+    .await?;
+    let (arguments, environment) = pg_restore_request(&options.database_url, &bundle.dump)?;
+    citadel_database::admit_database(&options.database_url)
+        .await
+        .map_err(|e| BackupError::Validation(e.to_string()))?;
     let mut request = ProcessRequest::new(options.pg_restore.clone())
         .args(arguments)
         .limits(ProcessLimits {
@@ -80,12 +92,16 @@ pub(super) struct RecoveryManifest<'a> {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct DatabaseManifest<'a> {
+    pub(super) server_version_num: u32,
+    pub(super) dump_tool_version_num: u32,
     pub(super) engine: &'a str,
     pub(super) path: &'a str,
     pub(super) sha256: String,
 }
 
 pub(crate) struct CheckedRecoveryBundle {
+    pub server_version_num: u32,
+    pub dump_tool_version_num: u32,
     pub dump: PathBuf,
     pub instance_id: Uuid,
     pub core_version: String,
@@ -94,6 +110,7 @@ pub(crate) struct CheckedRecoveryBundle {
     pub checksums_sha256: String,
 }
 
+#[cfg(test)]
 pub(crate) async fn validate_recovery_bundle(root: &Path) -> Result<PathBuf, BackupError> {
     inspect_recovery_bundle(root)
         .await
@@ -114,15 +131,23 @@ pub(crate) async fn inspect_recovery_bundle(
     let checksums_path = checked_bundle_file(&root, "checksums.json").await?;
     let manifest_bytes = read_recovery_file(&manifest_path, MAX_RECOVERY_METADATA_BYTES).await?;
     let manifest: RecoveryManifest<'_> =
-        serde_json::from_slice(&manifest_bytes).map_err(|error| {
-            BackupError::Validation(format!("Recovery manifest is invalid: {error}"))
+        serde_json::from_slice(&manifest_bytes).map_err(|_| {
+            BackupError::Validation("Invalid recovery manifest. Citadel requires a format-2 bundle with PostgreSQL server and dump-tool versions.".into())
         })?;
-    if manifest.format_version != 1 || manifest.product != "citadel" {
+    if manifest.format_version != 2 || manifest.product != "citadel" {
         return Err(BackupError::Validation(
-            "Recovery bundle format or product is unsupported.".into(),
+            "Citadel system recovery requires a format-2 Citadel bundle.".into(),
         ));
     }
-    if manifest.database.engine != "PostgreSQL" {
+    for version in [
+        manifest.database.server_version_num,
+        manifest.database.dump_tool_version_num,
+    ] {
+        citadel_primitives::postgres::require_supported(version)
+            .map_err(BackupError::Validation)?;
+    }
+    if manifest.database.path != "database/citadel.dump" || manifest.database.engine != "PostgreSQL"
+    {
         return Err(BackupError::Validation(
             "Recovery bundle database engine is unsupported.".into(),
         ));
@@ -179,6 +204,8 @@ pub(crate) async fn inspect_recovery_bundle(
     let dump = checked_bundle_file(&root, manifest.database.path).await?;
     validate_dump(&dump).await?;
     Ok(CheckedRecoveryBundle {
+        server_version_num: manifest.database.server_version_num,
+        dump_tool_version_num: manifest.database.dump_tool_version_num,
         dump,
         instance_id: manifest.instance_id,
         core_version: manifest.core_version.into(),
