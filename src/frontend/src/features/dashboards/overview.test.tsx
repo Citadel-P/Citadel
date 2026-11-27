@@ -453,51 +453,63 @@ it('searches across the paginated resource state sheet and opens the matching co
   ]);
 });
 
-it('shares pinned chart history across widgets and keeps it when their layout changes', async () => {
-  const id = '10000000-0000-4000-8000-000000000001';
-  const config = fromTemplate('Infrastructure and capacity');
-  config.widgets.push({
-    ...makeWidget('Metrics'),
-    title: 'Network traffic',
-    settings: metricSettings(DashboardMetric.Network),
-  });
-  config.widgets = config.widgets
-    .filter((w) => w.settings.kind === 'Metrics')
-    .map((w) =>
-      w.settings.kind === 'Metrics'
-        ? { ...w, settings: { ...w.settings, source: { kind: DashboardSourceKind.Platform, id } } }
-        : w,
+it.each([DashboardSourceKind.Platform, DashboardSourceKind.Deployment])(
+  'shares pinned %s chart history and its live owner across widget layout changes',
+  async (kind) => {
+    const live = new FakeRealtimeConnection();
+    vi.spyOn(transport, 'createRealtimeConnection').mockReturnValue(live);
+    const id = '10000000-0000-4000-8000-000000000001';
+    const config = fromTemplate('Infrastructure and capacity');
+    config.widgets.push({
+      ...makeWidget('Metrics'),
+      title: 'Network traffic',
+      settings: metricSettings(DashboardMetric.Network),
+    });
+    config.widgets = config.widgets
+      .filter((w) => w.settings.kind === 'Metrics')
+      .map((w) => (w.settings.kind === 'Metrics' ? { ...w, settings: { ...w.settings, source: { kind, id } } } : w));
+    const history = vi.fn(() => HttpResponse.json({ stats: [] }));
+    const metadata = vi.fn(() =>
+      HttpResponse.json([{ id, name: 'Host', status: 'Online', matchesTags: true, platformId: id }]),
     );
-  const history = vi.fn(() => HttpResponse.json({ stats: [] }));
-  const metadata = vi.fn(() =>
-    HttpResponse.json([{ id, name: 'Host', status: 'Online', matchesTags: true, platformId: id }]),
-  );
-  server.use(
-    http.get('*/api/v1/dashboards/sources', metadata),
-    http.get('*/api/v1/platforms/:id/stats', history),
-    http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
-    http.get('*/api/v1/application/info', () => HttpResponse.json({})),
-    http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
-    http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
-  );
-  const board = () => (
-    <AppProvider>
-      <DashboardGrid configuration={config} />
-    </AppProvider>
-  );
-  const { rerender } = renderCitadel(board());
-  await waitFor(() => expect(screen.getAllByText('No measurements in this range.')).toHaveLength(3), { timeout: 5000 });
-  expect(history).toHaveBeenCalledTimes(1);
-  expect(metadata).toHaveBeenCalledTimes(1);
-  config.widgets = config.widgets.map((w) => ({
-    ...w,
-    title: w.title + ' edited',
-    layout: { ...w.layout, h: w.layout.h + 1 },
-  }));
-  rerender(board());
-  expect(history).toHaveBeenCalledTimes(1);
-  expect(metadata).toHaveBeenCalledTimes(1);
-});
+    server.use(
+      http.get('*/api/v1/dashboards/sources', metadata),
+      http.get(`*/api/v1/${kind === 'Platform' ? 'platforms' : 'deployments'}/:id/stats`, history),
+      http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
+      http.get('*/api/v1/application/info', () => HttpResponse.json({ realtimeTransport: 'WebSocketV1' })),
+      http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
+      http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
+    );
+    const board = () => (
+      <AppProvider>
+        <DashboardGrid configuration={config} />
+      </AppProvider>
+    );
+    const { rerender } = renderCitadel(board());
+    await waitFor(() => expect(screen.getAllByText('No measurements in this range.')).toHaveLength(3), {
+      timeout: 5000,
+    });
+    expect(history).toHaveBeenCalledTimes(1);
+    expect(metadata).toHaveBeenCalledTimes(1);
+    config.widgets = config.widgets.map((w) => ({
+      ...w,
+      title: w.title + ' edited',
+      layout: { ...w.layout, h: w.layout.h + 1 },
+    }));
+    rerender(board());
+    expect(history).toHaveBeenCalledTimes(1);
+    expect(metadata).toHaveBeenCalledTimes(1);
+    if (kind === DashboardSourceKind.Deployment) {
+      await waitFor(() =>
+        expect(
+          live.invoke.mock.calls.filter(([op, group]) => op === 'JoinGroup' && group === 'deployment-stats:' + id),
+        ).toHaveLength(1),
+      );
+      expect(live.listenerCount('WorkloadStatsUpdated')).toBe(1);
+      expect(live.invoke.mock.calls.some(([, group]) => String(group).startsWith('containers:'))).toBe(false);
+    }
+  },
+);
 
 it('links to full statistics without fetching an oversized stack history', async () => {
   const id = '10000000-0000-4000-8000-000000000002';

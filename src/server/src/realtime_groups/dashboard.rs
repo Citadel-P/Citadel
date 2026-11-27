@@ -168,6 +168,7 @@ impl Projection {
             administrator: p.is_administrator(),
         };
         let failure = |e: DashboardError| RealtimeReadError::Storage(e.to_string());
+        let mut scope = None;
         let data = match self {
             Self::Board(id) => match reader.dashboards.get(viewer, *id).await {
                 Ok(row) => json!(SavedDashboardView::from(row)),
@@ -181,16 +182,27 @@ impl Projection {
                     .await
                     .map_err(failure)?
             ),
-            Self::Sources(f) => json!(
-                reader
+            Self::Sources(f) => {
+                let sources = reader
                     .dashboards
                     .sources(viewer, f.clone())
                     .await
-                    .map_err(failure)?
-                    .into_iter()
-                    .map(DashboardSourceView::from)
-                    .collect::<Vec<_>>()
-            ),
+                    .map_err(failure)?;
+                // A missing pin (or an unpinned search) can gain a member on any platform.
+                if !f.ids.is_empty() && sources.len() == f.ids.len() {
+                    scope = sources
+                        .iter()
+                        .map(|source| source.platform_id)
+                        .collect::<Option<_>>()
+                        .map(super::SnapshotScope::PinnedPlatforms);
+                }
+                json!(
+                    sources
+                        .into_iter()
+                        .map(DashboardSourceView::from)
+                        .collect::<Vec<_>>()
+                )
+            }
             Self::Recent {
                 tags,
                 event_type,
@@ -207,6 +219,7 @@ impl Projection {
             ),
         };
         Ok(GroupSnapshot {
+            scope,
             rows: vec![],
             events: vec![ClientEvent::new("DashboardSnapshot", vec![data])],
         })
@@ -266,6 +279,7 @@ mod tests {
             parse(&scope("listRecentActivities", json!({"limit":5}))).unwrap(),
         );
         let snapshot = |value| GroupSnapshot {
+            scope: None,
             events: vec![ClientEvent::new("DashboardSnapshot", vec![value])],
             rows: vec![],
         };

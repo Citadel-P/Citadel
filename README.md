@@ -31,6 +31,8 @@ Capabilities vary by edition; see the [Community and Team comparison](docs/conte
 <details>
 <summary>More screenshots</summary>
 
+![Citadel in dark mode showing the Production overview dashboard with active tag filters and gradient charts](docs/public/screenshots/dashboard-dark.png)
+
 ![Citadel Compose stack details with running services, deployment controls, and logs](docs/public/screenshots/stacks.png)
 
 ![Citadel Platforms page with an online standalone Docker host and an online Swarm host](docs/public/screenshots/platforms.png)

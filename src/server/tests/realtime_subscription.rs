@@ -1476,6 +1476,7 @@ async fn oversized_catalog_is_scoped_for_initial_join_rejoin_and_growth() {
             Box::pin(async move {
                 if group.name != "platforms" {
                     return Ok(GroupSnapshot {
+                        scope: None,
                         events: event
                             .map(|_| {
                                 citadel_server::realtime_groups::ClientEvent::new(
@@ -1489,6 +1490,7 @@ async fn oversized_catalog_is_scoped_for_initial_join_rejoin_and_growth() {
                     });
                 }
                 Ok(GroupSnapshot {
+                    scope: None,
                     rows: vec![GroupRows {
                         target: "FixtureRow",
                         style: RowStyle::Notification,

@@ -96,6 +96,20 @@ impl ApplicationGroupReader {
                     .map_err(failure)?;
                 ResourceType::Platform
             }
+            DeploymentStats(_) => ResourceType::Deployment,
+            ServiceStats(_) => {
+                if let Some(owner) = lease.scope(&g.name) {
+                    self.permission_with_lease(
+                        p,
+                        ResourceType::Platform,
+                        Some(owner),
+                        None,
+                        Some(lease),
+                    )
+                    .await?;
+                }
+                ResourceType::SwarmService
+            }
             Deployment(id) => {
                 self.deployments
                     .get_authorized(actor, admin, *id)

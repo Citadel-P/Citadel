@@ -139,6 +139,7 @@ pub(crate) async fn realtime_resource_snapshot(
             vec![]
         };
         return Ok(Some(GroupSnapshot {
+            scope: None,
             events,
             rows: vec![GroupRows {
                 target: "ImageEventReceived",
@@ -194,6 +195,7 @@ pub(crate) async fn realtime_resource_snapshot(
             payload["networks"] = serde_json::to_value(networks).map_err(failure)?;
         }
         return Ok(Some(GroupSnapshot {
+            scope: None,
             rows: vec![],
             events: vec![ClientEvent::new(
                 "SwarmNodeLocalResourcesUpdated",
@@ -386,11 +388,13 @@ pub(crate) async fn realtime_resource_snapshot(
             ));
         }
         return Ok(Some(GroupSnapshot {
+            scope: None,
             events,
             rows: vec![],
         }));
     }
     Ok(Some(GroupSnapshot {
+        scope: None,
         events,
         rows: if manager_available {
             vec![GroupRows {
@@ -504,6 +508,7 @@ pub(crate) async fn realtime_daemon_snapshot(
         })]));
     }
     Ok(GroupSnapshot {
+        scope: None,
         events,
         rows: vec![
             GroupRows {
@@ -693,6 +698,7 @@ pub(super) async fn network_reference_snapshot(
     .await
     .map_err(super::failure)?;
     Ok(GroupSnapshot {
+        scope: None,
         rows: vec![GroupRows {
             target: "NetworkEventReceived",
             style: RowStyle::Daemon,

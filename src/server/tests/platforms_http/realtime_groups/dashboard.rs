@@ -102,3 +102,57 @@ async fn saved_board_subscription_follows_committed_edits_and_private_visibility
     server.await.unwrap();
     cleanup(f).await;
 }
+
+#[tokio::test]
+#[ignore = "requires disposable CITADEL_PLATFORM_DATABASE_URL"]
+async fn pinned_workloads_only_reread_on_their_platform_and_follow_moves() {
+    use super::scoped_fixture::*;
+    let f = fixture().await;
+    let workload = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    sqlx::query("INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,platformdescriptor,status,volumecount) VALUES($1,'Other host','','Local',1,0,1000,0,'{}','Online',0)").bind(other).execute(&f.pool).await.unwrap();
+    sqlx::query("INSERT INTO deployments(id,name,platformid,spec,status,createdbyactorid) VALUES($1,'Pinned',$2,'{}','Healthy',$3)").bind(workload).bind(f.platform_id).bind(SYSTEM_ACTOR_ID).execute(&f.pool).await.unwrap();
+    let board: Uuid = sqlx::query_scalar("SELECT dashboardid FROM instancedashboarddefault")
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    let (hub, reads, address, cancel, server) = serve(&f).await;
+    let mut socket = connect(&f, &f.administrator, address).await;
+    let sub = Uuid::now_v7();
+    for j in [
+        json!({"group":"dashboard","subscriptionId":sub,"projection":"listDashboardSources","query":{"kind":"Deployment","ids":workload,"limit":1}}),
+        json!({"group":"dashboard","subscriptionId":Uuid::now_v7(),"projection":"getDashboard","query":{"id":board}}),
+    ] {
+        assert!(invoke_args(&mut socket, "JoinGroup", json!([j])).await["error"].is_null());
+        receive(&mut socket).await;
+    }
+    reads.take();
+    for (n, platform, should_read) in [(1, other, false), (2, f.platform_id, true)] {
+        hub.publish_runtime_change(platform, "container", "create", "example");
+        // Another projection scheduled later provides a barrier even for suppressed snapshots.
+        sqlx::query("UPDATE dashboards SET revision=revision+$2 WHERE id=$1")
+            .bind(board)
+            .bind(i64::from(n))
+            .execute(&f.pool)
+            .await
+            .unwrap();
+        hub.publish_resource_change("Dashboard", board, "resourceChanged");
+        receive(&mut socket).await;
+        assert_eq!(reads.take().contains(&sub.to_string()), should_read);
+    }
+    sqlx::query("UPDATE deployments SET platformid=$2 WHERE id=$1")
+        .bind(workload)
+        .bind(other)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+    hub.publish_resource_change("Deployment", workload, "updated");
+    assert_eq!(
+        receive(&mut socket).await["arguments"][0][0]["platformId"],
+        json!(other)
+    );
+    socket.close(None).await.unwrap();
+    cancel.cancel();
+    server.await.unwrap();
+    cleanup(f).await;
+}

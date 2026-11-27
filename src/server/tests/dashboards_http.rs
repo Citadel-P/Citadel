@@ -1158,7 +1158,11 @@ async fn fleet_ranks_before_limiting_and_counts_only_visible_owners() {
         get("dashboards/fleet?read=Attention&kinds=BackupPolicy").await["total"],
         0
     );
+    history_plans::compare(&admin, &reader, &tags[0]).await;
 }
+
+#[path = "dashboards_http/history_plans.rs"]
+mod history_plans;
 
 #[path = "dashboards_http/activity.rs"]
 mod activity;

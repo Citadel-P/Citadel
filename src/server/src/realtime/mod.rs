@@ -22,6 +22,7 @@ mod protocol;
 pub(crate) mod retention;
 mod subscription;
 pub mod topic;
+mod workload_stats;
 
 pub use authorization::{IdentityRealtimeReader, RealtimeReadError, RealtimeReadPort};
 use connection::handle_connection;

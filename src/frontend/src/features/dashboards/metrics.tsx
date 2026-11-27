@@ -18,8 +18,7 @@ import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
 import { filterStatsRange, statsBucketSeconds, resolveStatsRange, statsRangeQuery } from '@/lib/stats-range';
 import { requestErrorStatus } from '@/lib/request-error';
 import { useRead } from '@/lib/hooks';
-import { useTaskStatsStream } from '@/features/swarm-resources/tasks/hooks/useTaskStats';
-import { useServiceStatsStream } from '@/features/swarm-resources/services/hooks/useServiceStats';
+import { useWorkloadSeries } from './workload-series';
 import { usePlatformLiveStats } from '@/features/platforms/platform-series';
 import { useRealtimeContext } from '@/lib/context/realtime-context';
 import { Choice, chartPalette } from './display-controls';
@@ -49,7 +48,6 @@ type Sample = { created: number } & Partial<
     number | null
   >
 >;
-const emptyIds: string[] = [];
 const emptyStats: ContainerStatView[] = [];
 type Series = { name: string; stats: Sample[] };
 function Chart({
@@ -322,22 +320,23 @@ export function MetricHistory({
   const seconds = statsBucketSeconds(resolveStatsRange({ kind: 'relative', minutes }));
   const platformSource = source.kind === 'Platform' ? app.platforms?.find((p) => p.id === source.id) : undefined;
   const platformLive = usePlatformLiveStats(platformSource, seconds, minutes * 60);
-  const allowedPlatform = canReadPlatform ? (row.platformId ?? '') : '';
-  const taskLive = useTaskStatsStream(
-    source.kind === 'Deployment' ? allowedPlatform : '',
-    row.containerProjectionId ?? undefined,
-    seconds,
-    minutes * 60,
-  );
+  const workloadGroup =
+    source.kind === 'Deployment'
+      ? 'deployment-stats:' + source.id
+      : source.kind === 'SwarmService' && canReadPlatform && row.dockerServiceId
+        ? 'service-stats:' + source.id
+        : undefined;
+  const workload = useWorkloadSeries(workloadGroup, seconds, minutes * 60);
   const now = useContext(RangeClock);
   const { groups } = useRealtimeContext();
-  const streamGroup = source.kind === 'Platform' ? 'platforms' : allowedPlatform && 'containers:' + allowedPlatform;
-  const latest = source.kind === 'Platform' ? platformSource?.stats?.[0]?.created : latestLiveStat(taskLive)?.created;
+  const streamGroup = source.kind === 'Platform' ? 'platforms' : workloadGroup;
+  const latest =
+    source.kind === 'Platform' ? platformSource?.stats?.[0]?.created : latestLiveStat(workload.stats)?.created;
   // Stack and Swarm history also supplies membership for aggregating replicas.
   const receivingSamples = !!latest && now - latest <= 65 && !!streamGroup && groups?.isGroupLive(streamGroup);
   const opts = {
     staleTime: 15000,
-    refetchInterval: receivingSamples ? (false as const) : interval,
+    refetchInterval: receivingSamples && source.kind !== 'SwarmService' ? (false as const) : interval,
     retry: (attempt: number, error: Error) => attempt < 2 && requestErrorStatus(error) === 429,
     retryDelay: (attempt: number) => 500 * 2 ** attempt + Math.random() * 350,
   };
@@ -364,19 +363,17 @@ export function MetricHistory({
     SwarmService: service,
   }[source.kind];
   const data = read.data?.data;
-  const serviceLive = useServiceStatsStream(
-    source.kind === 'SwarmService' && service.data?.data.complete ? allowedPlatform : '',
-    service.data?.data.observedContainerProjectionIds ?? emptyIds,
-    seconds,
-    minutes * 60,
-  );
+  const coverage = service.data?.data;
   const live =
     source.kind === 'Platform'
       ? platformLive
       : source.kind === 'Deployment'
-        ? taskLive
-        : source.kind === 'SwarmService' && serviceLive.observedContainers === service.data?.data.expectedTasks
-          ? serviceLive.stats
+        ? workload.stats
+        : source.kind === 'SwarmService' &&
+            coverage?.complete &&
+            workload.members.size === coverage.expectedTasks &&
+            coverage.observedContainerProjectionIds.every((id) => workload.members.has(id))
+          ? workload.stats
           : emptyStats;
   const stackSeries = useStackSeries(
     source.kind === 'Stack' && stack.data && stack.data.data.services.length <= 8 ? source.id : undefined,
@@ -407,9 +404,7 @@ export function MetricHistory({
             <WidgetSkeleton kind="Metrics" />
           ) : (
             <WidgetNotice>
-              {requestErrorStatus(read.error) === 429
-                ? 'Statistics reads are busy.'
-                : 'Unavailable'}
+              {requestErrorStatus(read.error) === 429 ? 'Statistics reads are busy.' : 'Unavailable'}
             </WidgetNotice>
           );
         else if (!series.length) body = <p className="text-muted-foreground">No measurements in this range.</p>;
@@ -433,6 +428,12 @@ export function MetricHistory({
                 Latest measurement <Timestamp value={latestMeasurement * 1000} formatDateTime={formatDateTime} />
               </p>
             )}
+            {source.kind === 'SwarmService' &&
+              coverage?.complete &&
+              workload.expected !== undefined &&
+              workload.members.size < workload.expected && (
+                <p className="text-xs">Partial live coverage · awaiting current task measurements</p>
+              )}
             {service.data?.data.complete === false && (
               <p className="text-xs">
                 Partial coverage · {service.data.data.observedTasks} of {service.data.data.expectedTasks} tasks

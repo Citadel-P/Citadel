@@ -1,3 +1,6 @@
+#[path = "realtime_groups/workload_stats.rs"]
+mod workload_stats;
+
 #[path = "realtime_groups/dashboard.rs"]
 mod dashboard;
 

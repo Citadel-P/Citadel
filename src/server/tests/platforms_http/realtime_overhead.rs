@@ -166,6 +166,7 @@ async fn realtime_stack_statistics_do_not_reload_stack_configuration() {
     .expect("statistics reread full stack configuration")
     .unwrap();
     assert_eq!(snapshot.events[0].target, "ReceiveStackContainerStats");
+    assert_eq!(snapshot.events[0].arguments[1], json!(group.id()));
     assert_eq!(snapshot.events[0].arguments[0][0]["id"], "container-1");
     assert_eq!(
         snapshot.events[0].arguments[0][0]["containerStat"]["cpuUsage"],

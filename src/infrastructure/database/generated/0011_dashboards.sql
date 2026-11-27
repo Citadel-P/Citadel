@@ -83,3 +83,12 @@ WITH example AS (
 )
 INSERT INTO instancedashboarddefault (dashboardid)
 SELECT id FROM example;
+
+CREATE INDEX ix_backupruns_policy_completed ON backupruns (backuppolicyid, completedat DESC, id DESC)
+    INCLUDE (status) WHERE completedat IS NOT NULL AND status <> 'Cancelled';
+
+CREATE INDEX ix_alertevents_unresolved_resource ON alertevents (resourceid)
+    WHERE resolvedat IS NULL;
+
+CREATE INDEX ix_swarmtasks_running_service ON swarmtaskprojections (platformid, dockerserviceid)
+    WHERE NOT isstale AND lower(state) = 'running' AND lower(desiredstate) = 'running';

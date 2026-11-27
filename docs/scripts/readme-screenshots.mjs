@@ -522,6 +522,7 @@ export async function captureReadme({
   }, data.platforms[0].id);
   for (const [name, path, ready] of [
     ["dashboard", "/", data.dashboard],
+    ["dashboard-dark", "/", data.dashboard],
     ["platforms", "/platforms", "Production Docker"],
     [
       "platform-containers",
@@ -547,7 +548,7 @@ export async function captureReadme({
     else
       await page.goto(origin + path, { waitUntil: "networkidle" });
     await expect(page.getByText(ready, { exact: true }).first()).toBeVisible({ timeout: 15000 });
-    if (name === "dashboard") {
+    if (name === "dashboard" || name === "dashboard-dark") {
       for (const title of ["CPU usage", "Memory usage"]) {
         await expect(page.getByRole("region", { name: title }).locator(".recharts-area-curve")).toBeVisible();
       }

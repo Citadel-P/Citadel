@@ -117,6 +117,19 @@ pub(super) async fn run_group_connection(
                 }
                 let mut oversized = Vec::new();
                 for (name,joined) in state.groups.iter_mut().filter(|(_,g)|g.expects_event(&event, &subscription.lease)) {
+                    if let Some(crate::realtime_groups::SnapshotScope::Workload(membership)) = &joined.scope
+                        && event.payload["dockerResourceType"] == "containerStats" {
+                        if let Some(platform) = membership.platform {
+                            subscription.lease.set_scope(name, platform);
+                        }
+                        tokio::time::timeout(service.inner.subscribe_timeout,
+                            reader.recheck(&subscription.principal, &joined.group, &subscription.lease))
+                            .await.map_err(|_| RealtimeError::SubscribeTimeout)?.map_err(map_realtime_read_error)?;
+                        if let Some(update) = super::workload_stats::samples(name, membership, &event).await.map_err(map_realtime_read_error)? {
+                            send_group_message(socket, service, &update).await?;
+                        }
+                        continue;
+                    }
                     if joined.group.dashboard.is_some() {
                         state.dashboard_due.entry(name.clone()).or_insert_with(||Instant::now()+std::time::Duration::from_secs(2));
                         continue;

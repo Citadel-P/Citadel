@@ -17,6 +17,7 @@ pub(crate) struct CommittedReads {
         std::collections::BTreeMap<Uuid, std::sync::Arc<Cache<serde_json::Value>>>,
     >,
 
+    pub(super) sample_positions: Cache<std::collections::HashMap<String, usize>>,
     identities: Cache<Vec<citadel_platforms::ContainerIdentity>>,
     telemetry: Cache<Option<citadel_platforms::PlatformTelemetryContext>>,
     platform: Cache<Option<PlatformDetails>>,
@@ -152,6 +153,7 @@ impl CommittedReads {
             _payload: Some(payload),
             affected_stacks,
             processes: Default::default(),
+            sample_positions: Cache::new(budget.clone()),
             identities: Cache::new(budget.clone()),
             telemetry: Cache::new(budget.clone()),
             platform: Cache::new(budget.clone()),

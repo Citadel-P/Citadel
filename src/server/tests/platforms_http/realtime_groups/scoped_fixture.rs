@@ -56,6 +56,14 @@ struct ObservedReader {
     reads: GroupReads,
 }
 impl GroupReadPort for ObservedReader {
+    fn recheck<'a>(
+        &'a self,
+        p: &'a ActorPrincipal,
+        g: &'a Group,
+        lease: &'a AuthorizationLease,
+    ) -> BoxFuture<'a, Result<(), RealtimeReadError>> {
+        self.inner.recheck(p, g, lease)
+    }
     fn read_with_lease<'a>(
         &'a self,
         p: &'a ActorPrincipal,
@@ -63,7 +71,13 @@ impl GroupReadPort for ObservedReader {
         e: Option<&'a PublishedRuntimeEvent>,
         lease: &'a AuthorizationLease,
     ) -> BoxFuture<'a, Result<GroupSnapshot, RealtimeReadError>> {
-        if e.is_some() {
+        use citadel_server::realtime::topic::Topic;
+        if e.is_some()
+            || matches!(
+                g.topic(),
+                Topic::Dashboard | Topic::DeploymentStats(_) | Topic::ServiceStats(_)
+            )
+        {
             self.reads.0.lock().unwrap().push(g.name.clone());
         }
         self.inner.read_with_lease(p, g, e, lease)

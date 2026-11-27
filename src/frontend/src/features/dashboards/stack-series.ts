@@ -1,9 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRealtimeGroup } from '@/hooks/useRealtimeGroup';
 import type { RealtimeConnection } from '@/lib/realtime-connection';
 import type { ContainerStatView, StackServiceHistory } from '@/api/generated/api.types';
 import { appendLiveStatBucket, latestLiveStat, mergeStatsBuckets, sumStatBuckets } from '@/lib/stats-buckets';
-import { normalizeDockerId } from '@/lib/utils';
 
 const empty: StackServiceHistory[] = [];
 type Patch = { id: string; containerStat?: ContainerStatView | null };
@@ -11,25 +10,47 @@ type Patch = { id: string; containerStat?: ContainerStatView | null };
 // Keep persisted service identity across replacements. A partial set of replicas
 // cannot supply a complete live bucket for a service.
 export function useStackSeries(id: string | undefined, history = empty, seconds: number, windowSeconds: number) {
-  const membership = useMemo(() => new Set(history.flatMap((s) => s.containerIds.map(normalizeDockerId))), [history]);
-  const [byMember, setByMember] = useState(new Map<string, ContainerStatView[]>());
+  const memberKey = [...new Set(history.flatMap((s) => s.containerIds))].sort().join(',');
+  const membership = useMemo(() => new Set(memberKey.split(',').filter(Boolean)), [memberKey]);
+  const [buffer, setBuffer] = useState(() => ({
+    id,
+    membership,
+    seconds,
+    byMember: new Map<string, ContainerStatView[]>(),
+  }));
+  if (buffer.id !== id || buffer.membership !== membership || buffer.seconds !== seconds) {
+    const retained =
+      id === buffer.id && seconds === buffer.seconds
+        ? new Map([...buffer.byMember].filter(([key]) => membership.has(key)))
+        : new Map<string, ContainerStatView[]>();
+    setBuffer({ id, membership, seconds, byMember: retained });
+  }
+  const { byMember } = buffer;
+  const options = useRef({ membership, seconds, windowSeconds });
+  useLayoutEffect(() => {
+    options.current = { membership, seconds, windowSeconds };
+  }, [membership, seconds, windowSeconds]);
   const receive = useCallback(
-    (patches: Patch[]) => {
-      setByMember((previous) => {
+    (patches: Patch[], stack: string) => {
+      if (stack !== id) return;
+      const { membership, seconds, windowSeconds } = options.current;
+      setBuffer((buffer) => {
+        if (buffer.id !== id || buffer.membership !== membership) return buffer;
+        const previous = buffer.byMember;
         let next = previous;
         for (const patch of patches) {
-          const key = normalizeDockerId(patch.id);
+          const key = patch.id;
           const stat = patch.containerStat;
           if (!key || !membership.has(key) || !stat || !Number.isFinite(stat.created) || stat.created <= 0) continue;
-          const old = previous.get(key) ?? [];
+          const old = next.get(key) ?? [];
           if (stat.created <= (latestLiveStat(old)?.created ?? 0)) continue;
-          if (next === previous) next = new Map([...previous].filter(([k]) => membership.has(k)));
+          if (next === previous) next = new Map(previous);
           next.set(key, appendLiveStatBucket(old, stat, seconds, windowSeconds));
         }
-        return next;
+        return next === previous ? buffer : { ...buffer, byMember: next };
       });
     },
-    [membership, seconds, windowSeconds],
+    [id],
   );
   const setupEventListeners = useCallback(
     (c: RealtimeConnection) => c.on('ReceiveStackContainerStats', receive),
@@ -48,7 +69,7 @@ export function useStackSeries(id: string | undefined, history = empty, seconds:
   return useMemo(
     () =>
       history.map((service) => {
-        const members = service.containerIds.map((key) => byMember.get(normalizeDockerId(key) ?? '') ?? []);
+        const members = service.containerIds.map((key) => byMember.get(key) ?? []);
         if (!members.length || members.some((m) => !m.length))
           return { name: service.serviceName, stats: service.stats };
         const coverage = new Map<number, number>();

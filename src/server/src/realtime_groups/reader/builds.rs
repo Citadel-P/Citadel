@@ -87,6 +87,7 @@ impl ApplicationGroupReader {
             change.filter(|event| event.event_kind == "buildLogs" && event.resource_id == run)
         {
             return Ok(GroupSnapshot {
+                scope: None,
                 rows: vec![],
                 events: vec![ClientEvent::new(
                     "BuildRunLogsAppended",
