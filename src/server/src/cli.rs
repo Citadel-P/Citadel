@@ -416,7 +416,11 @@ async fn dispatch(command: Command) -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(target_os = "linux")]
         Command::UpdateHost => crate::cli_updates::host().await,
         Command::Serve => {
-            citadel_database::admit_database(&DatabaseConfig::from_env()?.database_url).await?;
+            citadel_database::admit_database(&DatabaseConfig::from_env()?.database_url)
+                .await
+                .map_err(|error| {
+                    crate::startup::phase_error("PostgreSQL version admission", error)
+                })?;
             crate::app::serve(Config::from_env_for_startup()?).await
         }
         Command::Migrate => migrate(DatabaseConfig::from_env()?).await,

@@ -43,7 +43,7 @@ pub struct InstanceConfiguration {
 impl Default for InstanceConfiguration {
     fn default() -> Self {
         Self {
-            database_max_connections: 3,
+            database_max_connections: 5,
             password_minimum_length: 15,
             browser_session_lifetime_days: 30,
             service_account_default_token_lifetime_days: 90,

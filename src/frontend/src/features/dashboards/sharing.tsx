@@ -22,9 +22,10 @@ import { requestErrorMessage, requestErrorStatus } from '@/lib/request-error';
 
 export function useCanManageSharing(board: DashboardSummaryView) {
   const profile = useRead('getCurrentProfile', undefined, {
-    enabled: board.visibility !== DashboardVisibility.Private,
+    enabled: board.canDelete && board.visibility !== DashboardVisibility.Private,
   });
   return (
+    board.canDelete &&
     board.visibility !== DashboardVisibility.Private &&
     !profile.isError &&
     !!profile.data?.data.authorization.isAdministrator

@@ -6,6 +6,7 @@ use std::{collections::BTreeSet, path::Path};
 fn authorization_writers_use_the_committed_mutation_boundary() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/persistence/postgres");
     let audited: BTreeSet<_> = [
+        "dashboards/repository.rs",
         "identity/actors/repository.rs",
         "identity/authentication/store/mod.rs",
         "identity/oidc/store.rs",
@@ -64,6 +65,14 @@ fn authorization_writers_use_the_committed_mutation_boundary() {
                     "{file}: {name} bypasses invalidation"
                 );
             } else {
+                if *file == "dashboards/repository.rs" {
+                    // These methods leave stored ACL grants intact.
+                    assert!(
+                        ["create", "update", "set_visibility", "set_default"].contains(&name),
+                        "Audit {file}: {name} before allowing a plain commit"
+                    );
+                    continue;
+                }
                 assert!(
                     exceptions.contains(&name),
                     "Audit {file}: {name} before allowing a plain commit"

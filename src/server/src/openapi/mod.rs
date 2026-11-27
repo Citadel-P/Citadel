@@ -221,7 +221,7 @@ mod tests {
                 .filter(|op| op["operationId"].is_string())
                 .count()
         };
-        assert_eq!(operations(&full), 444);
+        assert_eq!(operations(&full), 457);
         assert!(
             public["paths"]
                 .get("/api/v1/installation/settings")
@@ -263,6 +263,27 @@ mod tests {
         assert_eq!(operation["operationId"], "getInstanceJobHistory");
         assert_eq!(operation["security"], json!([{"Bearer": []}]));
         assert_eq!(operation["x-citadel-principal"], "human");
+        for (path, method, operation_id, principal) in [
+            ("/api/v1/dashboards", "get", "listDashboards", "human"),
+            (
+                "/api/v1/dashboards/{id}/visibility",
+                "put",
+                "setDashboardVisibility",
+                "administrator",
+            ),
+            (
+                "/api/v1/instance/dashboard-default",
+                "put",
+                "setInstanceDashboardDefault",
+                "administrator",
+            ),
+        ] {
+            assert!(public["paths"].get(path).is_none());
+            let operation = &full["paths"][path][method];
+            assert_eq!(operation["operationId"], operation_id);
+            assert_eq!(operation["security"], json!([{"Bearer": []}]));
+            assert_eq!(operation["x-citadel-principal"], principal);
+        }
         assert_eq!(operations(&public), 317);
         for (path, method, operation_id) in [
             ("/api/v1/updates", "get", "getInstanceUpdates"),

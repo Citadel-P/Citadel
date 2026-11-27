@@ -30,11 +30,7 @@ export function hasQueryTagFilter(queryKey: readonly unknown[]) {
 export async function reconcileTaggedEventPages(
   client: QueryClient,
   resource:
-    | 'listAlertEvents'
-    | 'listRecentActivities'
-    | 'listDashboardSources'
-    | 'getDashboardFleet'
-    | 'getUpcomingSchedules',
+    'listAlertEvents' | 'listRecentActivities' | 'listDashboardSources' | 'getDashboardFleet' | 'getUpcomingSchedules',
 ) {
   // Mark cached scopes stale without reading pages that have no observers.
   await client.invalidateQueries({

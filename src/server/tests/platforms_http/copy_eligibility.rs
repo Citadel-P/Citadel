@@ -177,10 +177,19 @@ async fn workload_lists_preserve_actor_specific_copy_eligibility() {
                 .unwrap()
                 .is_empty()
         );
-        assert!(matches!(
-            reader.read(&denied, &list, None).await,
-            Err(RealtimeReadError::Authorization)
-        ));
+        let denied_snapshot = reader.read(&denied, &list, None).await;
+        if kind == ResourceType::SwarmService {
+            // This subscription requires access to the parent platform.
+            assert!(matches!(
+                denied_snapshot,
+                Err(RealtimeReadError::Authorization)
+            ));
+        } else {
+            // Collection subscriptions apply grants to rows, like the HTTP list.
+            let snapshot = denied_snapshot.unwrap();
+            assert!(snapshot.rows.iter().all(|batch| batch.rows.is_empty()));
+            assert!(snapshot.events.is_empty());
+        }
     }
     // The next list snapshot reflects changed configuration instead of replacing
     // eligibility with null (which previously forced the menu to fetch details).

@@ -279,7 +279,7 @@ async fn get_job_history(
 }
 
 use crate::api::resources::instance::schedules::{
-    ScheduleGroupQuery, SchedulePage, SchedulePurposeCount, ScheduleQuery,
+    ScheduleGroupQuery, SchedulePage, SchedulePurposeCount, ScheduleQuery, UpcomingQuery,
 };
 #[utoipa::path(get, path = "/api/v1/instance/schedules", operation_id = "getInstanceSchedules", tag = "Instance",
     params(ScheduleQuery), summary = "List resource schedules (administrator)",
@@ -347,11 +347,6 @@ async fn get_schedule_groups(
         ),
         Err(error) => error_response(error, &headers),
     }
-}
-
-#[derive(serde::Deserialize, utoipa::IntoParams)]
-struct UpcomingQuery {
-    limit: Option<u8>,
 }
 
 #[utoipa::path(get, path="/api/v1/instance/schedules/upcoming",operation_id="getUpcomingSchedules",tag="Instance",summary="Next enabled resource schedule occurrences (administrator)",

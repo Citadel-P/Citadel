@@ -14,6 +14,7 @@ it('undoes a new tile, retains pending settings after a conflict, and saves one 
   server.use(
     http.get('*/api/v1/tags', () => HttpResponse.json({ tags: [] })),
     http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
+    http.get('*/api/v1/profile', () => HttpResponse.json({ authorization: { isAdministrator: false } })),
     http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
     http.get('*/api/v1/application/info', () => HttpResponse.json({})),
     http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
@@ -52,9 +53,7 @@ it('undoes a new tile, retains pending settings after a conflict, and saves one 
   await user.click(button('Undo'));
   expect(button('Save changes')).toBeDisabled();
   await user.click(button('Add Notes and links'));
-  const title = screen.getByLabelText('Widget title');
-  await user.clear(title);
-  await user.type(title, 'Incident contacts');
+  fireEvent.change(screen.getByLabelText('Widget title'), { target: { value: 'Incident contacts' } });
   const note = '**Page the primary operator**\n\n[Runbook](/platforms)';
   fireEvent.change(screen.getByLabelText('Note'), { target: { value: note } });
   expect(screen.getByText('Page the primary operator', { selector: 'strong' })).toBeVisible();

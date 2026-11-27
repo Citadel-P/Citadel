@@ -291,10 +291,13 @@ export const ResourceOverridesField = ({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dashboardPage, setDashboardPage] = useState(0);
   const [dashboardSearch, setDashboardSearch] = useState('');
-  const searchDashboards = useCallback((value: string) => {
-    setDashboardSearch(value);
-    setDashboardPage(0);
-  }, [setDashboardSearch, setDashboardPage]);
+  const searchDashboards = useCallback(
+    (value: string) => {
+      setDashboardSearch(value);
+      setDashboardPage(0);
+    },
+    [setDashboardSearch, setDashboardPage],
+  );
   const [selectedType, setSelectedType] = useState<OverrideResourceType>(ResourceType.Platform);
   const [draftSelectionsByType, setDraftSelectionsByType] = useState<ResourceDraftSelections>(() =>
     createEmptyDraftSelections(),

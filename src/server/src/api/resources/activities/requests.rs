@@ -31,3 +31,10 @@ impl From<ActivityFilterQuery> for ActivityFilter {
         }
     }
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RecentActivityQuery {
+    pub(crate) event_type: Option<ActivityEventType>,
+    pub(crate) limit: Option<i32>,
+}

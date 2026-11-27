@@ -8,6 +8,11 @@ pub struct ScheduleGroupQuery {
     pub search: Option<String>,
 }
 
+#[derive(Deserialize, utoipa::IntoParams)]
+pub struct UpcomingQuery {
+    pub limit: Option<u8>,
+}
+
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct SchedulePurposeCount {
     pub resource: String,

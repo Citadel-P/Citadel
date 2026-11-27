@@ -195,6 +195,8 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_TEST_DEBUG: "0"
       CARGO_PROFILE_DEV_INCREMENTAL: "false"
+      # Unoptimized Activity OpenAPI schemas need more stack on Rust test threads.
+      RUST_MIN_STACK: "16777216"
       DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:

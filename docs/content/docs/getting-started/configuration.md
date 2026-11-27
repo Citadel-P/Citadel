@@ -108,17 +108,17 @@ follow the public URL when not explicitly configured. Back up the data volume
 with PostgreSQL so these keys remain available during recovery.
 
 Manage database connections in **Administration → Instance → Config → Database
-connections**. Core defaults to three query connections; increasing the limit
+connections**. Core defaults to five query connections; increasing the limit
 allows more concurrent queries but can increase PostgreSQL memory use. Restart
 Core after saving. `CITADEL_DATABASE_MAX_CONNECTIONS` overrides the saved value
 for that Core. See [Instance settings](/operations/instance-settings#database-connections)
 for connection counts and database buffer settings.
 
-The packaged Compose files start PostgreSQL with `shared_buffers=64MB`. This is
+The packaged Compose files start PostgreSQL with `shared_buffers=128MB`. This is
 the database page-buffer budget, not a total memory limit; query sessions and the
 operating system's filesystem cache consume additional memory. For a larger
 database workload, edit the `pg_db.command` value in your Compose file, for example
-to `["postgres", "-c", "shared_buffers=128MB"]`. In-app updates support this literal
+to `["postgres", "-c", "shared_buffers=256MB"]`. In-app updates support this literal
 positive integer size in MB. Changing it requires recreating the PostgreSQL
 container with Compose and briefly interrupts database access; preserve its data
 volume. Updating only the Core image does not change an existing Compose file or

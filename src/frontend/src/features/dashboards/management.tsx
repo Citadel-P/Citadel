@@ -7,9 +7,12 @@ import { SetSelectedHome } from './actions';
 import { DashboardDeleteDialog } from './delete-dialog';
 import { useCanManageSharing, useSharingDisabled, SharingDialog } from './sharing';
 import { CreateDashboardDialog } from './create';
+import { useCanManageDashboards } from './access';
 
 export function DuplicateDashboard({ name, configuration }: { name: string; configuration: DashboardConfiguration }) {
   const [open, setOpen] = useState(false);
+  const canManage = useCanManageDashboards();
+  if (!canManage) return null;
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>

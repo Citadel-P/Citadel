@@ -389,7 +389,10 @@ it('switches between a saved Home dashboard and the Overview example without cha
   await user.click(overview);
   expect(router.state.location.pathname).toBe('/dashboards/example');
   await user.click(await screen.findByRole('button', { name: 'Overview' }));
-  expect(screen.getByRole('link', { name: 'Overview Everyone in this instance' })).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByRole('link', { name: 'Overview Everyone in this instance' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
   await user.click(screen.getByRole('link', { name: 'Board mine Private' }));
   expect(router.state.location.pathname).toBe('/dashboards/mine');
   expect(await screen.findByRole('heading', { name: 'Board mine' })).toBeVisible();

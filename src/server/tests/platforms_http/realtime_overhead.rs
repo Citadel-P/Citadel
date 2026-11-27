@@ -236,7 +236,9 @@ async fn realtime_scoped_workloads_query_only_the_platform_and_preserve_unaffect
     let mut denied = f.administrator.clone();
     denied.roles.clear();
     denied.actor_id = ActorId::new(Uuid::now_v7());
-    assert!(reader.read(&denied, &group, Some(&change)).await.is_err());
+    let denied = reader.read(&denied, &group, Some(&change)).await.unwrap();
+    assert!(denied.rows.iter().all(|batch| batch.rows.is_empty()));
+    assert!(denied.events.is_empty());
     cleanup(f).await;
 }
 
@@ -293,7 +295,9 @@ async fn realtime_telemetry_context_is_shared_without_bypassing_actor_access() {
     let mut denied = f.administrator.clone();
     denied.roles.clear();
     denied.actor_id = ActorId::new(Uuid::now_v7());
-    assert!(reader.read(&denied, &group, Some(&change)).await.is_err());
+    let denied = reader.read(&denied, &group, Some(&change)).await.unwrap();
+    assert!(denied.rows.iter().all(|batch| batch.rows.is_empty()));
+    assert!(denied.events.is_empty());
     sqlx::query("UPDATE platforms SET memtotal=memtotal+1000 WHERE id=$1")
         .bind(f.platform_id)
         .execute(&f.pool)

@@ -15,13 +15,16 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useMutate, useRead } from '@/lib/hooks';
 import { requestErrorMessage } from '@/lib/request-error';
+import { useCanManageDashboards } from './access';
 
 // The API resolves the personal preference, then the visible instance default.
 export function useDashboardHomeAction(board?: DashboardSummaryView) {
+  const canSet = useCanManageDashboards();
   const home = useRead('getDashboardDefault', undefined, { enabled: !!board, staleTime: 30_000 });
   const current = !!board && !home.isError && home.data?.data.dashboardId === board.id;
   return {
     current,
+    canSet,
     label: current ? 'Current home' : 'Set as home',
     disabled: current && board.visibility === DashboardVisibility.Private,
   };
@@ -30,6 +33,7 @@ export function useDashboardHomeAction(board?: DashboardSummaryView) {
 export function DashboardHomePreference({ board }: { board?: DashboardSummaryView }) {
   const [open, setOpen] = useState(false);
   const home = useDashboardHomeAction(board);
+  if (!home.canSet) return null;
   return (
     <>
       <Button variant="outline" disabled={home.disabled} onClick={() => setOpen(true)}>

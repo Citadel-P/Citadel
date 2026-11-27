@@ -1,5 +1,6 @@
 use super::*;
 use citadel_adapters::persistence::postgres::activities::store::PostgresActivityStore;
+use citadel_identity::IdentityStore;
 use citadel_server::api::routes::activities::{self, ActivitiesHttpState};
 
 async fn get(app: &Router, actor: &ActorPrincipal, path: &str) -> Value {
@@ -17,6 +18,7 @@ async fn dashboard_activity_tracks_committed_changes_and_current_audience() {
     let app = router(DashboardsHttpState {
         dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
         entitlements: Arc::new(StaticEntitlementService::new(true)),
+        identity: identity(&pool, []),
     })
     .merge(activities::router(ActivitiesHttpState {
         activities: Arc::new(citadel_activities::ActivityService::new(Arc::new(
@@ -172,6 +174,7 @@ async fn dashboard_activity_tracks_committed_changes_and_current_audience() {
                 .status(),
             StatusCode::NOT_FOUND
         );
+        let authorization = PostgresIdentityStore::new(pool.clone());
         if visibility != "Private" {
             for choice in [Some(id), Some(id), None, None] {
                 call(
@@ -193,6 +196,22 @@ async fn dashboard_activity_tracks_committed_changes_and_current_audience() {
             .await
             .unwrap();
             assert_eq!(count, 2);
+            sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourceid,resourcetype,permissionlevel,specificpermissions) VALUES ($1,$2,$3,$4,$5,0)")
+                .bind(Uuid::now_v7())
+                .bind(viewer.actor_id.value())
+                .bind(id)
+                .bind(ResourceType::Dashboard as i32)
+                .bind(PermissionLevel::Read as i32)
+                .execute(&pool)
+                .await
+                .unwrap();
+            assert!(
+                authorization
+                    .resource_permission(viewer.actor_id, ResourceType::Dashboard, id)
+                    .await
+                    .unwrap()
+                    .is_some()
+            );
         }
         call(
             &app,
@@ -203,6 +222,15 @@ async fn dashboard_activity_tracks_committed_changes_and_current_audience() {
             StatusCode::NO_CONTENT,
         )
         .await;
+        if visibility != "Private" {
+            assert!(
+                authorization
+                    .resource_permission(viewer.actor_id, ResourceType::Dashboard, id)
+                    .await
+                    .unwrap()
+                    .is_none()
+            );
+        }
         let history = get(&app, creator, &list).await;
         let deleted = &history["pagedResult"]["items"][0];
         let visibility_at_deletion = if visibility == "Private" {

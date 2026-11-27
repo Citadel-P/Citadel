@@ -1,9 +1,11 @@
 use super::activity;
+use crate::persistence::postgres::identity::authorization_cache::{Impact, Mutation};
 use citadel_activities::ActivityEventInfo;
 use citadel_dashboards::{
     DashboardContent, DashboardError as Error, DashboardRepository, DashboardSharingMode,
     DashboardSummary, DashboardViewer, DashboardVisibility, SavedDashboard,
 };
+use citadel_primitives::ResourceType;
 use futures_util::future::BoxFuture;
 use sqlx::{PgConnection, PgPool, Row, postgres::PgRow};
 use uuid::Uuid;
@@ -14,7 +16,7 @@ const ACCESS: &str = concat!(
     ", dashboard_viewer AS (SELECT $2::boolean AS administrator)",
     include_str!("visibility.sql")
 );
-const _: () = assert!(citadel_primitives::ResourceType::Dashboard as i32 == 22);
+const _: () = assert!(ResourceType::Dashboard as i32 == 22);
 
 pub struct PostgresDashboardRepository {
     pool: PgPool,
@@ -48,7 +50,7 @@ fn visibility_name(visibility: DashboardVisibility) -> &'static str {
     }
 }
 
-fn summary(row: &PgRow) -> Result<DashboardSummary, Error> {
+fn summary(row: &PgRow, viewer: DashboardViewer) -> Result<DashboardSummary, Error> {
     let visibility = match row.try_get::<&str, _>("visibility").map_err(storage)? {
         "Private" => DashboardVisibility::Private,
         "InstanceShared" => DashboardVisibility::InstanceShared,
@@ -60,8 +62,8 @@ fn summary(row: &PgRow) -> Result<DashboardSummary, Error> {
         id: row.try_get("id").map_err(storage)?,
         name: row.try_get("name").map_err(storage)?,
         revision: row.try_get("revision").map_err(storage)?,
-        can_edit: row.try_get("can_edit").map_err(storage)?,
-        can_delete: row.try_get("can_delete").map_err(storage)?,
+        can_edit: !viewer.read_only && row.try_get("can_edit").map_err(storage)?,
+        can_delete: !viewer.read_only && row.try_get("can_delete").map_err(storage)?,
     })
 }
 
@@ -92,7 +94,7 @@ async fn read(
         .map_err(storage)?
         .ok_or(Error::Unavailable)?;
     Ok(SavedDashboard {
-        summary: summary(&row)?,
+        summary: summary(&row, viewer)?,
         configuration: row.try_get("configuration").map_err(storage)?,
     })
 }
@@ -133,7 +135,7 @@ impl DashboardRepository for PostgresDashboardRepository {
                 .await
                 .map_err(storage)?
                 .iter()
-                .map(summary)
+                .map(|row| summary(row, viewer))
                 .collect()
         })
     }
@@ -291,7 +293,7 @@ impl DashboardRepository for PostgresDashboardRepository {
             .await
             .map_err(storage)?
             .ok_or(Error::Unavailable)?;
-            let mut board = summary(&row)?;
+            let mut board = summary(&row, viewer)?;
             if board.visibility == DashboardVisibility::Private {
                 return Err(Error::Invalid(
                     "Personal dashboards cannot change sharing mode.".into(),
@@ -325,6 +327,7 @@ impl DashboardRepository for PostgresDashboardRepository {
     }
     fn delete(&self, viewer: DashboardViewer, id: Uuid, revision: i64) -> ResultFuture<'_, ()> {
         Box::pin(async move {
+            let mut authorization = Mutation::enter(&self.pool).await;
             let mut tx = self.pool.begin().await.map_err(storage)?;
             let saved = read(&mut tx, viewer, id, true).await?;
             if !saved.summary.can_delete {
@@ -333,7 +336,13 @@ impl DashboardRepository for PostgresDashboardRepository {
             if revision != saved.summary.revision {
                 return Err(Error::Conflict);
             }
-            sqlx::query("DELETE FROM resourceaccesses WHERE resourcetype=22 AND resourceid=$1")
+            let impact = Impact::Resources(ResourceType::Dashboard as i32, vec![id]);
+            authorization
+                .capture(&mut tx, &impact)
+                .await
+                .map_err(storage)?;
+            sqlx::query("DELETE FROM resourceaccesses WHERE resourcetype=$1 AND resourceid=$2")
+                .bind(ResourceType::Dashboard as i32)
                 .bind(id)
                 .execute(&mut *tx)
                 .await
@@ -365,7 +374,7 @@ impl DashboardRepository for PostgresDashboardRepository {
                 .execute(&mut *tx)
                 .await
                 .map_err(storage)?;
-            tx.commit().await.map_err(storage)
+            authorization.commit(tx, impact).await.map_err(storage)
         })
     }
     fn default_for(&self, viewer: DashboardViewer) -> ResultFuture<'_, Option<Uuid>> {

@@ -246,6 +246,7 @@ pub fn router(
         citadel_server::api::routes::dashboards::DashboardsHttpState {
             dashboards,
             entitlements: entitlements.clone(),
+            identity: Arc::clone(&identity),
         },
     ))
     .merge(tags::router(tags::TagsHttpState {
