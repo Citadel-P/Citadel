@@ -95,6 +95,8 @@ the host mounts with that account's Docker socket and Docker data directory.
 Tests render the merged configuration to reject inherited host-root mounts and
 exercise failure when an engine or account does not match. Provisioning and data
 migration remain operator tasks; CI does not create Linux accounts or use sudo.
+Deployment skips an existing PostgreSQL cluster on an unsupported major version
+before stopping Core. The product release remains available.
 Core and PostgreSQL have no container memory or swap caps
 by default on either target (`0` means unlimited). CPU ceilings remain independent.
 Operators can tune these values in each server-owned `.env` through

@@ -362,12 +362,32 @@ class DemoTests(unittest.TestCase):
     def test_existing_postgres_image_is_preserved_and_only_core_is_replaced(self):
         (self.directory / 'docker-compose.yml').write_text('existing')
         digest = 'postgres@sha256:' + 'c' * 64
-        with patch.object(remote.subprocess, 'check_output', side_effect=['db-existing', digest]), patch.object(remote.subprocess, 'run') as run:
+        with patch.object(remote.subprocess, 'check_output',
+                          side_effect=['db-existing', 'postgres (PostgreSQL) 19.0', digest]), \
+             patch.object(remote.subprocess, 'run') as run:
             remote.deploy(self.directory, self.payload)
         command = run.call_args.args[0]
         self.assertIn('--no-deps', command)
         self.assertEqual(command[-1], 'server')
         self.assertIn('PG_IMAGE=' + digest, (self.directory / '.env').read_text())
+
+    def test_older_postgres_skips_deployment_before_core_replacement(self):
+        compose = self.directory / 'docker-compose.yml'
+        compose.write_text('existing')
+        env = self.directory / '.env'
+        original = env.read_text()
+        with patch.object(remote.subprocess, 'check_output',
+                          side_effect=['db-existing', 'postgres (PostgreSQL) 18.6']), \
+             patch.object(remote.subprocess, 'run') as run:
+            result = remote.deploy(self.directory, self.payload)
+        self.assertEqual(result['status'], 'skipped-incompatible-database')
+        self.assertEqual(result['postgresMajor'], 18)
+        self.assertEqual(result['requiredPostgresMajor'], 19)
+        run.assert_not_called()
+        self.setup.enable.assert_not_called()
+        self.assertEqual(env.read_text(), original)
+        self.assertEqual(compose.read_text(), 'existing')
+        self.assertFalse((self.directory / 'deployment-attempt.json').exists())
 
     def test_failed_upgrade_blocks_older_deploy_but_allows_same_version_retry(self):
         def fail_up(args, **kwargs):
