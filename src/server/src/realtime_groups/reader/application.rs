@@ -37,6 +37,7 @@ pub struct ApplicationGroupReader {
     pub scripts: Arc<dyn ScriptRepository>,
     pub builds: Arc<dyn BuildRepository>,
     pub backups: Arc<dyn BackupPersistence>,
+    pub dashboards: Arc<dyn citadel_dashboards::DashboardRepository>,
     pub activities: Arc<ActivityService>,
     pub alerts: Arc<dyn citadel_alerts::AlertRepository>,
     pub runtime: Arc<dyn citadel_platforms::runtime_provider::PlatformRuntimeProvider>,
@@ -53,6 +54,7 @@ pub(super) fn rows<T: Serialize>(
     style: RowStyle,
 ) -> Result<GroupSnapshot, RealtimeReadError> {
     Ok(GroupSnapshot {
+        scope: None,
         rows: vec![GroupRows {
             target,
             rows: values
@@ -134,6 +136,7 @@ pub(super) fn event(
     value: impl Serialize,
 ) -> Result<GroupSnapshot, RealtimeReadError> {
     Ok(GroupSnapshot {
+        scope: None,
         rows: vec![],
         events: vec![ClientEvent::new(
             target,
@@ -216,6 +219,7 @@ impl ApplicationGroupReader {
         let patches = event.container_state_patches()?;
         match group.topic() {
             Topic::Containers(..) => Some(GroupSnapshot {
+                scope: None,
                 rows: vec![],
                 events: vec![ClientEvent::new(
                     "ContainersStateChanged",
@@ -223,6 +227,7 @@ impl ApplicationGroupReader {
                 )],
             }),
             Topic::DockerDaemon(..) => Some(GroupSnapshot {
+                scope: None,
                 rows: vec![],
                 events: vec![ClientEvent::new(
                     "ContainerStateChanged",
@@ -441,6 +446,44 @@ impl ApplicationGroupReader {
             // invalidates it to cover changes between the GET and subscription.
             return event("ContainerHealthHistoryChanged", json!({"resourceId": id}));
         }
+        if let Topic::DeploymentStats(id) | Topic::ServiceStats(id) = g.topic() {
+            let (kind, workload) = match g.topic() {
+                Topic::DeploymentStats(_) => (
+                    ResourceType::Deployment,
+                    citadel_platforms::MetricWorkload::Deployment(*id),
+                ),
+                _ => (
+                    ResourceType::SwarmService,
+                    citadel_platforms::MetricWorkload::SwarmService(*id),
+                ),
+            };
+            self.permission_with_lease(p, kind, Some(*id), None, lease)
+                .await?;
+            let membership = self
+                .statistics
+                .metric_membership(workload)
+                .await
+                .map_err(failure)?;
+            if let Some(platform) = membership.platform {
+                if matches!(g.topic(), Topic::ServiceStats(_)) {
+                    self.permission_with_lease(
+                        p,
+                        ResourceType::Platform,
+                        Some(platform),
+                        None,
+                        lease,
+                    )
+                    .await?;
+                }
+                if let Some(lease) = lease {
+                    lease.set_scope(&g.name, platform);
+                }
+            }
+            return Ok(GroupSnapshot {
+                scope: Some(SnapshotScope::Workload(membership)),
+                ..Default::default()
+            });
+        }
         use ResourceType::*;
         let id = g.id();
         let actor = p.actor_id;
@@ -506,9 +549,21 @@ impl ApplicationGroupReader {
                 })?;
                 return event("ResourceCopyInfoUpdated", progress);
             }
+            Topic::Dashboard => {
+                if !p.is_human() {
+                    return Err(RealtimeReadError::Authorization);
+                }
+                return g
+                    .dashboard
+                    .as_ref()
+                    .ok_or(RealtimeReadError::Authorization)?
+                    .read(self, p)
+                    .await;
+            }
             Topic::Activity { .. } => return self.activities(p, g, lease).await,
             Topic::AlertEvents => {
                 let filter = citadel_alerts::AlertEventFilter {
+                    tags: vec![],
                     page: 1,
                     page_size: 100,
                     resource_id: None,
@@ -524,6 +579,7 @@ impl ApplicationGroupReader {
                 let events: crate::api::resources::alerts::views::AlertEventPage =
                     events.try_into().map_err(failure)?;
                 return Ok(GroupSnapshot {
+                    scope: None,
                     rows: vec![GroupRows {
                         target: "AlertEventReceived",
                         rows: events
@@ -1110,16 +1166,20 @@ impl ApplicationGroupReader {
                             .await?;
                     let values =
                         map_stats_for(change, identities.iter().filter(|c| c.stack_id == id));
-                    return event(
-                        "ReceiveStackContainerStats",
-                        values
-                            .into_iter()
-                            .filter_map(|stat| {
-                                let docker = stat["dockerContainerId"].as_str()?.to_owned();
-                                Some(json!({"id":docker,"containerStat":stat}))
-                            })
-                            .collect::<Vec<_>>(),
-                    );
+                    let patches = values
+                        .into_iter()
+                        .filter_map(|stat| {
+                            let docker = stat["dockerContainerId"].as_str()?.to_owned();
+                            Some(json!({"id":docker,"containerStat":stat}))
+                        })
+                        .collect::<Vec<_>>();
+                    return Ok(GroupSnapshot {
+                        events: vec![ClientEvent::new(
+                            "ReceiveStackContainerStats",
+                            vec![json!(patches), json!(id)],
+                        )],
+                        ..Default::default()
+                    });
                 }
                 let stack = self
                     .stacks

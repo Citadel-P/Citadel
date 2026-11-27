@@ -61,31 +61,14 @@ function AlertEventsContent({ actions }: { actions: RequiredComponents['Dropdown
   return <AlertEventsTable pagedResult={pagedAlertEvents as any} actions={actions as any} isLoading={isLoading} />;
 }
 
+const resourceOptions = Object.values(AlertResourceType).map((value) => ({
+  value,
+  label: value,
+  icon: CitadelIcons[value],
+}));
+
 function SearchSection() {
   const [query, setQuery] = useAlertEventQuery();
-
-  const resourceOptions = useMemo(() => {
-    const icons: Record<AlertResourceType, any> = {
-      [AlertResourceType.Deployment]: CitadelIcons.Deployment,
-      [AlertResourceType.GitRepository]: CitadelIcons.GitRepository,
-      [AlertResourceType.Platform]: CitadelIcons.Platform,
-      [AlertResourceType.Stack]: CitadelIcons.Stack,
-      [AlertResourceType.SwarmService]: CitadelIcons.SwarmService,
-      [AlertResourceType.Webhook]: CitadelIcons.Webhook,
-      [AlertResourceType.Script]: CitadelIcons.Script,
-      [AlertResourceType.Build]: CitadelIcons.Build,
-      [AlertResourceType.BackupPolicy]: CitadelIcons.BackupPolicy,
-      [AlertResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
-      [AlertResourceType.License]: CitadelIcons.License,
-      [AlertResourceType.Updates]: CitadelIcons.Updates,
-    };
-
-    return Object.values(AlertResourceType).map((value) => ({
-      value,
-      label: value,
-      icon: icons[value],
-    }));
-  }, []);
 
   const alertTypeOptions = useMemo(() => {
     const all = Object.values(AlertType);

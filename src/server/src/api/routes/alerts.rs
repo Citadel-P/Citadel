@@ -483,7 +483,7 @@ fn test_event() -> citadel_alerts::AlertEvent {
         (status = 200, description = "Success", body = Events, content_type = "application/json"),
         crate::openapi::errors::AccessErrors
     ),
-    params(("ResourceId" = Option<uuid::Uuid>, Query), ("AlertType" = Option<String>, Query), ("ResourceType" = Option<String>, Query), ("UnresolvedOnly" = Option<bool>, Query), ("Page" = Option<i32>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i32>, Query, minimum = 1, maximum = 1000, extensions(("x-citadel-default" = json!(50))))),
+    params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names on the readable event owner."), ("ResourceId" = Option<uuid::Uuid>, Query), ("AlertType" = Option<String>, Query), ("ResourceType" = Option<String>, Query), ("UnresolvedOnly" = Option<bool>, Query), ("Page" = Option<i32>, Query, minimum = 1, extensions(("x-citadel-default" = json!(1)))), ("PageSize" = Option<i32>, Query, minimum = 1, maximum = 1000, extensions(("x-citadel-default" = json!(50))))),
     security(("Bearer" = [])),
     extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(true)), ("x-citadel-setup-exempt" = json!(false)))
 )]
@@ -491,10 +491,15 @@ async fn list_events(
     State(s): State<AlertsHttpState>,
     p: Option<Extension<ActorPrincipal>>,
     ApiQuery(f): ApiQuery<EventFilter>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
     h: HeaderMap,
 ) -> HttpResult {
     let p = actor(p, &h)?;
     let filter = citadel_alerts::AlertEventFilter {
+        tags: api_result(
+            crate::api::request_validation::parse_tag_filters(raw.as_deref()),
+            &h,
+        )?,
         resource_id: f.resource_id,
         alert_type: f.alert_type,
         resource_type: f.resource_type,

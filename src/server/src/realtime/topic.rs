@@ -4,6 +4,7 @@ use uuid::Uuid;
 /// Validated topic shape. Authorization remains the feature reader's responsibility.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Topic {
+    Dashboard,
     InstanceJobs,
     InstanceSchedules,
     Platforms,
@@ -21,6 +22,8 @@ pub enum Topic {
     Images(Uuid),
     DockerDaemon(Uuid),
     Volumes(Uuid),
+    DeploymentStats(Uuid),
+    ServiceStats(Uuid),
     Deployment(Uuid),
     Stack(Uuid),
     StackInfo(Uuid),
@@ -72,6 +75,7 @@ impl Topic {
         }
         let parts: Vec<_> = name.split(':').collect();
         Some(match parts.as_slice() {
+            ["dashboard"] => Self::Dashboard,
             ["instance-jobs"] => Self::InstanceJobs,
             ["instance-schedules"] => Self::InstanceSchedules,
             ["platforms"] => Self::Platforms,
@@ -91,6 +95,8 @@ impl Topic {
             ["images", id] => Self::Images(non_nil(id)?),
             ["docker-daemon", id] => Self::DockerDaemon(non_nil(id)?),
             ["volumes", id] => Self::Volumes(non_nil(id)?),
+            ["deployment-stats", id] => Self::DeploymentStats(non_nil(id)?),
+            ["service-stats", id] => Self::ServiceStats(non_nil(id)?),
             ["deployment", id] => Self::Deployment(non_nil(id)?),
             ["stack", id] => Self::Stack(non_nil(id)?),
             ["stack-info", id] => Self::StackInfo(non_nil(id)?),
@@ -144,6 +150,7 @@ impl Topic {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::Dashboard => "dashboard",
             Self::InstanceJobs => "instance-jobs",
             Self::InstanceSchedules => "instance-schedules",
             Self::Platforms => "platforms",
@@ -161,6 +168,8 @@ impl Topic {
             Self::Images(_) => "images",
             Self::DockerDaemon(_) => "docker-daemon",
             Self::Volumes(_) => "volumes",
+            Self::DeploymentStats(_) => "deployment-stats",
+            Self::ServiceStats(_) => "service-stats",
             Self::Deployment(_) => "deployment",
             Self::Stack(_) => "stack",
             Self::StackInfo(_) => "stack-info",
@@ -199,6 +208,8 @@ impl Topic {
             | Self::Images(id)
             | Self::DockerDaemon(id)
             | Self::Volumes(id)
+            | Self::DeploymentStats(id)
+            | Self::ServiceStats(id)
             | Self::Deployment(id)
             | Self::Stack(id)
             | Self::StackInfo(id)
@@ -298,6 +309,8 @@ mod tests {
             "images",
             "docker-daemon",
             "deployment",
+            "deployment-stats",
+            "service-stats",
             "stack",
             "stack-info",
             "swarm-service",

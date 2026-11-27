@@ -12,7 +12,7 @@ import type { AppearancePreferences } from './appearance-types';
 
 export const DEFAULT_APPEARANCE: AppearancePreferences = {
   mode: UserTheme.System,
-  color: UserThemeColor.Neutral,
+  color: UserThemeColor.Blue,
   font: UserUiFont.Geist,
   radius: UserUiRadius.None,
   contentLayout: UserContentLayout.Full,

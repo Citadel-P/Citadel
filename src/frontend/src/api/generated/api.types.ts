@@ -350,6 +350,7 @@ export enum ResourceType {
   BuildAgentPool = "BuildAgentPool",
   SwarmService = "SwarmService",
   ServiceAccount = "ServiceAccount",
+  Dashboard = "Dashboard",
 }
 
 export enum ResourceCopyStatus {
@@ -736,6 +737,78 @@ export enum DatabaseInstallationView {
   Unknown = "Unknown",
 }
 
+export enum DashboardVisibility {
+  Private = "Private",
+  InstanceShared = "InstanceShared",
+  Restricted = "Restricted",
+}
+
+export enum DashboardStateKind {
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  SwarmService = "SwarmService",
+  Container = "Container",
+}
+
+export enum DashboardSourceKind {
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  SwarmService = "SwarmService",
+}
+
+export enum DashboardSharingMode {
+  InstanceShared = "InstanceShared",
+  Restricted = "Restricted",
+}
+
+export enum DashboardMetric {
+  Cpu = "Cpu",
+  Memory = "Memory",
+  Network = "Network",
+  DiskIo = "DiskIo",
+}
+
+export enum DashboardFleetMeasure {
+  Platforms = "Platforms",
+  Workloads = "Workloads",
+  Alerts = "Alerts",
+}
+
+export enum DashboardFleetKind {
+  Platform = "Platform",
+  Deployment = "Deployment",
+  Stack = "Stack",
+  SwarmService = "SwarmService",
+  BackupPolicy = "BackupPolicy",
+  Build = "Build",
+  BuildAgentPool = "BuildAgentPool",
+  Registry = "Registry",
+  GitRepository = "GitRepository",
+  Script = "Script",
+}
+
+export enum DashboardChartStyle {
+  Line = "Line",
+  Area = "Area",
+  Gradient = "Gradient",
+}
+
+export enum DashboardChartColor {
+  Blue = "Blue",
+  Green = "Green",
+  Amber = "Amber",
+  Violet = "Violet",
+  Cyan = "Cyan",
+}
+
+export enum DashboardAttentionTab {
+  All = "All",
+  Problems = "Problems",
+  Updates = "Updates",
+}
+
 export enum CurrentProfileAuthenticationType {
   Local = "Local",
   Oidc = "Oidc",
@@ -1090,6 +1163,7 @@ export enum ActivityResourceType {
   Volume = "Volume",
   BackupPolicy = "BackupPolicy",
   SwarmService = "SwarmService",
+  Dashboard = "Dashboard",
   ServiceAccount = "ServiceAccount",
 }
 
@@ -1244,6 +1318,11 @@ export enum ActivityEventType {
   SwarmServiceOperationFailed = "SwarmServiceOperationFailed",
   SwarmServiceDuplicated = "SwarmServiceDuplicated",
   SwarmServiceWebhookReceived = "SwarmServiceWebhookReceived",
+  DashboardCreated = "DashboardCreated",
+  DashboardUpdated = "DashboardUpdated",
+  DashboardSharingChanged = "DashboardSharingChanged",
+  DashboardDeleted = "DashboardDeleted",
+  InstanceHomeDashboardChanged = "InstanceHomeDashboardChanged",
   ServiceAccountCreated = "ServiceAccountCreated",
   ServiceAccountUpdated = "ServiceAccountUpdated",
   ServiceAccountRenamed = "ServiceAccountRenamed",
@@ -2856,6 +2935,14 @@ export interface Count {
   count: number;
 }
 
+export interface CreateDashboard {
+  configuration: DashboardConfiguration;
+  /** @format uuid */
+  id: string;
+  name: string;
+  visibility: DashboardVisibility;
+}
+
 export interface CreateDeploymentInput {
   description?: string | null;
   duplicateSource?: DuplicateSourceInput | null;
@@ -3048,6 +3135,217 @@ export interface CurrentProfileView {
   id: string;
   teams: ProfileResourceInfo[];
 }
+
+export interface DashboardConfiguration {
+  description?: string | null;
+  /**
+   * @format int32
+   * @min 0
+   */
+  rangeMinutes: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  schemaVersion: number;
+  tags: string[];
+  widgets: DashboardWidget[];
+}
+
+export interface DashboardDefault {
+  /** @format uuid */
+  dashboardId?: string | null;
+}
+
+export interface DashboardFleetPage {
+  /** @format int64 */
+  alerts: number;
+  /** @format int64 */
+  problems: number;
+  rows: DashboardFleetRow[];
+  states: DashboardStateCount[];
+  /** @format int64 */
+  total: number;
+  /** @format int64 */
+  updates: number;
+}
+
+export interface DashboardFleetReason {
+  code: string;
+  evidence?: string | null;
+  observedAt?: string | null;
+  /** @format int64 */
+  occurrences: number;
+  /** @format uuid */
+  target?: string | null;
+}
+
+export interface DashboardFleetRow {
+  createdAt?: string | null;
+  /** @format uuid */
+  id: string;
+  image?: string | null;
+  kind: string;
+  name: string;
+  /** @format uuid */
+  platformId?: string | null;
+  platformName?: string | null;
+  publishedPorts?: string[] | null;
+  reasons: DashboardFleetReason[];
+  releaseVersion?: string | null;
+  state: string;
+}
+
+export interface DashboardLayout {
+  /**
+   * @format int32
+   * @min 0
+   */
+  h: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  w: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  x: number;
+  /**
+   * @format int32
+   * @min 0
+   */
+  y: number;
+}
+
+export interface DashboardList {
+  dashboards: DashboardSummaryView[];
+}
+
+export interface DashboardMetricSource {
+  /** @format uuid */
+  id: string;
+  kind: DashboardSourceKind;
+}
+
+export interface DashboardNoteLink {
+  href: string;
+  label: string;
+}
+
+export interface DashboardSourceView {
+  canViewLogs: boolean;
+  /** @format uuid */
+  containerProjectionId?: string | null;
+  dockerServiceId?: string | null;
+  exceedsChartSeriesLimit: boolean;
+  /** @format uuid */
+  id: string;
+  matchesTags: boolean;
+  name: string;
+  /** @format uuid */
+  platformId?: string | null;
+  status: string;
+}
+
+export interface DashboardStateCount {
+  /** @format int64 */
+  count: number;
+  kind: string;
+  state: string;
+}
+
+export interface DashboardSummaryView {
+  canDelete: boolean;
+  canEdit: boolean;
+  /** @format uuid */
+  id: string;
+  name: string;
+  /** @format int64 */
+  revision: number;
+  visibility: DashboardVisibility;
+}
+
+export interface DashboardWidget {
+  /** @format uuid */
+  id: string;
+  layout: DashboardLayout;
+  settings: DashboardWidgetSettings;
+  title: string;
+}
+
+export type DashboardWidgetSettings =
+  | {
+      kind: "FleetSummary";
+      measures: DashboardFleetMeasure[];
+    }
+  | {
+      kind: "NeedsAttention";
+      kinds: DashboardFleetKind[];
+      /**
+       * @format int32
+       * @min 0
+       */
+      limit: number;
+      tab: DashboardAttentionTab;
+    }
+  | {
+      kind: "ResourceState";
+      resourceKind: DashboardStateKind;
+    }
+  | {
+      kind: "Watchlist";
+      pins: DashboardMetricSource[];
+    }
+  | {
+      color: DashboardChartColor;
+      kind: "Metrics";
+      legend: boolean;
+      metric: DashboardMetric;
+      presentation: DashboardChartStyle;
+      source: DashboardMetricSource;
+    }
+  | {
+      kind: "OpenAlerts";
+      /**
+       * @format int32
+       * @min 0
+       */
+      limit: number;
+    }
+  | {
+      kind: "Backups";
+      /**
+       * @format int32
+       * @min 0
+       */
+      limit: number;
+    }
+  | {
+      kind: "RecentActivity";
+      /**
+       * @format int32
+       * @min 0
+       */
+      limit: number;
+    }
+  | {
+      kind: "UpcomingSchedules";
+      /**
+       * @format int32
+       * @min 0
+       */
+      limit: number;
+    }
+  | {
+      kind: "Updates";
+    }
+  | {
+      kind: "Notes";
+      links: DashboardNoteLink[];
+      text: string;
+    };
 
 export interface DatabaseConnectionsView {
   /**
@@ -5990,6 +6288,30 @@ export type PublicActivityEventInfo =
       role: RoleActivitySnapshot;
     }
   | {
+      $type: "DashboardCreated";
+      configuration?: any;
+      visibility: string;
+    }
+  | {
+      $type: "DashboardUpdated";
+      changes: string[];
+      configuration?: any;
+      previousConfiguration?: any;
+    }
+  | {
+      $type: "DashboardSharingChanged";
+      visibility: string;
+    }
+  | {
+      $type: "DashboardDeleted";
+      configuration?: any;
+      visibility: string;
+    }
+  | {
+      $type: "InstanceHomeDashboardChanged";
+      dashboardName?: string | null;
+    }
+  | {
       $type: "ServiceAccountCreated";
       account: ServiceAccountActivitySnapshot;
     }
@@ -6565,6 +6887,17 @@ export interface ReadinessResponse {
   docker: boolean;
   setup: boolean;
   status: string;
+}
+
+export interface RecentActivityView {
+  /** @format date-time */
+  createdAt: string;
+  eventType: ActivityEventType;
+  /** @format uuid */
+  id: string;
+  resourceName: string;
+  resourceType: ActivityResourceType;
+  status: ActivityStatus;
 }
 
 export interface RecreateStackOnNewCommitState {
@@ -7194,6 +7527,12 @@ export interface RuntimeSwarmPeer {
   nodeId: string;
 }
 
+export interface SavedDashboardView {
+  /** Preserve unknown stored versions for read-only clients. */
+  configuration: any;
+  summary: DashboardSummaryView;
+}
+
 export interface ScaleSwarmServiceInput {
   /** @format int32 */
   replicas: number;
@@ -7633,6 +7972,12 @@ export interface ServiceStatistics {
   /** @format date-time */
   oldestSampleAt?: string | null;
   stats: ContainerStatSnapshot[];
+}
+
+export interface SetDashboardVisibility {
+  /** @format int64 */
+  revision: number;
+  visibility: DashboardSharingMode;
 }
 
 export interface SetupStatusView {
@@ -8837,6 +9182,13 @@ export interface UpdateCurrentProfileRequest {
   displayName: string;
 }
 
+export interface UpdateDashboard {
+  configuration: DashboardConfiguration;
+  name: string;
+  /** @format int64 */
+  revision: number;
+}
+
 export interface UpdateOperationView {
   component?: string | null;
   /** @format uuid */
@@ -9601,6 +9953,45 @@ export class Api<
      * No description
      *
      * @tags Activities
+     * @name ListRecentActivities
+     * @summary List recent authorized activity summaries
+     * @request GET:/api/v1/activities/recent
+     * @secure
+     * @response `200` `(RecentActivityView)[]` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    listRecentActivities: (
+      query?: {
+        /** Repeat to match all tag names on the readable event owner. */
+        tags?: string[];
+        eventType?: ActivityEventType;
+        /**
+         * @format int32
+         * @min 1
+         * @max 10
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<RecentActivityView[], ProblemDetails>({
+        path: `/api/v1/activities/recent`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Activities
      * @name GetActivity
      * @summary Get an authorized activity
      * @request GET:/api/v1/activities/{id}
@@ -9699,6 +10090,8 @@ export class Api<
      */
     listAlertEvents: (
       query?: {
+        /** Repeat to match all tag names on the readable event owner. */
+        tags?: string[];
         /** @format uuid */
         ResourceId?: string;
         AlertType?: string;
@@ -12918,6 +13311,284 @@ export class Api<
     /**
      * No description
      *
+     * @tags Dashboards
+     * @name ListDashboards
+     * @summary List visible dashboards
+     * @request GET:/api/v1/dashboards
+     * @secure
+     * @response `200` `DashboardList` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    listDashboards: (
+      query?: {
+        search?: string;
+        /** @format int64 */
+        limit?: number;
+        /** @format int64 */
+        offset?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<DashboardList, ProblemDetails>({
+        path: `/api/v1/dashboards`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
+     * @name CreateDashboard
+     * @summary Create a dashboard
+     * @request POST:/api/v1/dashboards
+     * @secure
+     * @response `200` `SavedDashboardView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    createDashboard: (data: CreateDashboard, params: RequestParams = {}) =>
+      this.request<SavedDashboardView, ProblemDetails>({
+        path: `/api/v1/dashboards`,
+        method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
+     * @name GetDashboardFleet
+     * @summary Count or investigate readable resources in the selected scope
+     * @request GET:/api/v1/dashboards/fleet
+     * @secure
+     * @response `200` `DashboardFleetPage` Scoped counts and bounded resource rows
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getDashboardFleet: (
+      query: {
+        read: string;
+        kinds?: string;
+        state?: string;
+        /** @maxLength 128 */
+        search?: string;
+        tab?: string;
+        /**
+         * @format int32
+         * @min 0
+         */
+        offset?: number;
+        /**
+         * @format int32
+         * @min 0
+         */
+        limit?: number;
+        /** Match all owner tags */
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<DashboardFleetPage, ProblemDetails>({
+        path: `/api/v1/dashboards/fleet`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
+     * @name ListDashboardSources
+     * @summary Find readable monitoring sources and check pinned resource tag membership
+     * @request GET:/api/v1/dashboards/sources
+     * @secure
+     * @response `200` `(DashboardSourceView)[]` Bounded resource metadata
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    listDashboardSources: (
+      query: {
+        kind: DashboardSourceKind;
+        search?: string;
+        /** Comma-separated pinned resource IDs of the selected kind. */
+        ids?: string;
+        /**
+         * @format int32
+         * @min 0
+         */
+        limit?: number;
+        /** Match all resource tag names */
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<DashboardSourceView[], ProblemDetails>({
+        path: `/api/v1/dashboards/sources`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
+     * @name DeleteDashboard
+     * @summary Delete a saved dashboard
+     * @request DELETE:/api/v1/dashboards/{id}
+     * @secure
+     * @response `204` `void` Saved
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    deleteDashboard: (
+      id: string,
+      query: {
+        /** @format int64 */
+        revision: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/dashboards/${id}`,
+        method: "DELETE",
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
+     * @name GetDashboard
+     * @summary Read a saved dashboard
+     * @request GET:/api/v1/dashboards/{id}
+     * @secure
+     * @response `200` `SavedDashboardView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getDashboard: (id: string, params: RequestParams = {}) =>
+      this.request<SavedDashboardView, ProblemDetails>({
+        path: `/api/v1/dashboards/${id}`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
+     * @name UpdateDashboard
+     * @summary Save dashboard content at its current revision
+     * @request PUT:/api/v1/dashboards/{id}
+     * @secure
+     * @response `200` `SavedDashboardView` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    updateDashboard: (
+      id: string,
+      data: UpdateDashboard,
+      params: RequestParams = {},
+    ) =>
+      this.request<SavedDashboardView, ProblemDetails>({
+        path: `/api/v1/dashboards/${id}`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
+     * @name SetDashboardVisibility
+     * @summary Change a dashboard’s sharing mode
+     * @request PUT:/api/v1/dashboards/{id}/visibility
+     * @secure
+     * @response `200` `DashboardSummaryView` Saved
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    setDashboardVisibility: (
+      id: string,
+      data: SetDashboardVisibility,
+      params: RequestParams = {},
+    ) =>
+      this.request<DashboardSummaryView, ProblemDetails>({
+        path: `/api/v1/dashboards/${id}/visibility`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
      * @tags Deployments
      * @name DeleteDeployments
      * @summary Delete Deployments
@@ -14734,6 +15405,37 @@ export class Api<
     /**
      * No description
      *
+     * @tags Dashboards
+     * @name SetInstanceDashboardDefault
+     * @summary Set or clear the instance default dashboard
+     * @request PUT:/api/v1/instance/dashboard-default
+     * @secure
+     * @response `204` `void` Saved
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    setInstanceDashboardDefault: (
+      data: DashboardDefault,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/instance/dashboard-default`,
+        method: "PUT",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
      * @tags Instance
      * @name GetDatabaseConnections
      * @summary Get this Core's database connection snapshot (administrator)
@@ -14942,6 +15644,43 @@ export class Api<
     ) =>
       this.request<SchedulePurposeCount[], ProblemDetails>({
         path: `/api/v1/instance/schedules/groups`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Instance
+     * @name GetUpcomingSchedules
+     * @summary Next enabled resource schedule occurrences (administrator)
+     * @request GET:/api/v1/instance/schedules/upcoming
+     * @secure
+     * @response `200` `SchedulePage` Ordered upcoming occurrences
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getUpcomingSchedules: (
+      query?: {
+        /**
+         * @format int32
+         * @min 0
+         */
+        limit?: number | null;
+        /** Match all owner tag names */
+        tags?: string[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<SchedulePage, ProblemDetails>({
+        path: `/api/v1/instance/schedules/upcoming`,
         method: "GET",
         query: query,
         secure: true,
@@ -17549,6 +18288,62 @@ export class Api<
       this.request<void, ProblemDetails>({
         path: `/api/v1/profile/change-password`,
         method: "POST",
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
+     * @name GetDashboardDefault
+     * @summary Resolve the current user’s default dashboard
+     * @request GET:/api/v1/profile/dashboard-default
+     * @secure
+     * @response `200` `DashboardDefault` Success
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    getDashboardDefault: (params: RequestParams = {}) =>
+      this.request<DashboardDefault, ProblemDetails>({
+        path: `/api/v1/profile/dashboard-default`,
+        method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Dashboards
+     * @name SetPersonalDashboardDefault
+     * @summary Set or clear the current user’s default dashboard
+     * @request PUT:/api/v1/profile/dashboard-default
+     * @secure
+     * @response `204` `void` Saved
+     * @response `400` `ProblemDetails` Bad Request
+     * @response `401` `ProblemDetails` Unauthorized
+     * @response `403` `ProblemDetails` Forbidden
+     * @response `404` `ProblemDetails` Not Found
+     * @response `409` `ProblemDetails` Conflict
+     * @response `429` `ProblemDetails` Too Many Requests
+     * @response `500` `ProblemDetails` Internal Server Error
+     * @response `default` `ProblemDetails` Request failed
+     */
+    setPersonalDashboardDefault: (
+      data: DashboardDefault,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/v1/profile/dashboard-default`,
+        method: "PUT",
         body: data,
         secure: true,
         type: ContentType.Json,

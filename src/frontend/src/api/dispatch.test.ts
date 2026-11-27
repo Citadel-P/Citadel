@@ -55,6 +55,17 @@ describe('generated-client dispatch', () => {
       }),
     ).toEqual(['getRegistry', { id: 'registry-id' }]);
   });
+
+  it('sends dashboard picker filters and delete revisions in the query string', async () => {
+    const { client, fetch } = capturedClient();
+    await invokeResource(client, 'listDashboards', { query: { search: 'Team board', limit: 20, offset: 40 } });
+    await invokeResource(client, 'deleteDashboard', { id: 'board-id', query: { revision: 3 } });
+    const [list, remove] = fetch.mock.calls.map(([url]) => new URL(String(url)));
+    expect(list.pathname).toBe('/api/v1/dashboards');
+    expect(Object.fromEntries(list.searchParams)).toEqual({ search: 'Team board', limit: '20', offset: '40' });
+    expect(remove.pathname).toBe('/api/v1/dashboards/board-id');
+    expect(remove.searchParams.get('revision')).toBe('3');
+  });
 });
 
 // Checked by tsc; do not execute requests during this compile-time assertion.

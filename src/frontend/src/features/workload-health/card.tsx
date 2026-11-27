@@ -80,7 +80,10 @@ export function WorkloadHealthCard({
       trigger={<Activity className={`size-4 ${tone}`} aria-hidden="true" />}
       status={<HealthLabel status={status} />}
       summary={
-        <HealthSummary resource={resource} unavailable={!!disconnected || status === ContainerHealthStatus.Unknown} />
+        <WorkloadHealthSummary
+          resource={resource}
+          unavailable={!!disconnected || status === ContainerHealthStatus.Unknown}
+        />
       }
       renderDetails={() => (
         <WorkloadHealthDetails
@@ -93,7 +96,7 @@ export function WorkloadHealthCard({
   );
 }
 
-function HealthSummary({ resource, unavailable }: { resource: HealthResource; unavailable: boolean }) {
+export function WorkloadHealthSummary({ resource, unavailable }: { resource: HealthResource; unavailable: boolean }) {
   const formatDateTime = useProfileDateTimeFormatter();
   const health = resource.probeHealth;
   const now = useHealthClock();

@@ -43,7 +43,7 @@ function renderSetup(entry: string) {
                     <Route path="/login/mfa/setup" element={<div>MFA enrollment</div>} />
                   </Route>
                   <Route element={<RequireAuth />}>
-                    <Route path="/" element={<div>Platforms page</div>} />
+                    <Route path="/" element={<div>Home page</div>} />
                     <Route path="/stacks" element={<div>Stacks page</div>} />
                   </Route>
                 </Route>
@@ -71,14 +71,14 @@ async function submitAdministrator() {
 
 describe('First-run setup navigation', () => {
   it.each([
-    ['/login', undefined, '/', 'Platforms page'],
-    ['/login?source=start#signin', undefined, '/', 'Platforms page'],
-    ['/', undefined, '/', 'Platforms page'],
+    ['/login', undefined, '/', 'Home page'],
+    ['/login?source=start#signin', undefined, '/', 'Home page'],
+    ['/', undefined, '/', 'Home page'],
     ['/stacks?source=first-run#runtime', undefined, '/stacks?source=first-run#runtime', 'Stacks page'],
-    ['/setup', '/login', '/', 'Platforms page'],
-    ['/setup', '/setup', '/', 'Platforms page'],
-    ['/setup', '/login/mfa', '/', 'Platforms page'],
-    ['/setup', '/login/mfa/setup', '/', 'Platforms page'],
+    ['/setup', '/login', '/', 'Home page'],
+    ['/setup', '/setup', '/', 'Home page'],
+    ['/setup', '/login/mfa', '/', 'Home page'],
+    ['/setup', '/login/mfa/setup', '/', 'Home page'],
   ] as const)(
     'opens the authenticated page after setup from %s with saved target %s',
     async (entry, savedTarget, expectedPath, page) => {
@@ -116,7 +116,7 @@ describe('First-run setup navigation', () => {
     renderSetup('/login');
     await submitAdministrator();
     expect(await screen.findByText(page)).toBeVisible();
-    expect(screen.queryByText('Platforms page')).not.toBeInTheDocument();
+    expect(screen.queryByText('Home page')).not.toBeInTheDocument();
   });
 
   it('shows confirmed maintenance and retries startup on the same route', async () => {
@@ -154,6 +154,6 @@ describe('First-run setup navigation', () => {
     renderSetup('/login');
     await submitAdministrator();
     expect(await screen.findByText('Login page')).toBeVisible();
-    expect(screen.queryByText('Platforms page')).not.toBeInTheDocument();
+    expect(screen.queryByText('Home page')).not.toBeInTheDocument();
   });
 });

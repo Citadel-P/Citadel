@@ -15,9 +15,11 @@ import QueryClientWrapper from './query-client-wrapper';
 import { ApiClientProvider } from './api/api-client-provider';
 import { AuthProvider } from './features/auth/auth-provider';
 import LoadingBarWrapper from './components/custom/loading-bar-wrapper';
-import { Router } from './router';
+import { createBrowserRouter, RouterProvider } from 'react-router';
+import { appRoutes } from './router';
 import { SetupProvider } from './features/setup/setup-provider';
 
+const router = createBrowserRouter(appRoutes);
 const initialAppearance = readBootstrapAppearance();
 applyAppearanceToDocument(initialAppearance);
 const initialFont = FONT_OPTIONS.find((option) => option.value === initialAppearance.font)!;
@@ -35,7 +37,7 @@ void document.fonts
                 <AuthProvider>
                   <AppearanceProvider>
                     <LoadingBarWrapper />
-                    <Router />
+                    <RouterProvider router={router} />
                     <Toaster />
                   </AppearanceProvider>
                 </AuthProvider>

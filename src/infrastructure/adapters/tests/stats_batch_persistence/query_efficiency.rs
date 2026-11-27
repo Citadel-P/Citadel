@@ -544,7 +544,8 @@ async fn swarm_freshness_seeks_sources_and_respects_future_samples_in_both_plans
     sqlx::raw_sql("ANALYZE statisticssources; ANALYZE statisticssamples; ANALYZE statisticsrollups; ANALYZE containers; ANALYZE swarmtaskprojections").execute(&pool).await.unwrap();
     let mut tx = pool.begin().await.unwrap();
     sqlx::query(concat!(
-        "PREPARE freshness(uuid,text,bigint) AS ",
+        "PREPARE freshness(uuid,text,bigint) AS WITH scope AS (SELECT $1::uuid AS platformid,$2::text AS dockerserviceid)",
+        include_str!("../../src/persistence/postgres/platforms/statistics/service_task_members.sql"),
         include_str!(
             "../../src/persistence/postgres/platforms/statistics/service_current_tasks.sql"
         )

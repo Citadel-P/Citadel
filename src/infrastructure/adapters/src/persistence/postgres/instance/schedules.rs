@@ -1,3 +1,4 @@
+mod upcoming;
 use chrono::{DateTime, Utc};
 use citadel_instance::{
     InstanceError, ScheduleCatalogPolicy, ScheduleCount, ScheduleDefinition, SchedulePurpose,
@@ -282,6 +283,16 @@ impl ScheduleReader for PostgresSchedules {
                 })
                 .collect()
         })
+    }
+    fn upcoming<'a>(
+        &'a self,
+        tags: &'a [String],
+        limit: usize,
+        now: DateTime<Utc>,
+        fixed: std::collections::BTreeMap<SchedulePurpose, DateTime<Utc>>,
+        policy: &'a ScheduleCatalogPolicy,
+    ) -> BoxFuture<'a, Result<Vec<ScheduleDefinition>, InstanceError>> {
+        Box::pin(upcoming::read(self, tags, limit, now, fixed, policy))
     }
     fn discover(
         &self,

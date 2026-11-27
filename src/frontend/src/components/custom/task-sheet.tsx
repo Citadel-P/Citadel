@@ -183,11 +183,12 @@ function getTaskStreamIconClassName(state: ReturnType<typeof useStreamProgress>)
 }
 
 function TaskActivityLayout({ activityId }: { activityId: string }) {
-  const { data, isLoading } = useRead('getActivity', { id: activityId });
+  const { data, isLoading, isError } = useRead('getActivity', { id: activityId });
 
   if (isLoading) return <Loader />;
 
-  const activity = data!.data;
+  if (isError || !data) return <div className="p-8 text-center text-muted-foreground">Activity unavailable.</div>;
+  const activity = data.data;
   const releaseSource = getActivityReleaseSource(activity);
 
   return (
@@ -354,6 +355,35 @@ type ActivityInfoRendererMap = {
 };
 
 const activityInfoRenderers: ActivityInfoRendererMap = {
+  DashboardCreated: (info, activity) => (
+    <div className="flex flex-col gap-4">
+      <p>Visibility · {info.visibility}</p>
+      {info.configuration && (
+        <SpecViewer spec={info.configuration} resourceId={activity.resourceId} title="Initial configuration" />
+      )}
+    </div>
+  ),
+  DashboardUpdated: (info) =>
+    info.previousConfiguration && info.configuration ? (
+      <MonacoDiff
+        original={info.previousConfiguration}
+        modified={info.configuration}
+        format="yaml"
+        title="Configuration changes"
+      />
+    ) : (
+      <p>Changed · {info.changes.join(', ')}</p>
+    ),
+  DashboardSharingChanged: (info) => <p>Visibility · {info.visibility}</p>,
+  DashboardDeleted: (info, activity) => (
+    <div className="flex flex-col gap-4">
+      <p>Visibility at deletion · {info.visibility}</p>
+      {info.configuration && (
+        <SpecViewer spec={info.configuration} resourceId={activity.resourceId} title="Deleted configuration" />
+      )}
+    </div>
+  ),
+  InstanceHomeDashboardChanged: (info) => <p>Instance home · {info.dashboardName ?? 'No instance default'}</p>,
   InstanceConfigurationUpdated: (info) => (
     <MonacoDiff
       original={{ configuration: info.previousConfiguration, mfaPolicy: info.previousMfaPolicy }}

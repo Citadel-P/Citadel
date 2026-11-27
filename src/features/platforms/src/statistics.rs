@@ -157,7 +157,25 @@ impl ServiceStatistics {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum MetricWorkload {
+    Deployment(Uuid),
+    SwarmService(Uuid),
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct MetricMembership {
+    pub platform: Option<Uuid>,
+    pub expected: usize,
+    // Event samples identify a physical container by node and Docker ID.
+    pub members: std::collections::BTreeMap<(Option<String>, String), Uuid>,
+}
+
 pub trait StatisticsReader: Send + Sync {
+    fn metric_membership(
+        &self,
+        workload: MetricWorkload,
+    ) -> BoxFuture<'_, Result<MetricMembership, RuntimeCapabilityError>>;
     fn task_container<'a>(
         &'a self,
         platform_id: Uuid,

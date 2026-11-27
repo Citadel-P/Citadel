@@ -1,4 +1,4 @@
-import { HardDrive } from 'lucide-react';
+import { CitadelIcons } from '@/lib/icons';
 import { VolumesTable } from './table';
 import { RegularResourceComponents, RequiredFormComponents, ResourceDataHookResult } from '@/pages/types';
 import { ActionBar } from '@/components/custom/action-bar';
@@ -10,7 +10,7 @@ import { BackupStatusFilter, useBackupStatusFilter } from '@/features/backup-pol
 const EMPTY_VOLUMES: never[] = [];
 
 export const VolumeComponents: RegularResourceComponents = {
-  Icon: HardDrive,
+  Icon: CitadelIcons.Volume,
   Content: VolumesTable,
   header: {
     showSearch: true,

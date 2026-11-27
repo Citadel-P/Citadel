@@ -45,6 +45,7 @@ pub(crate) fn documented_routes() -> utoipa_axum::router::OpenApiRouter<Activiti
         <ActivitySchemas as utoipa::OpenApi>::openapi(),
     )
         .normalized_routes(utoipa_axum::routes!(list))
+        .normalized_routes(utoipa_axum::routes!(recent))
         .normalized_routes(utoipa_axum::routes!(get_by_id))
 }
 
@@ -118,6 +119,67 @@ async fn list(
             Ok(activities) => no_store(Json(activities).into_response()),
             Err(error) => error_response(error, &headers),
         },
+        Err(error) => activity_error_response(error, &headers),
+    }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RecentQuery {
+    event_type: Option<citadel_activities::ActivityEventType>,
+    limit: Option<i32>,
+}
+
+#[utoipa::path(get, path = "/api/v1/activities/recent", operation_id = "listRecentActivities", tag = "Activities",
+    summary = "List recent authorized activity summaries",
+    params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names on the readable event owner."), ("eventType" = Option<crate::api::resources::vocabulary::ActivityEventTypeSchema>, Query),
+           ("limit" = Option<i32>, Query, minimum = 1, maximum = 10)),
+    responses((status = 200, description = "Success", body = [crate::api::resources::activities::views::RecentActivityView], content_type = "application/json"), crate::openapi::errors::AccessErrors),
+    security(("Bearer" = [])),
+    extensions(("x-citadel-principal" = json!("actor")), ("x-citadel-public" = json!(false)), ("x-citadel-setup-exempt" = json!(false)))
+)]
+async fn recent(
+    State(state): State<ActivitiesHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    crate::api::request_validation::ApiQuery(query): crate::api::request_validation::ApiQuery<
+        RecentQuery,
+    >,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+    headers: HeaderMap,
+) -> Response {
+    let Some(Extension(principal)) = principal else {
+        return error_response(ApiError::Unauthenticated, &headers);
+    };
+    let tags = match crate::api::request_validation::parse_tag_filters(raw.as_deref()) {
+        Ok(tags) => tags,
+        Err(error) => return error_response(error, &headers),
+    };
+    if url::form_urlencoded::parse(raw.as_deref().unwrap_or_default().as_bytes()).any(|(key, _)| {
+        !key.eq_ignore_ascii_case("tags") && !matches!(key.as_ref(), "eventType" | "limit")
+    }) {
+        return error_response(
+            ApiError::Validation("Unknown recent activity filter.".into()),
+            &headers,
+        );
+    }
+    match state
+        .activities
+        .recent(
+            &activity_access(&principal),
+            query.event_type,
+            query.limit.unwrap_or(5),
+            &tags,
+        )
+        .await
+    {
+        Ok(rows) => no_store(
+            Json(
+                rows.into_iter()
+                    .map(crate::api::resources::activities::views::RecentActivityView::from)
+                    .collect::<Vec<_>>(),
+            )
+            .into_response(),
+        ),
         Err(error) => activity_error_response(error, &headers),
     }
 }

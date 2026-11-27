@@ -5,6 +5,7 @@ pub mod authentication;
 pub mod backups;
 pub mod bindings;
 pub mod builds;
+pub mod dashboards;
 pub mod deployments;
 pub mod git_accounts;
 pub mod git_repositories;

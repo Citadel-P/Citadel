@@ -10,8 +10,9 @@ use uuid::Uuid;
 
 pub const MAX_GROUPS: usize = 64;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Group {
+    pub(crate) dashboard: Option<super::dashboard::Projection>,
     // Preserve the client's spelling for idempotent joins/leaves, including
     // accepted alternate UUID spellings. Never canonicalize a subscription key.
     pub name: String,
@@ -24,6 +25,7 @@ pub struct Group {
 impl Group {
     pub fn parse(name: &str) -> Option<Self> {
         Some(Self {
+            dashboard: None,
             name: name.into(),
             tags: Vec::new(),
             include_disabled: false,
@@ -75,6 +77,27 @@ impl Group {
     }
 
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if let Topic::DeploymentStats(_) | Topic::ServiceStats(_) = self.topic() {
+            let service = matches!(self.topic(), Topic::ServiceStats(_));
+            let owner = if service {
+                "SwarmService"
+            } else {
+                "Deployment"
+            };
+            if event.resource_type == owner {
+                return event.affects_resource(self.id());
+            }
+            return event.resource_type == "Platform"
+                && match event.payload["dockerResourceType"].as_str() {
+                    Some("containerStats" | "container" | "platformInventory" | "platform") => true,
+                    Some("swarm" | "service" | "task") => service,
+                    None => matches!(event.event_kind, "connectionChanged" | "resourceChanged"),
+                    _ => false,
+                };
+        }
+        if let Some(dashboard) = &self.dashboard {
+            return dashboard.affected_by(event);
+        }
         if event.resource_type == "Tag" {
             let kind = match self.topic() {
                 Topic::Platforms => "Platform",
@@ -450,8 +473,14 @@ pub enum RowStyle {
     Platforms,
     PlatformPatch(Uuid),
 }
+#[derive(PartialEq, Eq)]
+pub enum SnapshotScope {
+    Workload(citadel_platforms::MetricMembership),
+    PinnedPlatforms(BTreeSet<Uuid>),
+}
 #[derive(Default)]
 pub struct GroupSnapshot {
+    pub scope: Option<SnapshotScope>,
     pub rows: Vec<GroupRows>,
     pub events: Vec<ClientEvent>,
 }
@@ -525,6 +554,8 @@ pub type GroupStream =
 pub struct GroupSubscription {
     pub group: Group,
     known: BTreeMap<&'static str, BTreeSet<String>>,
+    pub(crate) scope: Option<SnapshotScope>,
+    dashboard_digest: Option<[u8; 32]>,
     // Only routing fields needed to identify deleted Containers/Images, never
     // their configuration, environment, or secret-bearing resource payloads.
     tombstones: BTreeMap<&'static str, BTreeMap<String, Value>>,
@@ -535,6 +566,8 @@ impl GroupSubscription {
             group,
             known: BTreeMap::new(),
             tombstones: BTreeMap::new(),
+            scope: None,
+            dashboard_digest: None,
         }
     }
     pub(crate) fn expects_event(
@@ -542,6 +575,23 @@ impl GroupSubscription {
         event: &PublishedRuntimeEvent,
         lease: &crate::realtime::AuthorizationLease,
     ) -> bool {
+        if event.resource_type == "Platform" {
+            let affects_platform = |owner| {
+                event.platform_id.map_or_else(
+                    || event.affects_resource(Some(owner)),
+                    |changed| changed == owner,
+                )
+            };
+            if let Some(SnapshotScope::Workload(membership)) = &self.scope {
+                return membership.platform.is_some_and(affects_platform)
+                    && self.group.affected_by(event);
+            }
+            if let Some(SnapshotScope::PinnedPlatforms(owners)) = &self.scope
+                && !owners.iter().copied().any(affects_platform)
+            {
+                return false;
+            }
+        }
         if self.group.subscription_id.is_some()
             && matches!(self.group.topic(), Topic::Platforms)
             && event.payload["dockerResourceType"] == "containerStats"
@@ -560,6 +610,31 @@ impl GroupSubscription {
         limit: usize,
     ) -> Result<Vec<ClientEvent>, RealtimeReadError> {
         let mut events = snapshot.events;
+        if let Some(SnapshotScope::Workload(membership)) = &snapshot.scope
+            && self.scope != snapshot.scope
+        {
+            events.push(ClientEvent::new(
+                "WorkloadStatsMembership",
+                vec![json!({
+                    "group": self.group.name,
+                    "expected": membership.expected,
+                    "members": membership.members.values().collect::<Vec<_>>()
+                })],
+            ));
+        }
+        self.scope = snapshot.scope;
+        if self.group.dashboard.is_some()
+            && let [update] = events.as_slice()
+        {
+            use sha2::{Digest, Sha256};
+            let bytes = serde_json::to_vec(&update.arguments)
+                .map_err(|e| RealtimeReadError::Storage(e.to_string()))?;
+            let digest = Sha256::digest(bytes).into();
+            if self.dashboard_digest.replace(digest) == Some(digest) {
+                events.clear();
+            }
+        }
+
         if self.group.subscription_id.is_some() && matches!(self.group.topic(), Topic::Platforms) {
             events.retain(|event| {
                 event.target != "PlatformStatsUpdated"
@@ -1013,6 +1088,7 @@ mod tests {
     fn owner_patches_preserve_siblings_and_enforce_the_subscription_bound() {
         let mut subscription = GroupSubscription::new(Group::parse("deployments").unwrap());
         let snapshot = |rows, style| GroupSnapshot {
+            scope: None,
             rows: vec![GroupRows {
                 target: "DeploymentInfoUpdated",
                 rows,
@@ -1058,6 +1134,7 @@ mod tests {
         let b = Uuid::now_v7();
         let mut subscription = GroupSubscription::new(Group::parse("platforms").unwrap());
         let snapshot = |rows, style| GroupSnapshot {
+            scope: None,
             rows: vec![GroupRows {
                 target: "PlatformUpdated",
                 rows,
@@ -1099,6 +1176,7 @@ mod tests {
             Group::parse(&format!("docker-daemon:{}", Uuid::now_v7())).unwrap(),
         );
         let snapshot = |rows, style| GroupSnapshot {
+            scope: None,
             rows: vec![GroupRows {
                 target: "VolumeEventReceived",
                 rows,
@@ -1146,6 +1224,7 @@ mod tests {
             Group::parse(&format!("docker-daemon:{}", Uuid::now_v7())).unwrap(),
         );
         let snapshot = |rows, style| GroupSnapshot {
+            scope: None,
             rows: vec![GroupRows {
                 target: "ContainerEventReceived",
                 rows,
@@ -1237,6 +1316,7 @@ mod tests {
     fn alert_notifications_do_not_replay_history_or_repeat_existing_events() {
         let mut subscription = GroupSubscription::new(Group::parse("alert-events").unwrap());
         let snapshot = |ids: &[&str]| GroupSnapshot {
+            scope: None,
             rows: vec![GroupRows {
                 target: "AlertEventReceived",
                 rows: ids.iter().map(|id| json!({"id":id})).collect(),
@@ -1337,6 +1417,7 @@ mod tests {
     fn snapshots_upsert_and_remove_without_retaining_resource_payloads() {
         let mut subscription = GroupSubscription::new(Group::parse("deployments").unwrap());
         let snapshot = |rows| GroupSnapshot {
+            scope: None,
             rows: vec![GroupRows {
                 target: "DeploymentInfoUpdated",
                 rows,
@@ -1362,6 +1443,7 @@ mod tests {
             subscription
                 .apply(
                     GroupSnapshot {
+                        scope: None,
                         rows: vec![GroupRows {
                             target: "PlatformUpdated",
                             rows: vec![json!({"id":"a"}), json!({"id":"b"})],
@@ -1417,6 +1499,7 @@ mod tests {
             Group::parse(&format!("docker-daemon:{}", Uuid::now_v7())).unwrap(),
         );
         let snapshot = |rows| GroupSnapshot {
+            scope: None,
             rows: vec![GroupRows {
                 target: "ContainerEventReceived",
                 style: RowStyle::DockerResource,

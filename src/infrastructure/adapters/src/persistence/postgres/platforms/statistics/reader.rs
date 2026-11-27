@@ -1,7 +1,7 @@
 use citadel_platforms::{
-    ContainerStatSnapshot, PlatformStatSnapshot, RuntimeCapabilityError, RuntimeErrorKind,
-    ServiceStatIdentity, ServiceTaskSample, StatisticsContainer, StatisticsReader,
-    StatisticsWorkload, StatsWindow, WorkloadStatSeries,
+    ContainerStatSnapshot, MetricMembership, MetricWorkload, PlatformStatSnapshot,
+    RuntimeCapabilityError, RuntimeErrorKind, ServiceStatIdentity, ServiceTaskSample,
+    StatisticsContainer, StatisticsReader, StatisticsWorkload, StatsWindow, WorkloadStatSeries,
 };
 use futures_util::{FutureExt, future::BoxFuture};
 use sqlx::{PgPool, Row, postgres::PgRow};
@@ -56,6 +56,62 @@ fn map_container(row: PgRow) -> Result<ContainerStatSnapshot, RuntimeCapabilityE
     })
 }
 impl StatisticsReader for PostgresStatisticsReader {
+    fn metric_membership(
+        &self,
+        workload: MetricWorkload,
+    ) -> BoxFuture<'_, Result<MetricMembership, RuntimeCapabilityError>> {
+        const DEPLOYMENT: &str =
+            "SELECT d.platformid, 1 AS expected, c.id, c.dockercontainerid, c.dockernodeid AS node
+            FROM deployments d LEFT JOIN LATERAL (
+                SELECT id, dockercontainerid, dockernodeid FROM containers
+                WHERE deploymentid=d.id AND platformid=d.platformid AND projectionstalesince IS NULL
+                ORDER BY updated DESC, id DESC LIMIT 1
+            ) c ON true WHERE d.id=$1";
+        const SERVICE: &str = concat!(
+            "WITH scope AS (SELECT s.platformid,
+                CASE WHEN p.platformdescriptor->>'$type'='DockerSwarm' THEN s.dockerserviceid END AS dockerserviceid
+                FROM swarmservices s JOIN platforms p ON p.id=s.platformid WHERE s.id=$1)",
+            include_str!("service_task_members.sql"),
+            "SELECT s.platformid, coalesce(p.desiredtaskcount,0) AS expected,
+                CASE WHEN NOT p.isstale THEN m.id END AS id, m.dockercontainerid, m.node
+             FROM scope s LEFT JOIN swarmserviceprojections p USING (platformid,dockerserviceid)
+             LEFT JOIN members m ON true"
+        );
+        async move {
+            let (id, sql) = match workload {
+                MetricWorkload::Deployment(id) => (id, DEPLOYMENT),
+                MetricWorkload::SwarmService(id) => (id, SERVICE),
+            };
+            let rows = sqlx::query(sqlx::AssertSqlSafe(sql))
+                .bind(id)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(storage)?;
+            let mut membership = MetricMembership::default();
+            if let Some(first) = rows.first() {
+                membership.platform = first.try_get("platformid").map_err(storage)?;
+                membership.expected =
+                    first.try_get::<i32, _>("expected").map_err(storage)?.max(0) as usize;
+            }
+            // Partial, ambiguous or oversized membership falls back to bounded HTTP history.
+            if rows.len() == membership.expected && rows.len() <= 500 {
+                for row in rows {
+                    let Some(id) = row.try_get::<Option<Uuid>, _>("id").map_err(storage)? else {
+                        break;
+                    };
+                    let node = row.try_get("node").map_err(storage)?;
+                    let docker_id = row.try_get("dockercontainerid").map_err(storage)?;
+                    membership.members.insert((node, docker_id), id);
+                }
+                if membership.members.len() != membership.expected {
+                    membership.members.clear();
+                }
+            }
+            Ok(membership)
+        }
+        .boxed()
+    }
+
     fn task_container<'a>(
         &'a self,
         platform_id: Uuid,
@@ -82,13 +138,17 @@ impl StatisticsReader for PostgresStatisticsReader {
         now: i64,
     ) -> BoxFuture<'a, Result<Vec<ServiceTaskSample>, RuntimeCapabilityError>> {
         async move {
-            let rows = sqlx::query(include_str!("service_current_tasks.sql"))
-                .bind(platform_id)
-                .bind(service_id)
-                .bind(now)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(storage)?;
+            let rows = sqlx::query(concat!(
+                "WITH scope AS (SELECT $1::uuid AS platformid,$2::text AS dockerserviceid)",
+                include_str!("service_task_members.sql"),
+                include_str!("service_current_tasks.sql")
+            ))
+            .bind(platform_id)
+            .bind(service_id)
+            .bind(now)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(storage)?;
             if rows.len() > 500 {
                 return Err(capacity(
                     "Service statistics supports at most 500 current Tasks",

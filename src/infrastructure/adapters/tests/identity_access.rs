@@ -112,7 +112,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     assert!(!preferences.is_persisted);
     assert_eq!(
         preferences.theme_color,
-        citadel_identity::UserThemeColor::Neutral
+        citadel_identity::UserThemeColor::Blue
     );
     assert_eq!(preferences.radius, citadel_identity::UserUiRadius::None);
     assert_eq!(
@@ -152,7 +152,7 @@ async fn identity_and_service_account_lifecycle_is_atomic_and_actor_scoped() {
     assert!(preferences.is_persisted);
     assert_eq!(
         preferences.theme_color,
-        citadel_identity::UserThemeColor::Neutral
+        citadel_identity::UserThemeColor::Blue
     );
     assert_eq!(preferences.radius, citadel_identity::UserUiRadius::None);
     assert_eq!(

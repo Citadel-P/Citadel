@@ -1,4 +1,4 @@
-import { KeyRound, Network, Settings, MonitorCog } from 'lucide-react';
+import { House, KeyRound, Network, Settings, MonitorCog } from 'lucide-react';
 import { JSX } from 'react';
 import DockerIcon from '@/assets/docker.min.svg?react';
 import { CitadelIcons } from '@/lib/icons';
@@ -29,9 +29,13 @@ const renderIcon = (Icon?: React.ComponentType<{ className?: string }>, classNam
 
 const MenuItems: IMenuItem[] = [
   {
+    group: '',
+    items: [{ icon: renderIcon(House), label: 'Home', route: '/' }],
+  },
+  {
     group: 'Infrastructure',
     items: [
-      { icon: renderIcon(CitadelIcons.Platform), label: 'Platforms', route: '/' },
+      { icon: renderIcon(CitadelIcons.Platform), label: 'Platforms', route: '/platforms' },
       { icon: renderIcon(CitadelIcons.BackupPolicy), label: 'Backups', route: '/backup-policies' },
     ],
   },
@@ -75,6 +79,7 @@ export const UtilityItems: ISubMenuItem[] = [
     icon: <Settings className="w-4 h-4" />,
     label: 'Configuration',
     children: [
+      { icon: renderIcon(CitadelIcons.Dashboard), label: 'Dashboards', route: '/dashboards' },
       {
         icon: renderIcon(CitadelIcons.AlertRule),
         label: 'Alert Rules',

@@ -107,6 +107,20 @@ it('highlights the resource family on edit pages', () => {
   expect(screen.getByRole('link', { name: 'Platforms' })).not.toHaveAttribute('aria-current');
 });
 
+it('keeps Home separate from the Platforms list', async () => {
+  const { user } = renderCitadel(<Harness />, { route: '/' });
+  const home = screen.getByRole('link', { name: 'Home' });
+  const platforms = screen.getByRole('link', { name: 'Platforms' });
+  expect(home).toHaveAttribute('aria-current', 'page');
+  expect(platforms).not.toHaveAttribute('aria-current');
+  await user.click(platforms);
+  expect(screen.getByTestId('location')).toHaveTextContent(/^\/platforms$/);
+  expect(platforms).toHaveAttribute('aria-current', 'page');
+  expect(home).not.toHaveAttribute('aria-current');
+  await user.click(home);
+  expect(screen.getByTestId('location')).toHaveTextContent(/^\/$/);
+});
+
 it('retains the selected platform and its collapse state on global pages', async () => {
   const { user } = renderCitadel(<Harness />, { route: '/platforms/one/containers/container-id' });
   await user.click(screen.getByRole('button', { name: 'Platform resources' }));
@@ -169,11 +183,10 @@ it('shows Configuration independently of Administration for permitted non-admini
   expect(configuration).toHaveAttribute('aria-expanded', 'false');
 });
 
-it('opens Instance from the collapsed sidebar without expanding it and hides empty Configuration', async () => {
+it('opens Instance from the collapsed sidebar without expanding it', async () => {
   const { user } = renderCitadel(<Harness open={false} />, { route: '/instance' });
   const administration = screen.getByRole('button', { name: 'Administration' });
   expect(administration).toHaveAttribute('data-active', 'true');
-  expect(screen.queryByRole('button', { name: 'Configuration' })).not.toBeInTheDocument();
   await user.click(administration);
   expect(screen.getByRole('menuitem', { name: 'Instance' })).toHaveAttribute('aria-current', 'page');
   expect(screen.getByTestId('sidebar-state')).toHaveTextContent('collapsed');
@@ -187,7 +200,19 @@ it('keeps All platforms available from the platform browser', async () => {
   const { user } = renderCitadel(<Harness />, { route: '/deployments' });
   await user.click(screen.getByRole('button', { name: 'Select platform' }));
   await user.click(screen.getByRole('menuitem', { name: 'All platforms' }));
-  expect(screen.getByTestId('location')).toHaveTextContent('/');
+  expect(screen.getByTestId('location')).toHaveTextContent(/^\/platforms$/);
+});
+
+it('opens Dashboards under Configuration for regular users', async () => {
+  mocks.administrator = false;
+  const { user } = renderCitadel(<Harness />);
+  expect(screen.queryByRole('link', { name: 'Dashboards' })).not.toBeInTheDocument();
+  const configuration = screen.getByRole('button', { name: 'Configuration' });
+  await user.click(configuration);
+  expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Dashboards']);
+  await user.click(screen.getByRole('menuitem', { name: 'Dashboards' }));
+  expect(screen.getByTestId('location')).toHaveTextContent(/^\/dashboards$/);
+  expect(configuration).toHaveAttribute('data-active', 'true');
 });
 
 it('supports keyboard selection in utility menus', async () => {

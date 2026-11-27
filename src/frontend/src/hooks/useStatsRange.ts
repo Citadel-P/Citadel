@@ -1,8 +1,12 @@
+import { initialHistoryMinutes } from '@/lib/monitoring-link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { resolveStatsRange, statsRangeIsLive, statsRangeQuery, type StatsRange } from '@/lib/stats-range';
 
 export function useStatsRange() {
-  const [selection, saveSelection] = useState<StatsRange>({ kind: 'relative', minutes: 60 });
+  const [selection, saveSelection] = useState<StatsRange>(() => ({
+    kind: 'relative',
+    minutes: initialHistoryMinutes(),
+  }));
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const setSelection = useCallback((next: StatsRange) => {
     setNow(Math.floor(Date.now() / 1000));

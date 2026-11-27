@@ -1,3 +1,4 @@
+import { CitadelIcons } from '@/lib/icons';
 import {
   ActivityResourceType,
   ActorType,
@@ -225,6 +226,8 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   placeholder,
   searchPlaceholder,
   className,
+  onSearchChange,
+  onOpenChange,
   sourceResourceId,
   platformId,
   queryEnabled = true,
@@ -244,6 +247,8 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
   placeholder?: string;
   searchPlaceholder?: string;
   className?: string;
+  onSearchChange?: (search: string) => void;
+  onOpenChange?: (open: boolean) => void;
   sourceResourceId?: string;
   platformId?: string;
   queryEnabled?: boolean;
@@ -304,9 +309,13 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
     return [...entries.entries()];
   }, [filtered]);
 
+  const changeOpen = (next: boolean) => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
   const handleSelect = (item: T | undefined) => {
     onSelect?.(item);
-    setOpen(false);
+    changeOpen(false);
   };
 
   useLayoutEffect(() => {
@@ -315,7 +324,7 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
 
   const defaultDisplay = (item: T | undefined) => (item?.name == '' ? `<id=${item?.id}>` : item?.name);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={changeOpen}>
       <PopoverTrigger asChild>
         <Button
           id={id}
@@ -347,7 +356,10 @@ export function ResourceSelectorField<T extends { id: string; name: string }>({
           <CommandInput
             placeholder={searchPlaceholder ?? `Search ${getLookupResourceName(sourceType ?? targetType)}`}
             value={search}
-            onValueChange={setSearch}
+            onValueChange={(value) => {
+              setSearch(value);
+              onSearchChange?.(value);
+            }}
           />
 
           <CommandList>
@@ -886,6 +898,7 @@ export const TargetCell = ({
   dockerNodeId?: string | null;
 }) => {
   const resourceConfig: Partial<Record<string, { Icon: any; path: string }>> = {
+    [ActivityResourceType.Dashboard]: { Icon: CitadelIcons.Dashboard, path: `/dashboards/${resourceId}` },
     [ActivityResourceType.AlertRule]: { Icon: Megaphone, path: `/alert-rules/edit/${resourceId}` },
     [ActivityResourceType.Deployment]: { Icon: Rocket, path: `/deployments/edit/${resourceId}` },
     [ActivityResourceType.Registry]: { Icon: Cable, path: `/registries/edit/${resourceId}` },

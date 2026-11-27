@@ -51,6 +51,8 @@ fn decode(channel: &str, payload: &str) -> Option<RuntimeNotification> {
                 }),
         ),
         super::tags::links::USAGE_CHANGED_CHANNEL => Some(TagUsageChanged),
+        "citadel_dashboard_changes" if payload == "activity" => Some(RecentActivityChanged),
+        "citadel_dashboard_changes" => payload.parse().ok().map(DashboardChanged),
         "citadel_resource_recovery" => match payload {
             "backup" => Some(BackupRecovery),
             "git" => Some(GitRecovery),

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ImageUpdateStatus, type ImageView } from '@/api/generated/api.types';
 import { UpdatesAvailableFilter, useUpdatesAvailableFilter } from '@/components/custom/updates-available-filter';
-import { HardDrive } from 'lucide-react';
+import { CitadelIcons } from '@/lib/icons';
 import { ImagesTable } from './table';
 import { RegularResourceComponents, ResourceDataHookResult } from '@/pages/types';
 import { useImagesGroup } from './hooks/useImagesGroup';
@@ -13,7 +13,7 @@ import { ImageColumnsButton } from './table-columns';
 const EMPTY_IMAGES: never[] = [];
 
 export const ImageComponents: RegularResourceComponents<ImageView> = {
-  Icon: HardDrive,
+  Icon: CitadelIcons.Image,
   Content: ImagesTable,
   useData: function (platformId: string): ResourceDataHookResult<ImageView> {
     const { imagesInfo, capabilities, isLoading, error, refetch, isFetching } = useImagesGroup(platformId);

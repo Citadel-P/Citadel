@@ -36,6 +36,9 @@ impl Group {
         if let Some(name) = argument.as_str() {
             return Self::parse(name);
         }
+        if argument["group"] == "dashboard" {
+            return super::dashboard::parse(argument);
+        }
         let request: CollectionJoin = serde_json::from_value(argument.clone()).ok()?;
         let mut group = Self::parse(&request.group)?;
         if !group.uses_row_authorization() && !matches!(group.topic(), Topic::SwarmServices(_)) {

@@ -203,8 +203,8 @@ pub struct UserAppearance {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UserThemeColor {
-    #[default]
     Neutral,
+    #[default]
     Blue,
     Indigo,
     Violet,

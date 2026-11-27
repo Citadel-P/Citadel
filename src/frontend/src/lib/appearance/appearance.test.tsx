@@ -255,7 +255,7 @@ describe('appearance provider and customizer', () => {
     await waitFor(() =>
       expect(stored).toMatchObject({
         theme: UserTheme.System,
-        themeColor: UserThemeColor.Neutral,
+        themeColor: UserThemeColor.Blue,
         font: UserUiFont.Geist,
         radius: UserUiRadius.None,
         contentLayout: UserContentLayout.Full,

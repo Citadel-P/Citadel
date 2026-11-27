@@ -1,0 +1,260 @@
+use super::schema_models::dashboards::{DashboardConfigurationSchema, DashboardVisibilitySchema};
+use citadel_dashboards::{DashboardContent, DashboardVisibility};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateDashboard {
+    pub id: Uuid,
+    #[schema(value_type = DashboardVisibilitySchema)]
+    pub visibility: DashboardVisibility,
+    pub name: String,
+    #[schema(value_type = DashboardConfigurationSchema)]
+    pub configuration: citadel_dashboards::DashboardConfiguration,
+}
+
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateDashboard {
+    pub revision: i64,
+    pub name: String,
+    #[schema(value_type = DashboardConfigurationSchema)]
+    pub configuration: citadel_dashboards::DashboardConfiguration,
+}
+
+impl From<UpdateDashboard> for DashboardContent {
+    fn from(value: UpdateDashboard) -> Self {
+        Self {
+            name: value.name,
+            configuration: value.configuration,
+        }
+    }
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardSummaryView {
+    pub id: Uuid,
+    pub name: String,
+    #[schema(value_type = DashboardVisibilitySchema)]
+    pub visibility: DashboardVisibility,
+    pub revision: i64,
+    pub can_edit: bool,
+    pub can_delete: bool,
+}
+
+impl From<citadel_dashboards::DashboardSummary> for DashboardSummaryView {
+    fn from(value: citadel_dashboards::DashboardSummary) -> Self {
+        let citadel_dashboards::DashboardSummary {
+            id,
+            name,
+            visibility,
+            revision,
+            can_edit,
+            can_delete,
+        } = value;
+        Self {
+            id,
+            name,
+            visibility,
+            revision,
+            can_edit,
+            can_delete,
+        }
+    }
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedDashboardView {
+    pub summary: DashboardSummaryView,
+    /// Preserve unknown stored versions for read-only clients.
+    pub configuration: serde_json::Value,
+}
+
+impl From<citadel_dashboards::SavedDashboard> for SavedDashboardView {
+    fn from(value: citadel_dashboards::SavedDashboard) -> Self {
+        Self {
+            summary: value.summary.into(),
+            configuration: value.configuration,
+        }
+    }
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct DashboardList {
+    pub dashboards: Vec<DashboardSummaryView>,
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DashboardDefault {
+    pub dashboard_id: Option<Uuid>,
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct DashboardListQuery {
+    pub search: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct DashboardRevision {
+    pub revision: i64,
+}
+
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetDashboardVisibility {
+    pub revision: i64,
+    #[schema(value_type = super::schema_models::dashboards::DashboardSharingModeSchema)]
+    pub visibility: citadel_dashboards::DashboardSharingMode,
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct DashboardSourceQuery {
+    #[param(value_type=super::schema_models::dashboards::DashboardSourceKindSchema)]
+    pub kind: citadel_dashboards::SourceKind,
+    pub search: Option<String>,
+    /// Comma-separated pinned resource IDs of the selected kind.
+    pub ids: Option<String>,
+    pub limit: Option<u8>,
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardSourceView {
+    pub id: Uuid,
+    pub name: String,
+    pub status: String,
+    pub platform_id: Option<Uuid>,
+    pub container_projection_id: Option<Uuid>,
+    pub docker_service_id: Option<String>,
+    pub matches_tags: bool,
+    pub exceeds_chart_series_limit: bool,
+    pub can_view_logs: bool,
+}
+
+impl From<citadel_dashboards::DashboardSource> for DashboardSourceView {
+    fn from(row: citadel_dashboards::DashboardSource) -> Self {
+        Self {
+            id: row.id,
+            name: row.name,
+            status: row.status,
+            platform_id: row.platform_id,
+            container_projection_id: row.container_projection_id,
+            docker_service_id: row.docker_service_id,
+            matches_tags: row.matches_tags,
+            exceeds_chart_series_limit: row.exceeds_chart_series_limit,
+            can_view_logs: row.can_view_logs,
+        }
+    }
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in=Query)]
+pub struct DashboardFleetQuery {
+    #[param(value_type=String)]
+    pub read: citadel_dashboards::FleetRead,
+    pub kinds: Option<String>,
+    pub state: Option<String>,
+    #[param(max_length = 128)]
+    pub search: Option<String>,
+    #[param(value_type=Option<String>)]
+    pub tab: Option<citadel_dashboards::AttentionTab>,
+    pub offset: Option<u32>,
+    pub limit: Option<u8>,
+}
+
+impl DashboardSourceQuery {
+    pub(crate) fn filter(
+        self,
+        tags: Vec<String>,
+    ) -> Result<citadel_dashboards::SourceFilter, &'static str> {
+        let ids = self
+            .ids
+            .as_deref()
+            .into_iter()
+            .flat_map(|ids| ids.split(','))
+            .take(9)
+            .map(Uuid::parse_str)
+            .collect::<Result<Vec<_>, _>>();
+        let ids = ids.map_err(|_| "Invalid pinned resource ID.")?;
+        let search = self.search.unwrap_or_default();
+        let limit = self.limit.unwrap_or(10);
+        if ids.len() > 8 || search.chars().count() > 128 || !(1..=25).contains(&limit) {
+            return Err(
+                "Search up to 128 characters, select up to eight IDs, and request 1–25 results.",
+            );
+        }
+        Ok(citadel_dashboards::SourceFilter {
+            kind: self.kind,
+            search,
+            ids,
+            tags,
+            limit: i64::from(limit),
+        })
+    }
+}
+impl DashboardFleetQuery {
+    pub(crate) fn filter(
+        self,
+        tags: Vec<String>,
+    ) -> Result<citadel_dashboards::FleetFilter, &'static str> {
+        let kinds: Vec<_> = self
+            .kinds
+            .as_deref()
+            .into_iter()
+            .flat_map(|s| s.split(','))
+            .map(str::to_owned)
+            .collect();
+        let limit = self.limit.unwrap_or(5);
+        let search = self
+            .search
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        if !(1..=25).contains(&limit)
+            || kinds.len() > 12
+            || kinds.iter().any(|s| {
+                !matches!(
+                    s.as_str(),
+                    "Platform"
+                        | "Deployment"
+                        | "Stack"
+                        | "SwarmService"
+                        | "Container"
+                        | "BackupPolicy"
+                        | "Build"
+                        | "BuildAgentPool"
+                        | "Registry"
+                        | "GitRepository"
+                        | "Script"
+                )
+            })
+            || self.state.as_ref().is_some_and(|s| s.len() > 64)
+            || search.is_some_and(|s| {
+                !matches!(self.read, citadel_dashboards::FleetRead::Members)
+                    || s.chars().count() > 128
+            })
+        {
+            return Err("Invalid dashboard fleet filter.");
+        }
+        Ok(citadel_dashboards::FleetFilter {
+            read: self.read,
+            tags,
+            kinds,
+            tab: self.tab.unwrap_or(citadel_dashboards::AttentionTab::All),
+            state: self.state,
+            search: search.map(str::to_owned),
+            limit: i64::from(limit),
+            offset: i64::from(self.offset.unwrap_or(0)),
+        })
+    }
+}

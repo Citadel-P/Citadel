@@ -1,4 +1,10 @@
-import { PermissionLevel, PlatformType, ResourceType, SpecificPermission } from '@/api/generated/api.types';
+import {
+  DashboardVisibility,
+  PermissionLevel,
+  PlatformType,
+  ResourceType,
+  SpecificPermission,
+} from '@/api/generated/api.types';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
@@ -23,12 +29,45 @@ vi.mock('@/lib/hooks', () => ({
                 maximumLevel: PermissionLevel.Execute,
                 specificPermissions: { ManageNodeAgents: PermissionLevel.Execute, Inspect: PermissionLevel.Read },
               },
+              Dashboard: { label: 'Dashboard', maximumLevel: PermissionLevel.Write, specificPermissions: {} },
             }
-          : { platforms },
+          : query === 'listDashboards'
+            ? {
+                dashboards: [
+                  { id: 'board', name: 'Operations', visibility: DashboardVisibility.Restricted },
+                  { id: 'private', name: 'Personal notes', visibility: DashboardVisibility.Private },
+                ],
+              }
+            : { platforms },
     },
     isLoading: false,
   }),
 }));
+
+it('keeps dashboard grants when editing overrides and only offers shareable boards', async () => {
+  const user = userEvent.setup();
+  const onChange = vi.fn();
+  const grant = {
+    resourceType: ResourceType.Dashboard,
+    resourceId: 'board',
+    resourceName: 'Operations',
+    permissionLevel: PermissionLevel.Write,
+    specificPermissions: null,
+  };
+  render(
+    <MemoryRouter>
+      <ResourceOverridesField value={[grant]} onChange={onChange} />
+    </MemoryRouter>,
+  );
+  const row = within(screen.getByText('Operations').closest('tr')!);
+  expect(row.getByRole('link', { name: 'Operations' })).toHaveAttribute('href', '/dashboards/board');
+  await user.click(row.getByRole('button', { name: 'Edit override' }));
+  const dialog = within(screen.getByRole('dialog'));
+  expect(dialog.getByText('Operations')).toBeVisible();
+  expect(dialog.queryByText('Personal notes')).toBeNull();
+  await user.click(dialog.getByRole('button', { name: 'Save' }));
+  expect(onChange).toHaveBeenCalledWith([grant]);
+});
 vi.mock('@/components/custom/common', () => ({ SelectField: () => null }));
 vi.mock('@/components/ui/multi-select', () => ({
   MultiSelect: ({ options, defaultValue }: { options: { value: string }[]; defaultValue: string[] }) => (

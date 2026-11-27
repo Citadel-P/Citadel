@@ -43,6 +43,7 @@ fn settings_routes() -> utoipa_axum::router::OpenApiRouter<InstanceHttpState> {
         .normalized_routes(utoipa_axum::routes!(get_installation_settings))
         .normalized_routes(utoipa_axum::routes!(get_database_connections))
         .normalized_routes(utoipa_axum::routes!(get_schedules))
+        .normalized_routes(utoipa_axum::routes!(get_upcoming_schedules))
         .normalized_routes(utoipa_axum::routes!(get_schedule_groups))
         .normalized_routes(utoipa_axum::routes!(get_jobs))
         .normalized_routes(utoipa_axum::routes!(get_job_history))
@@ -345,5 +346,37 @@ async fn get_schedule_groups(
             .into_response(),
         ),
         Err(error) => error_response(error, &headers),
+    }
+}
+
+#[derive(serde::Deserialize, utoipa::IntoParams)]
+struct UpcomingQuery {
+    limit: Option<u8>,
+}
+
+#[utoipa::path(get, path="/api/v1/instance/schedules/upcoming",operation_id="getUpcomingSchedules",tag="Instance",summary="Next enabled resource schedule occurrences (administrator)",
+ params(UpcomingQuery,("tags"=Option<Vec<String>>,Query,description="Match all owner tag names")),responses((status=200,description="Ordered upcoming occurrences",body=SchedulePage),crate::openapi::errors::AccessErrors),security(("Bearer"=[])), extensions(("x-citadel-principal"=json!("human")),("x-citadel-public"=json!(false)),("x-citadel-setup-exempt"=json!(false))))]
+async fn get_upcoming_schedules(
+    State(state): State<InstanceHttpState>,
+    principal: Option<Extension<ActorPrincipal>>,
+    axum::extract::Query(query): axum::extract::Query<UpcomingQuery>,
+    axum::extract::RawQuery(raw): axum::extract::RawQuery,
+    headers: HeaderMap,
+) -> Response {
+    let Some(Extension(principal)) = principal else {
+        return error_response(IdentityError::Unauthenticated, &headers);
+    };
+    let tags = match crate::api::request_validation::parse_tag_filters(raw.as_deref()) {
+        Ok(t) => t,
+        Err(e) => return error_response(e, &headers),
+    };
+    let now = chrono::Utc::now();
+    match state
+        .instance
+        .upcoming_schedules(&principal, &tags, query.limit.unwrap_or(5), now)
+        .await
+    {
+        Ok(rows) => no_store(Json(SchedulePage::at(rows, now)).into_response()),
+        Err(e) => error_response(e, &headers),
     }
 }

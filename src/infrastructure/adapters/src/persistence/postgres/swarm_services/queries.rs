@@ -9,6 +9,7 @@ pub(super) const PROJECTION: &str = concat!(
 SELECT s.*,
        COALESCE(("#,
     include_str!("../swarm_health_members.sql"),
+    include_str!("../swarm_health_tasks.sql"),
     r#"task.platformid=s.platformid AND task.dockerserviceid=s.dockerserviceid
  AND EXISTS(SELECT 1 FROM swarmserviceprojections owned WHERE owned.platformid=task.platformid AND owned.dockerserviceid=task.dockerserviceid AND owned.swarmserviceid=s.id AND owned.ownership<>'OwnershipConflict')
 "#,

@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 pub(super) struct CatalogComponents {
     pub activities: Arc<ActivityService>,
+    pub dashboards: Arc<dyn citadel_dashboards::DashboardRepository>,
     pub tags: Arc<dyn citadel_tags::TagRepository>,
     pub registries: Arc<dyn citadel_registries::RegistryRepository>,
     pub registry_connections: Arc<dyn citadel_registries::RegistryConnectionChecker>,
@@ -97,6 +98,11 @@ pub(super) fn build(
     let audit = Arc::new(PostgresActivityStore::new(pool.clone()));
     Ok(CatalogComponents {
         activities,
+        dashboards: Arc::new(
+            citadel_adapters::persistence::postgres::dashboards::PostgresDashboardRepository::new(
+                pool.clone(),
+            ),
+        ),
         tags,
         registries,
         registry_connections: Arc::new(

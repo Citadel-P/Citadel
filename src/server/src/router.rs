@@ -73,6 +73,7 @@ pub fn router(
         profiles,
         activities,
         secrets,
+        dashboards,
         tags,
         registries,
         registry_connections,
@@ -241,6 +242,12 @@ pub fn router(
         identity: Arc::clone(&identity),
         stacks,
     }))
+    .merge(citadel_server::api::routes::dashboards::router(
+        citadel_server::api::routes::dashboards::DashboardsHttpState {
+            dashboards,
+            entitlements: entitlements.clone(),
+        },
+    ))
     .merge(tags::router(tags::TagsHttpState {
         identity: Arc::clone(&identity),
         tags,

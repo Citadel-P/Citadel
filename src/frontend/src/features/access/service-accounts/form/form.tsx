@@ -337,6 +337,7 @@ export const ServiceAccountForm = ({
             label: 'Resource overrides',
             render: (value, set) => (
               <ResourceOverridesField
+                serviceAccount
                 value={(value as AddServiceAccountResourceAccessRequest[]) ?? []}
                 onChange={(resourceAccesses) =>
                   set({

@@ -6,6 +6,7 @@ mod build_attempts;
 mod build_spec_references;
 mod coarse_history;
 mod container_io;
+mod dashboards;
 mod health_retention;
 mod instance_settings;
 mod job_history;
@@ -311,7 +312,7 @@ async fn initial_baseline_includes_appearance_defaults_and_restart_preserves_pre
             "Europe/Paris".into(),
             "TwentyFourHour".into(),
             "Dark".into(),
-            "Neutral".into(),
+            "Blue".into(),
             "Geist".into(),
             "None".into(),
             "Full".into(),

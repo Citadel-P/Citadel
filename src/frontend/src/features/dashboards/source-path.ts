@@ -1,0 +1,15 @@
+import type { DashboardStateKind, DashboardSourceView } from '@/api/generated/api.types';
+export const sourcePath = (kind: `${DashboardStateKind}`, row: Pick<DashboardSourceView, 'id' | 'platformId'>) => {
+  switch (kind) {
+    case 'Container':
+      return '/platforms/' + row.platformId + '/containers/' + row.id;
+    case 'Platform':
+      return '/platforms/edit/' + row.id;
+    case 'SwarmService':
+      return '/swarm-services/edit/' + row.id;
+    case 'Stack':
+      return '/stacks/edit/' + row.id;
+    case 'Deployment':
+      return '/deployments/edit/' + row.id;
+  }
+};

@@ -6,7 +6,6 @@ import type { RealtimeConnection } from '@/lib/realtime-connection';
 import { useRead } from '@/lib/hooks';
 
 export function useSchedules(search: string) {
-  const [batches, setBatches] = useState<string[]>();
   const client = useQueryClient();
   const query = useRead(
     'getInstanceScheduleGroups',
@@ -17,6 +16,11 @@ export function useSchedules(search: string) {
     void client.invalidateQueries({ queryKey: resourceQueryKey('getInstanceScheduleGroups') });
     void client.invalidateQueries({ queryKey: resourceQueryKey('getInstanceSchedules') });
   }, [client]);
+  return { query, ...useScheduleChanges(true, refresh) };
+}
+
+export function useScheduleChanges(enabled: boolean, refresh: () => void) {
+  const [batches, setBatches] = useState<string[]>();
   const receive = useCallback(
     (snapshot: { catalogChanged: boolean; activeBatches: string[] }) => {
       setBatches(snapshot.activeBatches);
@@ -34,6 +38,7 @@ export function useSchedules(search: string) {
     [refresh],
   );
   const realtime = useRealtimeGroup({
+    enabled,
     groupName: 'instance-schedules',
     setupEventListeners: listen,
     removeEventListeners: unlisten,
@@ -41,7 +46,6 @@ export function useSchedules(search: string) {
     onSubscriptionError: refresh,
   });
   return {
-    query,
     synchronized: realtime.isConnected && batches !== undefined,
     activeBatches: realtime.isConnected ? (batches ?? []) : [],
   };

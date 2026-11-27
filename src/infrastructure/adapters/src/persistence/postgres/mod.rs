@@ -13,6 +13,7 @@ pub mod scripts;
 
 pub(crate) mod authorization;
 pub mod bindings;
+pub mod dashboards;
 pub mod registries;
 pub mod tags;
 

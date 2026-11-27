@@ -48,6 +48,7 @@ pub mod alerts;
 pub mod backups;
 pub mod bindings;
 pub mod builds;
+pub mod dashboards;
 pub mod deployments;
 pub mod discovery;
 pub mod git;

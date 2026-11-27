@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Default)]
 pub struct AlertEventFilter {
+    pub tags: Vec<String>,
     pub resource_id: Option<Uuid>,
     pub alert_type: Option<String>,
     pub resource_type: Option<String>,

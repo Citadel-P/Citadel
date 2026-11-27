@@ -94,5 +94,22 @@ async fn team_membership_requires_enabled_actors_across_catalogs_and_activity() 
             .await
             .unwrap();
         assert_eq!(page.total_count, if visible { 1 } else { 0 });
+        let recent = activities
+            .recent_authorized(
+                &ActivityAccess {
+                    actor_id: actor,
+                    administrator: false,
+                },
+                None,
+                10,
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(recent.len(), usize::from(visible));
+        if visible {
+            assert_eq!(recent[0].id, page.items[0].id);
+            assert_eq!(recent[0].resource_name, page.items[0].resource_name);
+        }
     }
 }

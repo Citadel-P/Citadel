@@ -1,4 +1,4 @@
-import { Activity, MoveUpRight, SquareStack, RefreshCw, ServerCog } from 'lucide-react';
+import { Activity, MoveUpRight, SquareStack } from 'lucide-react';
 import { useMemo } from 'react';
 import { RequiredComponents, ResourceDataHookResult } from '@/pages/types';
 import { useActivitiesGroup } from './hooks/useActivitiesGroup';
@@ -11,34 +11,12 @@ import { Link } from 'react-router';
 import { CitadelIcons } from '@/lib/icons';
 import { useRead } from '@/lib/hooks';
 
-const activityResourceIcons = {
-  [ActivityResourceType.Deployment]: CitadelIcons.Deployment,
-  [ActivityResourceType.Registry]: CitadelIcons.Registry,
-  [ActivityResourceType.Platform]: CitadelIcons.Platform,
-  [ActivityResourceType.Stack]: CitadelIcons.Stack,
-  [ActivityResourceType.AlertRule]: CitadelIcons.Alert,
-  [ActivityResourceType.GitRepository]: CitadelIcons.GitRepository,
-  [ActivityResourceType.OidcProvider]: CitadelIcons.OidcProvider,
-  [ActivityResourceType.Script]: CitadelIcons.Script,
-  [ActivityResourceType.User]: CitadelIcons.User,
-  [ActivityResourceType.Team]: CitadelIcons.Team,
-  [ActivityResourceType.Role]: CitadelIcons.Role,
-  [ActivityResourceType.License]: CitadelIcons.License,
-  [ActivityResourceType.Updates]: RefreshCw,
-  [ActivityResourceType.Instance]: ServerCog,
-  [ActivityResourceType.Volume]: CitadelIcons.Volume,
-  [ActivityResourceType.Build]: CitadelIcons.Build,
-  [ActivityResourceType.BuildAgentPool]: CitadelIcons.BuildAgentPool,
-  [ActivityResourceType.BackupPolicy]: CitadelIcons.BackupPolicy,
-  [ActivityResourceType.SwarmService]: CitadelIcons.SwarmService,
-  [ActivityResourceType.ServiceAccount]: CitadelIcons.ServiceAccount,
-} satisfies Record<ActivityResourceType, any>;
-
 const activityEventPrefixes = {
   [ActivityResourceType.Deployment]: 'Deployment',
   [ActivityResourceType.Registry]: 'Registry',
   [ActivityResourceType.Platform]: 'Platform',
   [ActivityResourceType.Stack]: 'Stack',
+  [ActivityResourceType.Dashboard]: 'Dashboard',
   [ActivityResourceType.AlertRule]: 'AlertRule',
   [ActivityResourceType.GitRepository]: 'GitRepo',
   [ActivityResourceType.OidcProvider]: 'OidcProvider',
@@ -78,6 +56,7 @@ const activityLookupTargets = {
   [ActivityResourceType.License]: LookupResourceType.License,
   [ActivityResourceType.Updates]: undefined,
   [ActivityResourceType.Instance]: undefined,
+  [ActivityResourceType.Dashboard]: undefined,
   [ActivityResourceType.Volume]: LookupResourceType.Platform,
   [ActivityResourceType.Build]: LookupResourceType.Build,
   [ActivityResourceType.BuildAgentPool]: LookupResourceType.BuildAgentPool,
@@ -103,7 +82,7 @@ export const getActivityResourceOptions = (isAdministrator: boolean) =>
     .map((type) => ({
       value: type,
       label: activityResourceLabels[type] ?? type,
-      icon: activityResourceIcons[type],
+      icon: CitadelIcons[type],
     }));
 
 export const ActivityComponents: RequiredComponents = {
@@ -165,6 +144,7 @@ function SearchSection() {
 
   const eventOptions = useMemo(() => getActivityEventOptions(query.resourceType), [query.resourceType]);
 
+  const lookupTarget = query.resourceType === 'All' ? undefined : activityLookupTargets[query.resourceType];
   const handleResourceTypeChange = (value: string) => {
     setQuery({
       ...query,
@@ -200,19 +180,17 @@ function SearchSection() {
         allIcon={SquareStack}
         className={filterFieldClassName}
       />
-      {query.resourceType !== 'All' &&
-        query.resourceType !== ActivityResourceType.Updates &&
-        query.resourceType !== ActivityResourceType.Instance && (
-          <ResourceSelectorField
-            targetType={activityLookupTargets[query.resourceType]}
-            onSelect={handleResourceChange as any}
-            selected={query.resourceId}
-            placeholder={
-              query.resourceType === ActivityResourceType.Volume ? 'Select Platform' : 'Select ' + query.resourceType
-            }
-            className={filterFieldClassName}
-          />
-        )}
+      {lookupTarget && (
+        <ResourceSelectorField
+          targetType={lookupTarget}
+          onSelect={handleResourceChange as any}
+          selected={query.resourceId}
+          placeholder={
+            query.resourceType === ActivityResourceType.Volume ? 'Select Platform' : 'Select ' + query.resourceType
+          }
+          className={filterFieldClassName}
+        />
+      )}
       <SelectField
         value={query.eventType}
         options={eventOptions}

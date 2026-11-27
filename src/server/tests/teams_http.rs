@@ -37,6 +37,8 @@ struct Fixture {
 }
 
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
+#[path = "support/dashboard_grants.rs"]
+mod dashboard_grants;
 
 #[tokio::test]
 #[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
@@ -260,6 +262,21 @@ async fn patch_replaces_and_clears_assignments_without_removing_service_accounts
     assert_eq!(clear["members"].as_array().unwrap().len(), 1);
     assert_eq!(clear["members"][0]["principalType"], "ServiceAccount");
     let _ = old_user;
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
+async fn dashboard_grant_name_survives_reopening_team_access() {
+    let fixture = fixture(true).await;
+    let (id, actor) = seed_team(&fixture.pool, &format!("team-{}", Uuid::now_v7()), true).await;
+    dashboard_grants::verify(
+        &fixture.app,
+        &fixture.pool,
+        &fixture.administrator,
+        &format!("/api/v1/teams/{id}"),
+        actor,
+    )
+    .await;
 }
 
 #[tokio::test]

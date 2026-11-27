@@ -187,6 +187,11 @@
           "SwarmServiceOperationFailed",
           "SwarmServiceDuplicated",
           "SwarmServiceWebhookReceived",
+          "DashboardCreated",
+          "DashboardUpdated",
+          "DashboardSharingChanged",
+          "DashboardDeleted",
+          "InstanceHomeDashboardChanged",
           "ServiceAccountCreated",
           "ServiceAccountUpdated",
           "ServiceAccountRenamed",
@@ -219,6 +224,7 @@
           "Volume",
           "BackupPolicy",
           "SwarmService",
+          "Dashboard",
           "ServiceAccount"
         ],
         "type": "string"
@@ -14058,6 +14064,105 @@
             "properties": {
               "$type": {
                 "enum": [
+                  "DashboardCreated"
+                ],
+                "type": "string"
+              },
+              "configuration": {},
+              "visibility": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "visibility",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "DashboardUpdated"
+                ],
+                "type": "string"
+              },
+              "changes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "configuration": {},
+              "previousConfiguration": {}
+            },
+            "required": [
+              "changes",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "DashboardSharingChanged"
+                ],
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "visibility",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "DashboardDeleted"
+                ],
+                "type": "string"
+              },
+              "configuration": {},
+              "visibility": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "visibility",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceHomeDashboardChanged"
+                ],
+                "type": "string"
+              },
+              "dashboardName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
                   "ServiceAccountCreated"
                 ],
                 "type": "string"
@@ -17863,7 +17968,8 @@
           "Build",
           "BuildAgentPool",
           "SwarmService",
-          "ServiceAccount"
+          "ServiceAccount",
+          "Dashboard"
         ],
         "type": "string"
       },
@@ -25604,6 +25710,18 @@
       "get": {
         "operationId": "listAlertEvents",
         "parameters": [
+          {
+            "description": "Repeat to match all tag names on the readable event owner.",
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
           {
             "in": "query",
             "name": "ResourceId",

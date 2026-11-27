@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { StockFeatures, ColumnDef } from '@tanstack/react-table';
 import { BackupCoverageStatus, ResourceBackupSummaryView } from '@/api/generated/api.types';
-import { Shield, ShieldAlert, ShieldCheck, ShieldOff } from 'lucide-react';
+import { backupStatusOptions } from './coverage-status-options';
+import { Shield } from 'lucide-react';
 import { ResourceFilterChip, ResourceFilterDropdown } from '@/components/custom/resource-filter';
 import { CommandGroup, CommandItem } from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
@@ -12,25 +13,11 @@ import { ResourceBackupSource } from './resource-backup-summary';
 
 type CoveredResource = { backupCoverage?: BackupCoverageState | null };
 
-const statuses = [
-  { value: 'Protected', label: 'Protected', Icon: ShieldCheck, color: 'text-emerald-600 dark:text-emerald-400' },
-  { value: 'Unprotected', label: 'Unprotected', Icon: ShieldOff, color: 'text-amber-700 dark:text-amber-400' },
-  {
-    value: 'Warning',
-    label: 'Needs attention / partial coverage',
-    Icon: ShieldAlert,
-    color: 'text-amber-700 dark:text-amber-400',
-  },
-  { value: 'Failed', label: 'Backup failed', Icon: ShieldAlert, color: 'text-destructive' },
-  { value: 'Unavailable', label: 'Coverage unavailable', Icon: Shield, color: 'text-muted-foreground' },
-  { value: 'NotApplicable', label: 'No eligible storage', Icon: Shield, color: 'text-muted-foreground' },
-];
-
 function useBackupStatus() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selected = useMemo(
     () =>
-      statuses
+      backupStatusOptions
         .filter((option) => searchParams.getAll('backupStatus').includes(option.value))
         .map((option) => option.value),
     [searchParams],
@@ -39,7 +26,7 @@ function useBackupStatus() {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete('backupStatus');
-      statuses
+      backupStatusOptions
         .filter((option) => values.includes(option.value))
         .forEach((option) => next.append('backupStatus', option.value));
       return next;
@@ -59,10 +46,10 @@ export function useBackupStatusFilter<T extends CoveredResource>(items: T[]) {
 
 export function BackupStatusFilter() {
   const { selected, setStatuses } = useBackupStatus();
-  const available = statuses.filter((option) => !selected.includes(option.value));
+  const available = backupStatusOptions.filter((option) => !selected.includes(option.value));
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      {statuses
+      {backupStatusOptions
         .filter((option) => selected.includes(option.value))
         .map((option) => (
           <ResourceFilterChip

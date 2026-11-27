@@ -25,9 +25,11 @@ export const SidebarMenu = () => {
       <SidebarPlatforms />
       {MenuItems.map((menu) => (
         <SidebarGroup key={menu.group} className="py-1">
-          <SidebarGroupLabel className="h-6 text-[11px] font-medium text-muted-foreground">
-            {menu.group}
-          </SidebarGroupLabel>
+          {menu.group && (
+            <SidebarGroupLabel className="h-6 text-[11px] font-medium text-muted-foreground">
+              {menu.group}
+            </SidebarGroupLabel>
+          )}
           <SidebarGroupContent>
             <SidebarMenuList>
               {menu.items.map((item) => (

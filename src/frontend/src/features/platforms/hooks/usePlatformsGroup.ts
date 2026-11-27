@@ -28,14 +28,17 @@ type UsePlatformsGroupOptions = {
 };
 
 export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOptions = {}) => {
-  const { selectedTagNames: activeTagNames, filterReady } = useResourceTagFilter(useTagFilter);
-  const selectedTagNames = useMemo(() => (useTagFilter ? activeTagNames : []), [activeTagNames, useTagFilter]);
+  const { selectedTagNames, filterReady } = useResourceTagFilter(useTagFilter);
+  return usePlatformCollection(selectedTagNames, filterReady);
+};
+
+export const usePlatformCollection = (selectedTagNames: string[], enabled: boolean, live = true) => {
   const readArgs = useMemo(() => {
     if (selectedTagNames.length === 0) return undefined;
     return { query: { tags: selectedTagNames } };
   }, [selectedTagNames]);
   const { data, isSuccess, dataUpdatedAt, isLoading, error, refetch, isFetching } = useRead('listPlatforms', readArgs, {
-    enabled: filterReady,
+    enabled,
   });
   const groupName = collectionGroup('platforms', selectedTagNames);
   const capabilities = data?.data.capabilities;
@@ -140,7 +143,7 @@ export const usePlatformsGroup = ({ useTagFilter = true }: UsePlatformsGroupOpti
   );
 
   useRealtimeGroup({
-    enabled: filterReady,
+    enabled: enabled && live,
     onJoinedGroup,
     onCollectionSnapshot,
     groupName,

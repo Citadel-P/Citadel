@@ -1,3 +1,4 @@
+import { hasQueryTagFilter, reconcileTaggedEventPages } from '@/lib/collection-scope';
 import { useCallback, useMemo, useState } from 'react';
 import { AlertEventStatus, AlertEventView, Count, type ServerAlertsHttpEvents } from '@/api/generated/api.types';
 import { useRead } from '@/lib/hooks';
@@ -56,6 +57,7 @@ export function useAlertEventsGroup() {
       // Pages (including the notification seed) outlive the bounded live window.
       // Replace only existing rows so pagination and filter membership stay intact.
       for (const list of queryClient.getQueryCache().findAll({ queryKey: ['listAlertEvents'] })) {
+        if (hasQueryTagFilter(list.queryKey)) continue;
         const cached = queryClient.getQueryData<{ data: ServerAlertsHttpEvents }>(list.queryKey);
         const page = cached?.data?.pagedResult;
         if (!cached || !page?.items.some((row) => byId.has(row.id))) continue;
@@ -82,8 +84,12 @@ export function useAlertEventsGroup() {
         }
       }
 
-      if (alertEvents.some((alertEvent) => alertEvent.status === AlertEventStatus.Resolved)) {
-        void queryClient.invalidateQueries({ queryKey: ['listAlertEvents'] });
+      void reconcileTaggedEventPages(queryClient, 'listAlertEvents');
+      if (alertEvents.some((event) => event.status === AlertEventStatus.Resolved)) {
+        void queryClient.invalidateQueries({
+          queryKey: ['listAlertEvents'],
+          predicate: ({ queryKey }) => !hasQueryTagFilter(queryKey),
+        });
       }
     },
     [queryClient],
@@ -111,7 +117,7 @@ export function useAlertEventsGroup() {
     [handleAlertEventReceived, handleAlertEventsUpdated, handleUnresolvedAlertCount],
   );
 
-  useRealtimeGroup({
+  const { isConnected } = useRealtimeGroup({
     groupName: 'alert-events',
     setupEventListeners,
     removeEventListeners,
@@ -119,10 +125,13 @@ export function useAlertEventsGroup() {
 
   return useMemo(
     () => ({
-      unresolvedAlertCount,
+      alertFeedConnected: isConnected,
+      unresolvedAlertCount: isConnected
+        ? unresolvedAlertCount
+        : Number(unresolvedEventsData?.data.pagedResult.totalCount ?? 0),
       liveAlertEvents: alertEvents,
       receivedAlertEventIds: recent.received,
     }),
-    [unresolvedAlertCount, alertEvents, recent.received],
+    [isConnected, unresolvedAlertCount, unresolvedEventsData, alertEvents, recent.received],
   );
 }

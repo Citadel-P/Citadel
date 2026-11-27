@@ -19,6 +19,7 @@ SELECT s.id,s.name,s.description,s.stacksource,s.stackupdatestate,s.driftpolicy,
         FROM swarmserviceprojections sp WHERE sp.platformid=r.platformid AND sp.stackid=s.id), '[]'::jsonb) health_services,
        CASE WHEN p.platformdescriptor->>'$type'='DockerSwarm' THEN COALESCE(("#,
     include_str!("../swarm_health_members.sql"),
+    include_str!("../swarm_health_tasks.sql"),
     r#"task.platformid=r.platformid AND EXISTS(SELECT 1 FROM swarmserviceprojections sp WHERE sp.platformid=task.platformid AND sp.dockerserviceid=task.dockerserviceid AND sp.stackid=s.id AND sp.ownership<>'OwnershipConflict')
 "#,
     include_str!("../swarm_health_container.sql"),

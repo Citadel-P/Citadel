@@ -14,6 +14,7 @@ export const SwarmResourcePathMap = {
 export type ResourceType =
   | DockerResourceType
   | SwarmResourceType
+  | 'Dashboard'
   | 'Registry'
   | 'Platform'
   | 'Deployment'
@@ -52,6 +53,7 @@ export const PluralResourceMap = {
   Task: 'Tasks',
   Secret: 'Secrets',
   Config: 'Configs',
+  Dashboard: 'Dashboards',
   Registry: 'Registries',
   Platform: 'Platforms',
   Deployment: 'Deployments',

@@ -61,7 +61,7 @@ export function SidebarUtilities() {
                   align="end"
                   sideOffset={8}
                   collisionPadding={12}
-                  className="w-56 max-w-[calc(100vw-2rem)]">
+                  className="grid w-56 max-w-[calc(100vw-2rem)] gap-1">
                   {menu.children.map((item) => {
                     const selected = isSidebarRouteActive(pathname, item.route);
                     return (

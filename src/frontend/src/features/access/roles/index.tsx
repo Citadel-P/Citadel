@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocalStorage, useMutate, useRead } from '@/lib/hooks';
-import { Lock, Plus, Loader2, Trash } from 'lucide-react';
+import { LayoutDashboard, Lock, Plus, Loader2, Trash } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { atom, useAtom } from 'jotai';
 import { useQueryClient } from '@tanstack/react-query';
@@ -53,6 +53,7 @@ type ResourceIcon = React.ComponentType<{ className?: string }>;
 const createRoleOpenAtom = atom(false);
 
 export const ROLE_PERMISSION_RESOURCES = [
+  ResourceType.Dashboard,
   ResourceType.Platform,
   ResourceType.Deployment,
   ResourceType.SwarmService,
@@ -107,6 +108,7 @@ export const AddRoleButton = () => {
 };
 
 export const RESOURCE_ICONS: Record<RolePermissionResourceType, ResourceIcon> = {
+  [ResourceType.Dashboard]: LayoutDashboard,
   [ResourceType.Platform]: CitadelIcons.Platform,
   [ResourceType.Deployment]: CitadelIcons.Deployment,
   [ResourceType.SwarmService]: CitadelIcons.SwarmService,

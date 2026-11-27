@@ -13,12 +13,13 @@ export type StateBadgeKind =
   | 'job'
   | 'run'
   | 'swarmNode'
-  | 'swarmTask';
+  | 'swarmTask'
+  | 'visibility';
 
 const styles = {
   danger: 'border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300',
   info: 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
-  unknown:
+  violet:
     'border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300',
   pending: 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300',
   muted: 'border-border bg-muted/40 text-muted-foreground',
@@ -109,11 +110,16 @@ const getStateStyle = (value: StateBadgeValue, kind: StateBadgeKind) => {
   if (value === null || value === undefined || value === '') return styles.muted;
   if (kind === 'default' && typeof value === 'boolean') return value ? styles.success : styles.muted;
   const normalized = normalize(value);
+  if (kind === 'visibility') {
+    if (normalized === 'instanceshared') return styles.info;
+    if (normalized === 'restricted') return styles.violet;
+    return styles.muted;
+  }
   if (kind === 'job') {
     if (normalized === 'failed') return styles.danger;
     if (normalized === 'backingoff') return styles.warning;
     if (normalized === 'running') return styles.info;
-    if (normalized === 'unavailable') return styles.unknown;
+    if (normalized === 'unavailable') return styles.violet;
     if (normalized === 'notstarted') return styles.pending;
     return styles.muted;
   }

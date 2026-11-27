@@ -5,6 +5,7 @@ import { AlertEventView, ApplicationInfoView, PlatformView } from '../../api/gen
 
 interface IContext {
   isLoading: boolean;
+  alertFeedConnected?: boolean;
   platformRead?: ResourceReadState;
   currentPlatform: PlatformView | undefined;
   platforms: PlatformView[] | undefined;

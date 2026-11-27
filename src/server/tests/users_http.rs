@@ -40,6 +40,8 @@ struct Fixture {
 static TEST_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
 #[path = "users_http/actors.rs"]
 mod actors;
+#[path = "support/dashboard_grants.rs"]
+mod dashboard_grants;
 const VIEWER_ROLE_ID: Uuid = Uuid::from_u128(0x30000000000000000000000000000003);
 
 #[tokio::test]
@@ -780,6 +782,22 @@ async fn add_and_remove_user_resource_access_changes_effective_authorization() {
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+#[ignore = "requires CITADEL_IDENTITY_DATABASE_URL"]
+async fn dashboard_grant_name_survives_reopening_user_access() {
+    let fixture = fixture().await;
+    let (id, actor) =
+        seed_user_record(&fixture.pool, &format!("reader-{}", Uuid::now_v7()), true).await;
+    dashboard_grants::verify(
+        &fixture.app,
+        &fixture.pool,
+        &fixture.administrator,
+        &format!("/api/v1/users/{id}"),
+        actor,
+    )
+    .await;
 }
 
 #[tokio::test]

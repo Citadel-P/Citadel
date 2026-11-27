@@ -70,6 +70,34 @@ export function ResourceBackupIndicator({
   compact?: boolean;
   returnTo?: string;
 }) {
+  const target =
+    source.$type === 'DockerVolume' ? source.volumeName : source.$type === 'BindMount' ? source.hostPath : undefined;
+
+  return (
+    <BackupCoveragePopover
+      appearance={coverageAppearance(coverage)}
+      compact={compact}
+      target={target}
+      showLabel={!!coverage?.volumes.length && !coverage.unavailable}>
+      <ResourceBackupSummary source={source} coverage={coverage} returnTo={returnTo} />
+    </BackupCoveragePopover>
+  );
+}
+
+export function BackupCoveragePopover({
+  appearance,
+  compact = true,
+  target,
+  showLabel,
+  children,
+}: {
+  appearance: ReturnType<typeof coverageAppearance>;
+  compact?: boolean;
+  target?: string;
+  showLabel: boolean;
+  children: React.ReactNode;
+}) {
+  const { Icon, className, label } = appearance;
   const [open, setOpen] = useState(false);
   const pinned = useRef(false);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -78,10 +106,6 @@ export function ResourceBackupIndicator({
   const skipFocusOpen = useRef(false);
   const cardId = useId();
   const titleId = useId();
-  const { Icon, className, label } = coverageAppearance(coverage);
-  const target =
-    source.$type === 'DockerVolume' ? source.volumeName : source.$type === 'BindMount' ? source.hostPath : undefined;
-
   const cancelClose = () => clearTimeout(closeTimer.current);
   useEffect(() => () => clearTimeout(closeTimer.current), []);
 
@@ -174,15 +198,13 @@ export function ResourceBackupIndicator({
           <h2 id={titleId} className="text-sm font-semibold">
             Backups
           </h2>
-          {!!coverage?.volumes.length && !coverage.unavailable && (
+          {showLabel && (
             <Badge variant="secondary" className={cn('ml-auto whitespace-normal font-medium', className)}>
               {label}
             </Badge>
           )}
         </div>
-        <div className="p-4">
-          <ResourceBackupSummary source={source} coverage={coverage} returnTo={returnTo} />
-        </div>
+        <div className="p-4">{children}</div>
       </PopoverContent>
     </Popover>
   );

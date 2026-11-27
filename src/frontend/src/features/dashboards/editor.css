@@ -1,0 +1,263 @@
+.app-content:has(> .dashboard-builder) {
+  max-width: none;
+  padding: 0;
+  gap: 0;
+}
+
+.dashboard-builder-layout {
+  --builder-height: calc(100dvh - var(--layout-header-height));
+  --selection-color: var(--primary);
+  display: grid;
+  grid-template-areas: 'toolbar' 'canvas';
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  min-height: var(--builder-height);
+  min-width: 0;
+}
+
+.dashboard-builder-toolbar {
+  grid-area: toolbar;
+  padding: 1rem var(--content-padding-x);
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.dashboard-builder-canvas {
+  grid-area: canvas;
+  min-width: 0;
+  padding: 0.25rem;
+  background: var(--background);
+}
+
+.dashboard-builder-panel {
+  grid-area: panel;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: 70dvh;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-builder-layout[data-panel='true'] {
+  grid-template-areas: 'toolbar' 'panel' 'canvas';
+  grid-template-rows: auto auto 1fr;
+}
+
+@media (min-width: 64rem) {
+  .dashboard-builder-layout[data-panel='true'] {
+    grid-template-areas: 'toolbar panel' 'canvas panel';
+    grid-template-columns: minmax(0, 1fr) clamp(19rem, 24vw, 23rem);
+    grid-template-rows: auto 1fr;
+  }
+  .dashboard-builder-toolbar,
+  .dashboard-builder-panel {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .dashboard-builder-panel {
+    align-self: start;
+    height: var(--builder-height);
+    max-height: none;
+    border-bottom: 0;
+    border-left: 1px solid var(--border);
+  }
+}
+
+.dashboard-editor-grid .dashboard-edit-tile {
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+.dashboard-edit-tile > header {
+  border-radius: inherit;
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+.dashboard-editor-grid .dashboard-edit-tile[data-selected='true'] {
+  border-color: var(--selection-color);
+  outline: 1px solid var(--selection-color);
+  z-index: 2;
+}
+.dashboard-editor-grid .dashboard-edit-tile[data-selected='true'] > .react-resizable-handle-se {
+  opacity: 1;
+  right: -3px;
+  bottom: -3px;
+  background: var(--selection-color);
+  border-radius: 0.3rem;
+}
+.dashboard-editor-grid .dashboard-edit-tile[data-selected='true'] > .react-resizable-handle-se::after {
+  border-color: white;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-editor-grid .react-grid-item {
+    transition: none;
+  }
+}
+
+@media (max-width: 63.99rem) {
+  .dashboard-builder-panel {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 12;
+    max-height: 48dvh;
+    overflow: auto;
+    border-top: 1px solid var(--border);
+  }
+  .dashboard-builder-layout[data-panel='true'] {
+    padding-bottom: 48dvh;
+  }
+}
+
+.dashboard-builder-canvas[data-editing='true'] {
+  padding: 0.5rem;
+  background-color: color-mix(in srgb, var(--muted) 32%, var(--background));
+}
+.dashboard-edit-tools [aria-pressed='true'],
+.dashboard-edit-tools [aria-expanded='true'] {
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
+  color: var(--primary);
+}
+.dashboard-inspector-bar {
+  background: color-mix(in srgb, var(--primary) 4%, var(--card));
+}
+.dashboard-inspector-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.8rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.dashboard-inspector-identity .dashboard-widget-thumbnail {
+  width: 3.4rem;
+  height: 3.4rem;
+}
+.dashboard-widget-thumbnail {
+  background: linear-gradient(145deg, color-mix(in srgb, currentColor 11%, var(--card)), var(--card));
+}
+.dashboard-library-item {
+  background: var(--card);
+}
+.dashboard-library-item:is(:hover, :focus-within) {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 3%, var(--card));
+}
+.dashboard-editor-grid .dashboard-edit-tile[data-selected='true'] {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--selection-color) 17%, transparent);
+}
+.dashboard-selection-size {
+  position: absolute;
+  inset-block-start: -0.5rem;
+  inset-inline-start: 1.1rem;
+  z-index: 2;
+  pointer-events: none;
+  padding: 0 0.4rem;
+  border-radius: var(--radius);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font: 500 0.65rem/1rem var(--font-mono);
+}
+.dashboard-edit-tile[data-selected='true'] .dashboard-grip {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dashboard-builder-panel {
+    animation: dashboard-inspector-in 200ms ease-out;
+  }
+  .dashboard-inspector-fields {
+    animation: dashboard-arrive 150ms ease-out;
+  }
+  .dashboard-library-item {
+    transition:
+      background-color 150ms,
+      border-color 150ms;
+  }
+}
+@keyframes dashboard-inspector-in {
+  from {
+    opacity: 0;
+    translate: 6px 0;
+  }
+}
+
+.dashboard-column-ruler {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--grid-gap);
+  padding-inline: var(--grid-gap);
+  color: var(--muted-foreground);
+  font: 500 0.65rem/1.5rem var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-column-ruler > span {
+  border-bottom: 2px solid var(--border);
+  text-align: center;
+}
+.dashboard-column-ruler > span:nth-child(3n) {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+}
+.dashboard-placement[data-guides='true'] .dashboard-editor-grid::before {
+  content: '';
+  position: absolute;
+  inset: var(--grid-gap);
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+  mask-image:
+    linear-gradient(to right, black calc(100% - var(--grid-gap)), transparent 0),
+    linear-gradient(to bottom, black calc(100% - var(--grid-gap)), transparent 0);
+  mask-size: var(--grid-column-step) var(--grid-row-step);
+  mask-composite: intersect;
+}
+/* Keep the cells anchored to the canvas. Only the painted destination changes at each snap. */
+.dashboard-editor-grid:has(.react-grid-placeholder)::before {
+  --drop-tint: color-mix(in srgb, var(--selection-color) 28%, transparent);
+  background-image: linear-gradient(var(--drop-tint), var(--drop-tint));
+  background-position: calc(var(--drop-left) - var(--grid-gap)) calc(var(--drop-top) - var(--grid-gap));
+  background-size: var(--drop-width, 0) var(--drop-height, 0);
+  background-repeat: no-repeat;
+}
+.dashboard-editor-grid:has(.react-grid-placeholder)::after {
+  content: var(--dashboard-ghost, '');
+  display: grid;
+  place-content: center;
+  font: 600 0.75rem/1.5 var(--font-mono);
+  color: var(--primary);
+  position: absolute;
+  pointer-events: none;
+  left: var(--drop-left);
+  top: var(--drop-top);
+  width: var(--drop-width, 0);
+  height: var(--drop-height, 0);
+  outline: 2px dashed var(--selection-color);
+  outline-offset: -2px;
+  border-radius: var(--radius);
+}
+.dashboard-placement[data-guides='true'] .dashboard-drag-handle,
+.dashboard-library-item[draggable='true'] {
+  cursor: grab;
+}
+.dashboard-placement[data-moving='true'] .dashboard-drag-handle,
+.dashboard-library-item[draggable='true']:active {
+  cursor: grabbing;
+}
+.dashboard-editor-grid .dashboard-edit-tile > .react-resizable-handle {
+  z-index: 3;
+}
+.dashboard-editor-grid .react-grid-item.react-grid-placeholder {
+  visibility: hidden;
+}
+.dashboard-editor-grid .dashboard-edit-tile.react-draggable-dragging {
+  z-index: 4;
+  opacity: 0.5;
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--foreground) 18%, transparent);
+}
+.dashboard-column-ruler > span[data-covered='true'] {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.dashboard-library-item[draggable='true'] > button {
+  cursor: pointer;
+}

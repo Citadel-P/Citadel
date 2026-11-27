@@ -79,6 +79,7 @@ it('keeps Instance administrator-only and separate from Updates', () => {
   expect(getActivityEventOptions(ActivityResourceType.Instance)).toEqual([
     ActivityEventType.InstanceConfigurationUpdated,
     ActivityEventType.InstanceRestarted,
+    ActivityEventType.InstanceHomeDashboardChanged,
   ]);
   expect(getActivityEventOptions(ActivityResourceType.Updates)).not.toContain(
     ActivityEventType.InstanceConfigurationUpdated,

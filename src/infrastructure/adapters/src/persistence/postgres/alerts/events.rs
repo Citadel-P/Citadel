@@ -23,10 +23,21 @@ AND ($8 OR (SELECT allowed FROM global_access) OR EXISTS (
     WHERE access.resourcetype=$2 AND access.resourceid=event.id
       AND access.permissionlevel = ANY($3)
 ))"#;
+            let (owners, scope, paging) = if filter.tags.is_empty() {
+                (String::new(), "", "LIMIT $9 OFFSET $10")
+            } else {
+                (
+                    crate::persistence::postgres::authorization::tagged_event_owners("$9", "$8"),
+                    " AND (CASE WHEN event.resourcetype='Webhook' AND event.type='WebhookGitRepoSyncFailed'
+                                 THEN 'GitRepository' ELSE event.resourcetype END,
+                             event.resourceid) IN (SELECT kind,id FROM tagged_event_owners)",
+                    "LIMIT $10 OFFSET $11",
+                )
+            };
             let count_query = format!(
-                "{AUTHORIZED_CTE} SELECT COUNT(*) FROM alertevents event WHERE {predicate}"
+                "{AUTHORIZED_CTE}{owners} SELECT COUNT(*) FROM alertevents event WHERE {predicate}{scope}"
             );
-            let total_count = sqlx::query_scalar(AssertSqlSafe(count_query.as_str()))
+            let mut count = sqlx::query_scalar(AssertSqlSafe(count_query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::Alert as i32)
                 .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
@@ -34,15 +45,16 @@ AND ($8 OR (SELECT allowed FROM global_access) OR EXISTS (
                 .bind(&filter.alert_type)
                 .bind(&filter.resource_type)
                 .bind(filter.unresolved_only)
-                .bind(administrator)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(storage)?;
+                .bind(administrator);
+            if !filter.tags.is_empty() {
+                count = count.bind(&filter.tags);
+            }
+            let total_count = count.fetch_one(&self.pool).await.map_err(storage)?;
             let select_query = format!(
-                "{AUTHORIZED_CTE} {} WHERE {predicate} ORDER BY event.createdat DESC,event.id DESC LIMIT $9 OFFSET $10",
+                "{AUTHORIZED_CTE}{owners} {} WHERE {predicate}{scope} ORDER BY event.createdat DESC,event.id DESC {paging}",
                 super::queries::EVENT_SELECT
             );
-            let rows = sqlx::query(AssertSqlSafe(select_query.as_str()))
+            let mut read = sqlx::query(AssertSqlSafe(select_query.as_str()))
                 .bind(actor.value())
                 .bind(ResourceType::Alert as i32)
                 .bind(citadel_primitives::PermissionLevel::Read.accepted_database_levels())
@@ -50,7 +62,11 @@ AND ($8 OR (SELECT allowed FROM global_access) OR EXISTS (
                 .bind(&filter.alert_type)
                 .bind(&filter.resource_type)
                 .bind(filter.unresolved_only)
-                .bind(administrator)
+                .bind(administrator);
+            if !filter.tags.is_empty() {
+                read = read.bind(&filter.tags);
+            }
+            let rows = read
                 .bind(i64::from(page_size))
                 .bind(offset)
                 .fetch_all(&self.pool)

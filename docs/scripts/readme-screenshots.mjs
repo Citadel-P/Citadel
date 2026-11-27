@@ -1,6 +1,173 @@
 // Demonstration data rendered by the real frontend, never a live installation.
 import { MIN_SCREENSHOT_WIDTH, saveScreenshot } from "./screenshot-output.mjs";
 
+function prepareDashboard({ routes, fixture, id, platform, capturedAt }) {
+  const name = "Production overview";
+  const tags = [
+    ["Production", "#dbeafe"],
+    ["Storefront", "#ede9fe"],
+  ].map(([name, color], index) => fixture("AuthorizedTagView", {
+    id: id(130 + index),
+    name,
+    normalizedName: name.toLowerCase(),
+    color,
+  }));
+  routes["/tags"] = { ...routes["/tags"], tags };
+  const tagNames = tags.map((tag) => tag.normalizedName);
+  const requestedTags = (url) => url.searchParams.getAll("tags");
+  const matchesTags = (url, names) =>
+    requestedTags(url).every((tag) => names.includes(tag.toLowerCase()));
+  routes["/tags/_filter"] = (url) =>
+    Object.fromEntries(requestedTags(url).map((tag) => [tag, tag.toLowerCase()]));
+  // Staging belongs to Storefront as well, but lacks the Production tag.
+  const scoped = (url, production, staging) => [
+    ...(matchesTags(url, tagNames) ? production : []),
+    ...(matchesTags(url, ["storefront"]) ? staging : []),
+  ];
+  const summary = fixture("DashboardSummaryView", {
+    id: id(100),
+    name,
+    visibility: "InstanceShared",
+    revision: 1,
+    canEdit: true,
+    canDelete: true,
+  });
+  const metric = (metric, color) => ({
+    kind: "Metrics",
+    source: { kind: "Platform", id: platform.id },
+    metric,
+    color,
+    presentation: "Gradient",
+    legend: false,
+  });
+  const widgets = [
+    ["Fleet summary", 0, 0, 12, 2, { kind: "FleetSummary", measures: ["Platforms", "Workloads", "Alerts"] }],
+    ["CPU usage", 0, 2, 6, 5, metric("Cpu", "Blue")],
+    ["Memory usage", 6, 2, 6, 5, metric("Memory", "Violet")],
+    ["Deployment state", 0, 7, 4, 5, { kind: "ResourceState", resourceKind: "Deployment" }],
+    ["Needs attention", 4, 7, 4, 5, { kind: "NeedsAttention", kinds: [], tab: "All", limit: 3 }],
+    ["Recent activity", 8, 7, 4, 5, { kind: "RecentActivity", limit: 4 }],
+  ].map(([title, x, y, w, h, settings], index) => ({
+    id: id(101 + index),
+    title,
+    layout: { x, y, w, h },
+    settings,
+  }));
+  routes["/profile/dashboard-default"] = { dashboardId: summary.id };
+  routes[`/dashboards/${summary.id}`] = {
+    summary,
+    configuration: {
+      schemaVersion: 2,
+      description: "Storefront, background workers, and their Docker hosts.",
+      rangeMinutes: 360,
+      tags: tags.map((tag) => tag.name),
+      widgets,
+    },
+  };
+  routes["/dashboards/sources"] = (url) => [
+    fixture("DashboardSourceView", {
+      id: platform.id,
+      name: platform.name,
+      platformId: platform.id,
+      status: "Online",
+      matchesTags: matchesTags(url, tagNames),
+    }),
+  ];
+
+  const statsPath = `/platforms/${platform.id}/stats`;
+  const defaultStats = routes[statsPath];
+  const samples = Array.from({ length: 361 }, (_, minute) => {
+    const pulse = (center, width) => Math.exp(-(((minute - center) / width) ** 2));
+    return fixture("PlatformStatView", {
+      created: capturedAt / 1000 - (360 - minute) * 60,
+      cpuUsage:
+        9 + minute * 0.022 + 1.6 * Math.sin(minute / 8) + Math.sin(minute / 3) +
+        10 * pulse(44, 9) + 24 * pulse(124, 11) + 15 * pulse(230, 16) + 22 * pulse(296, 12),
+      memoryUsage:
+        42 + minute * 0.026 + 0.55 * Math.sin(minute / 11) +
+        (minute >= 71 ? 5 : 0) + (minute >= 158 ? 6 : 0) - (minute >= 277 ? 7 : 0),
+    });
+  });
+  routes[statsPath] = (url) =>
+    url.searchParams.get("minutes") === "360" ? { stats: samples } : defaultStats;
+
+  const states = [
+    ["Platform", "Online", 2],
+    ["Deployment", "Healthy", 19],
+    ["Deployment", "Stopped", 2],
+    ["Deployment", "Degraded", 1],
+    ["Stack", "Healthy", 4],
+    ["SwarmService", "Healthy", 6],
+  ].map(([kind, state, count]) => ({ kind, state, count }));
+  const rows = [
+    ["Deployment", "checkout-api", "Degraded", "Degraded"],
+    ["Stack", "Storefront", "Healthy", "New Git commit"],
+    ["SwarmService", "background-worker", "Healthy", "Image update"],
+  ].map(([kind, name, state, code], index) => ({
+    id: id(110 + index),
+    kind,
+    name,
+    state,
+    reasons: [{ code, occurrences: 1 }],
+  }));
+  const stagingRow = {
+    id: id(113),
+    kind: "Deployment",
+    name: "checkout-staging",
+    state: "Failed",
+    reasons: [{ code: "Failed", occurrences: 1 }],
+  };
+  routes["/dashboards/fleet"] = (url) => {
+    const { searchParams } = url;
+    const read = searchParams.get("read");
+    const tab = searchParams.get("tab");
+    const kinds = searchParams.get("kinds");
+    const scopeStates = scoped(url, states, [{ kind: "Deployment", state: "Failed", count: 1 }]);
+    const scopeRows = scoped(url, rows, [stagingRow]);
+    const problems = scopeRows.filter(({ state }) => state !== "Healthy");
+    const updates = scopeRows.filter(({ state }) => state === "Healthy");
+    const results = (tab === "Problems" ? problems : tab === "Updates" ? updates : scopeRows)
+      .filter((row) => !kinds || kinds.split(",").includes(row.kind));
+    const offset = Number(searchParams.get("offset") ?? 0);
+    const limit = Number(searchParams.get("limit") ?? 25);
+    return {
+      alerts: (matchesTags(url, tagNames) ? 2 : 0) + (matchesTags(url, ["storefront"]) ? 1 : 0),
+      problems: problems.length,
+      updates: updates.length,
+      total: scopeRows.length,
+      rows: read === "Attention" ? results.slice(offset, offset + limit) : [],
+      states: read === "Summary" ? scopeStates : scopeStates.filter((row) => row.kind === kinds),
+    };
+  };
+  const recent = [
+    ["Deployment", "orders-api", "DeploymentUpdated", 7],
+    ["BackupPolicy", "storefront volumes", "BackupRunCompleted", 18],
+    ["Stack", "Storefront", "StackApplied", 32],
+    ["SwarmService", "background-worker", "SwarmServiceUpdated", 46],
+  ].map(([resourceType, resourceName, eventType, ageMinutes], index) => ({
+    id: id(120 + index),
+    resourceType,
+    resourceName,
+    eventType,
+    status: "Success",
+    createdAt: new Date(capturedAt - ageMinutes * 60_000).toISOString(),
+  }));
+  const stagingActivity = {
+    id: id(124),
+    resourceType: "Deployment",
+    resourceName: stagingRow.name,
+    eventType: "DeploymentApplied",
+    status: "Failure",
+    createdAt: new Date(capturedAt - 4 * 60_000).toISOString(),
+  };
+  routes["/activities/recent"] = (url) =>
+    scoped(url, recent, [stagingActivity])
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(0, Number(url.searchParams.get("limit") ?? 5));
+
+  return name;
+}
+
 export function prepareReadme({ routes, lookups, fixture, id, caps, version, capturedAt }) {
   routes["/application/info"].version = version;
   routes["/application/info"].realtimeTransport = "WebSocketV1";
@@ -299,7 +466,8 @@ export function prepareReadme({ routes, lookups, fixture, id, caps, version, cap
       }),
     ),
   };
-  return { platforms, services, stack, preferences };
+  const dashboard = prepareDashboard({ routes, fixture, id, platform: platforms[0], capturedAt });
+  return { platforms, services, stack, preferences, dashboard };
 }
 
 export async function mockScreenshotRealtime(context, snapshots = {}) {
@@ -346,7 +514,15 @@ export async function captureReadme({
   data,
 }) {
   await page.setViewportSize({ width: MIN_SCREENSHOT_WIDTH, height: 1000 });
+  await page.addInitScript((platformId) => {
+    if (window.location.pathname === "/") {
+      localStorage.setItem("sidebar-platform-id", JSON.stringify(platformId));
+      localStorage.setItem("sidebar-platform-expanded", "false");
+    }
+  }, data.platforms[0].id);
   for (const [name, path, ready] of [
+    ["dashboard", "/", data.dashboard],
+    ["dashboard-dark", "/", data.dashboard],
     ["platforms", "/platforms", "Production Docker"],
     [
       "platform-containers",
@@ -372,6 +548,22 @@ export async function captureReadme({
     else
       await page.goto(origin + path, { waitUntil: "networkidle" });
     await expect(page.getByText(ready, { exact: true }).first()).toBeVisible({ timeout: 15000 });
+    if (name === "dashboard" || name === "dashboard-dark") {
+      for (const title of ["CPU usage", "Memory usage"]) {
+        await expect(page.getByRole("region", { name: title }).locator(".recharts-area-curve")).toBeVisible();
+      }
+      await expect(page.getByRole("region", { name: "Deployment state" }).locator(".dashboard-state-ring")).toBeVisible();
+      const attention = page.getByRole("region", { name: "Needs attention" });
+      const recentActivity = page.getByRole("region", { name: "Recent activity" });
+      await expect(attention).toContainText("checkout-api");
+      await expect(attention.getByRole("button", { name: "View all 3 resources" })).toHaveClass(/dashboard-widget-footer/);
+      await expect(recentActivity).toContainText("orders-api");
+      await expect(recentActivity.getByText("checkout-staging", { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Remove Production tag filter" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Remove Storefront tag filter" })).toBeVisible();
+      const activity = await recentActivity.boundingBox();
+      expect(activity.y + activity.height).toBeLessThanOrEqual(1000);
+    }
     if (name === "stacks") {
       await page.getByRole("tab", { name: "Services", exact: true }).click();
       await expect(
@@ -398,6 +590,10 @@ export async function captureReadme({
       path: `${root}/docs/public/screenshots/${name}.png`,
       animations: "disabled",
     });
+    if (name === "dashboard") {
+      await page.getByRole("button", { name: "Remove Production tag filter" }).click();
+      await expect(page.getByRole("region", { name: "Recent activity" })).toContainText("checkout-staging");
+    }
     console.log(`Captured ${name}`);
   }
 }

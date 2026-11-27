@@ -99,6 +99,7 @@ export const RegularResourceView = <T,>({ Components, type, showTaskSheet = true
             realtimeGroup={realtimeGroup}
             actions={Components.DropdownActions ?? {}}
             isLoading={isLoading}
+            search={search}
             isFiltered={Boolean(search.trim()) || hasActiveUrlFilters}
           />
         )}

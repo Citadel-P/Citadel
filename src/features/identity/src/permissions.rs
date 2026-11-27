@@ -135,7 +135,11 @@ pub fn permission_matrix() -> BTreeMap<ResourceType, PermissionCapability> {
             (
                 resource,
                 PermissionCapability {
-                    maximum_level: PermissionLevel::Execute,
+                    maximum_level: if resource == ResourceType::Dashboard {
+                        PermissionLevel::Write
+                    } else {
+                        PermissionLevel::Execute
+                    },
                     specifics,
                 },
             )
