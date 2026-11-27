@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore = "requires two fresh disposable CITADEL_CHECKPOINT_DATABASE_URL/CITADEL_CHECKPOINT_TARGET_DATABASE_URL and PostgreSQL 18 tools"]
+#[ignore = "requires two fresh disposable CITADEL_CHECKPOINT_DATABASE_URL/CITADEL_CHECKPOINT_TARGET_DATABASE_URL and PostgreSQL 19 tools"]
 async fn restores_checkpoint_and_releases_only_the_verified_fresh_database() {
     let source_url = std::env::var("CITADEL_CHECKPOINT_DATABASE_URL").unwrap();
     let target_url = std::env::var("CITADEL_CHECKPOINT_TARGET_DATABASE_URL").unwrap();

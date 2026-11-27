@@ -100,10 +100,14 @@ class LocalUpgrade(upgrade.UpgradeFixture):
     interruption = None
     concurrent_requests = False
     database_source = None
+    # Set this to the immutable released source image when qualifying the next minor.
+    database_source_image = None
+    database_target = "19.0"
+    database_target_num = b"190000"
 
     def start(self, *args, **kwargs):
         if self.database_source:
-            self.database_image = "postgres:18.1-alpine"
+            self.database_image = self.database_source_image
             self.host("pull", self.database_image, timeout=300)
         result = super().start(*args, **kwargs)
         if self.database_source:
@@ -121,11 +125,11 @@ class LocalUpgrade(upgrade.UpgradeFixture):
         if preparation_failure:
             self.sql(database, "SELECT pg_create_physical_replication_slot('citadel_preflight_fixture')")
         status = self.http("updates", token=token)
-        require(status.get("databaseInstallation") == "Bundled" and status["databaseManaged"] and status["databaseAvailable"] == "18.6", "Qualified database update is not offered")
+        require(status.get("databaseInstallation") == "Bundled" and status["databaseManaged"] and status["databaseAvailable"] == self.database_target, "Qualified database update is not offered")
         if preparation_failure:
-            self.http_failure("updates/review", {"database": True, "version": "18.6"}, token)
+            self.http_failure("updates/review", {"database": True, "version": self.database_target}, token)
             self.sql(database, "SELECT pg_drop_replication_slot('citadel_preflight_fixture')")
-            review = self.http("updates/review", {"database": True, "version": "18.6"}, token)
+            review = self.http("updates/review", {"database": True, "version": self.database_target}, token)
             self.sql(database, "SELECT pg_create_physical_replication_slot('citadel_preflight_fixture')")
             self.http_failure("updates/approve", {"reviewId": review["id"], "requestId": str(uuid.uuid4())}, token)
             require(self.sql(database, "SELECT count(*) FROM instanceupdates") == b"0", "Blocked update claimed ownership")
@@ -136,8 +140,8 @@ class LocalUpgrade(upgrade.UpgradeFixture):
             require(self.sql(database, "SELECT encryptedvalue FROM internalsecretvalues ORDER BY secretid") == ciphertext, "Eligibility check changed data")
             print("PASS: replication blocks review and approval before ownership or shutdown", flush=True)
             return
-        review = self.http("updates/review", {"database": True, "version": "18.6"}, token)
-        require(review["component"] == "Database" and review["targetVersion"] == "18.6", "Incorrect database review")
+        review = self.http("updates/review", {"database": True, "version": self.database_target}, token)
+        require(review["component"] == "Database" and review["targetVersion"] == self.database_target, "Incorrect database review")
         self.approval_attempted = True
         request = {"reviewId": review["id"], "requestId": str(uuid.uuid4())}
         operation = self.http("updates/approve", request, token)
@@ -161,8 +165,8 @@ class LocalUpgrade(upgrade.UpgradeFixture):
         target = refreshed["databaseContainerId"]
         require(target != database and refreshed["coreContainerId"] != core, "Core/database were not replaced")
         require(status["installedVersion"] == SOURCE, "Database update changed Core version")
-        require(status["databaseVersion"] == "18.6" and status["databaseAvailable"] is None, "Database status was not refreshed")
-        require(self.sql(target, "SHOW server_version_num") == b"180006", "Incorrect database engine")
+        require(status["databaseVersion"] == self.database_target and status["databaseAvailable"] is None, "Database status was not refreshed")
+        require(self.sql(target, "SHOW server_version_num") == self.database_target_num, "Incorrect database engine")
         require(self.sql(target, "SELECT encryptedvalue FROM internalsecretvalues ORDER BY secretid") == ciphertext, "Encrypted data changed")
         require(self.keys(refreshed["coreContainerId"]) == keys, "Recovery keys changed")
         require(self.sql(target, "SELECT count(*) FROM instanceupdates") == b"1", "Duplicate update operation")
@@ -198,7 +202,7 @@ class LocalUpgrade(upgrade.UpgradeFixture):
         # Leave discovery, review and approval to the person using the browser.
         print(f"\nOpen http://localhost:{port}/updates\n"
               f"Email: upgrade@example.test\nPassword: {password}\n\n"
-              + (f"Review and update → PostgreSQL → Update and restart (PostgreSQL {self.database_source} → 18.6).\n" if self.database_source else f"Check now → Review and update → Update and restart ({SOURCE} → {TARGET}).\n")
+              + (f"Review and update → PostgreSQL → Update and restart (PostgreSQL {self.database_source} → {self.database_target}).\n" if self.database_source else f"Check now → Review and update → Update and restart ({SOURCE} → {TARGET}).\n")
               + "Keep this process running. Ctrl+C removes this disposable installation.\n",
               flush=True)
         while True:
@@ -388,11 +392,14 @@ def main():
     mode.add_argument("--browser", action="store_true", help="Keep an isolated installation open for manual UI testing")
     mode.add_argument("--scenario", choices=["all", "upgrade", "cleanup-restart", "receipt-restart", "helper-exit-restart", "concurrent-requests", "preparation-failure", "database-preparation-failure"], default="all",
                         help="Run all lifecycle and interruption scenarios by default")
-    parser.add_argument("--database-source", type=int, choices=[18], help="Exercise a PostgreSQL 18 minor upgrade, including in browser mode")
+    parser.add_argument("--database-source", type=int, choices=[19], help="Exercise a PostgreSQL 19 minor upgrade, including in browser mode")
     parser.add_argument("--source-tree", type=Path, help="Build the source/helper from a separate checkout; target uses this checkout")
     parser.add_argument("--port", type=int, default=18080, help="Localhost port for --browser (default: 18080)")
     parser.add_argument("--rootless", action="store_true", help="Run the lifecycle on a real rootless Docker daemon inside the disposable fixture")
     args = parser.parse_args()
+    if (args.database_source or args.scenario == "database-preparation-failure") and not LocalUpgrade.database_source_image:
+        print("NOT QUALIFIED: PostgreSQL 19.0 has no earlier released 19.x minor for a real transition.")
+        raise SystemExit(77)
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
     source_root = args.source_tree.resolve() if args.source_tree else registration.ROOT

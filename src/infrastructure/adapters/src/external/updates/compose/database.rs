@@ -6,48 +6,62 @@ use citadel_updates::{DatabaseUpdatePlan, UpdateError};
 use tokio_util::sync::CancellationToken;
 use zeroize::Zeroize;
 
-const TARGET_VERSION: u32 = 180006;
-const TARGET_IMAGE: &str =
-    "postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5";
-
-pub(in crate::external::updates) fn database_update(
-    source_version: u32,
-) -> Result<Option<DatabaseUpdatePlan>, UpdateError> {
-    if source_version / 10000 != 18 {
-        return Err(UpdateError::Conflict(format!(
-            "In-app database updates support PostgreSQL 18 minor releases. PostgreSQL {} is outside the supported update range; use its manual upgrade procedure.",
-            source_version / 10000
-        )));
-    }
-    if source_version >= TARGET_VERSION {
-        return Ok(None);
-    }
-    let plan = DatabaseUpdatePlan {
-        source_version,
-        target_version: TARGET_VERSION,
-        target_image: TARGET_IMAGE.into(),
-    };
-    plan.validate()?;
-    Ok(Some(plan))
+#[derive(Clone, Copy)]
+pub(in crate::external::updates) struct QualifiedDatabase {
+    version: u32,
+    image: &'static str,
 }
 
-pub(in crate::external::updates) fn validate_database_update(
-    plan: &DatabaseUpdatePlan,
-) -> Result<(), UpdateError> {
-    if database_update(plan.source_version)?.as_ref() != Some(plan) {
-        return Err(unsupported());
+pub(in crate::external::updates) const QUALIFIED: QualifiedDatabase = QualifiedDatabase {
+    version: 190000,
+    image: "postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f",
+};
+
+#[cfg(test)]
+pub(in crate::external::updates) const SYNTHETIC: QualifiedDatabase = QualifiedDatabase {
+    version: 190001,
+    image: "postgres@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+};
+
+impl QualifiedDatabase {
+    pub(in crate::external::updates) fn update(
+        self,
+        source_version: u32,
+    ) -> Result<Option<DatabaseUpdatePlan>, UpdateError> {
+        citadel_primitives::postgres::require_supported(source_version)
+            .map_err(UpdateError::Conflict)?;
+        if source_version >= self.version {
+            return Ok(None);
+        }
+        let plan = DatabaseUpdatePlan {
+            source_version,
+            target_version: self.version,
+            target_image: self.image.into(),
+        };
+        plan.validate()?;
+        Ok(Some(plan))
     }
-    Ok(())
+
+    pub(in crate::external::updates) fn validate(
+        self,
+        plan: &DatabaseUpdatePlan,
+    ) -> Result<(), UpdateError> {
+        if self.update(plan.source_version)?.as_ref() != Some(plan) {
+            return Err(unsupported());
+        }
+        Ok(())
+    }
 }
 
 impl InstallerComposeInputs {
     pub(in crate::external::updates) async fn prepare_database_replacement(
         &self,
+        qualified: QualifiedDatabase,
         plan: &DatabaseUpdatePlan,
         process: &dyn ProcessRunner,
         cancellation: &CancellationToken,
     ) -> Result<PreparedCoreReplacement, UpdateError> {
-        validate_database_update(plan)?;
+        qualified.validate(plan)?;
         super::publication::check_environment(self)?;
         let mut captured = self.capture()?;
         let result = async {
@@ -66,7 +80,7 @@ impl InstallerComposeInputs {
             let environment = super::replacement::replace_selector(
                 &environment,
                 "PG_DATA",
-                "/var/lib/postgresql/18/docker",
+                "/var/lib/postgresql/19/docker",
             )?;
             let bytes = &mut captured.last_mut().ok_or_else(unsupported)?.1;
             bytes.zeroize();
@@ -79,7 +93,7 @@ impl InstallerComposeInputs {
             if target_hash == source_hash
                 || target["services"]["pg_db"]["image"] != plan.target_image
                 || target["services"]["pg_db"]["environment"]["PGDATA"]
-                    != "/var/lib/postgresql/18/docker"
+                    != "/var/lib/postgresql/19/docker"
             {
                 return Err(unsupported());
             }
@@ -131,30 +145,16 @@ mod tests {
     use super::*;
     #[test]
     fn only_the_qualified_engine_target_can_be_selected() {
-        for source in [180000, 180001, 180005] {
-            let plan = database_update(source).unwrap().unwrap();
-            validate_database_update(&plan).unwrap();
-            let mut changed = plan.clone();
-            changed.target_image = format!("postgres@sha256:{}", "a".repeat(64));
-            assert!(validate_database_update(&changed).is_err());
-            changed = plan;
-            changed.target_version = 180007;
-            assert!(validate_database_update(&changed).is_err());
+        for version in [190000, 190001, 190010] {
+            assert_eq!(QUALIFIED.update(version).unwrap(), None);
         }
-        assert!(database_update(160010).is_err());
-        assert!(database_update(170011).is_err());
-        assert!(database_update(180006).unwrap().is_none());
-        assert!(database_update(190000).is_err());
-    }
-
-    #[test]
-    fn unsupported_major_versions_report_the_eligibility_reason() {
-        for version in [170011, 190000] {
-            let Err(UpdateError::Conflict(reason)) = database_update(version) else {
-                panic!("An unsupported major version must report an eligibility conflict");
-            };
-            assert!(reason.contains("support PostgreSQL 18 minor releases"));
-            assert!(reason.contains(&format!("PostgreSQL {} is outside", version / 10000)));
+        for version in [0, 170011, 180007, 200000] {
+            assert!(QUALIFIED.update(version).is_err());
         }
+        let mut plan = SYNTHETIC.update(190000).unwrap().unwrap();
+        assert!(QUALIFIED.validate(&plan).is_err());
+        SYNTHETIC.validate(&plan).unwrap();
+        plan.target_image = QUALIFIED.image.into();
+        assert!(SYNTHETIC.validate(&plan).is_err());
     }
 }

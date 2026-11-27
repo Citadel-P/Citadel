@@ -3,9 +3,9 @@ use crate::api::resources::activities::authorized::activity_access;
 use crate::{
     api::{
         error::{ApiError, error_response, no_store},
-        request_validation::ApiPath,
+        request_validation::{ApiPath, ApiQuery},
         resources::activities::{
-            requests::ActivityFilterQuery,
+            requests::{ActivityFilterQuery, RecentActivityQuery},
             views::{ActivitiesView, PagedActivityView, map_activity},
         },
     },
@@ -123,13 +123,6 @@ async fn list(
     }
 }
 
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RecentQuery {
-    event_type: Option<citadel_activities::ActivityEventType>,
-    limit: Option<i32>,
-}
-
 #[utoipa::path(get, path = "/api/v1/activities/recent", operation_id = "listRecentActivities", tag = "Activities",
     summary = "List recent authorized activity summaries",
     params(("tags" = Option<Vec<String>>, Query, description = "Repeat to match all tag names on the readable event owner."), ("eventType" = Option<crate::api::resources::vocabulary::ActivityEventTypeSchema>, Query),
@@ -141,9 +134,7 @@ struct RecentQuery {
 async fn recent(
     State(state): State<ActivitiesHttpState>,
     principal: Option<Extension<ActorPrincipal>>,
-    crate::api::request_validation::ApiQuery(query): crate::api::request_validation::ApiQuery<
-        RecentQuery,
-    >,
+    ApiQuery(query): ApiQuery<RecentActivityQuery>,
     axum::extract::RawQuery(raw): axum::extract::RawQuery,
     headers: HeaderMap,
 ) -> Response {

@@ -4,11 +4,12 @@ use crate::api::resources::{
     activities::{authorized::activity_access, views::RecentActivityView},
     dashboards::{
         DashboardFleetQuery, DashboardSourceQuery, DashboardSourceView, SavedDashboardView,
+        dashboard_viewer,
     },
 };
 use crate::realtime::{PublishedRuntimeEvent, RealtimeReadError};
 use citadel_activities::ActivityEventType;
-use citadel_dashboards::{DashboardError, DashboardViewer, FleetFilter, FleetRead, SourceFilter};
+use citadel_dashboards::{DashboardError, FleetFilter, FleetRead, SourceFilter};
 use citadel_identity::ActorPrincipal;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -163,10 +164,7 @@ impl Projection {
         reader: &ApplicationGroupReader,
         p: &ActorPrincipal,
     ) -> Result<GroupSnapshot, RealtimeReadError> {
-        let viewer = DashboardViewer {
-            actor: p.actor_id,
-            administrator: p.is_administrator(),
-        };
+        let viewer = dashboard_viewer(&reader.identity, p);
         let failure = |e: DashboardError| RealtimeReadError::Storage(e.to_string());
         let mut scope = None;
         let data = match self {

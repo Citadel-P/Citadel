@@ -14,7 +14,7 @@ use axum::{
 use citadel_dashboards::{
     DashboardContent, DashboardError, DashboardRepository, DashboardViewer, DashboardVisibility,
 };
-use citadel_identity::{ActorPrincipal, EntitlementService};
+use citadel_identity::{ActorPrincipal, EntitlementService, IdentityService};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -22,6 +22,7 @@ use uuid::Uuid;
 pub struct DashboardsHttpState {
     pub dashboards: Arc<dyn DashboardRepository>,
     pub entitlements: Arc<dyn EntitlementService>,
+    pub identity: Arc<IdentityService>,
 }
 
 impl From<DashboardError> for ApiError {
@@ -38,14 +39,24 @@ impl From<DashboardError> for ApiError {
 }
 
 fn viewer(
+    state: &DashboardsHttpState,
     principal: Option<Extension<ActorPrincipal>>,
     headers: &HeaderMap,
 ) -> HttpResult<DashboardViewer> {
     let actor = api_result(require_human(principal), headers)?;
-    Ok(DashboardViewer {
-        actor: actor.actor_id,
-        administrator: actor.is_administrator(),
-    })
+    Ok(dashboard_viewer(&state.identity, &actor))
+}
+
+fn writer(
+    state: &DashboardsHttpState,
+    principal: Option<Extension<ActorPrincipal>>,
+    headers: &HeaderMap,
+) -> HttpResult<DashboardViewer> {
+    let actor = viewer(state, principal, headers)?;
+    if actor.read_only {
+        return api_result(Err(ApiError::Forbidden), headers);
+    }
+    Ok(actor)
 }
 
 pub fn router(state: DashboardsHttpState) -> Router {
@@ -78,7 +89,7 @@ async fn list(
     headers: HeaderMap,
     ApiQuery(query): ApiQuery<DashboardListQuery>,
 ) -> HttpResult {
-    let actor = viewer(principal, &headers)?;
+    let actor = viewer(&state, principal, &headers)?;
     let rows = api_result(
         state
             .dashboards
@@ -110,7 +121,7 @@ async fn get(
     headers: HeaderMap,
     ApiPath(id): ApiPath<Uuid>,
 ) -> HttpResult {
-    let actor = viewer(principal, &headers)?;
+    let actor = viewer(&state, principal, &headers)?;
     let saved = api_result(state.dashboards.get(actor, id).await, &headers)?;
     Ok(no_store(
         Json(SavedDashboardView::from(saved)).into_response(),
@@ -128,7 +139,7 @@ async fn create(
     headers: HeaderMap,
     ValidatedJson(input): ValidatedJson<CreateDashboard>,
 ) -> HttpResult {
-    let actor = viewer(principal, &headers)?;
+    let actor = writer(&state, principal, &headers)?;
     if input.visibility != DashboardVisibility::Private && !actor.administrator {
         return api_result(Err(ApiError::Forbidden), &headers);
     }
@@ -172,7 +183,7 @@ async fn update(
     ApiPath(id): ApiPath<Uuid>,
     ValidatedJson(input): ValidatedJson<UpdateDashboard>,
 ) -> HttpResult {
-    let actor = viewer(principal, &headers)?;
+    let actor = writer(&state, principal, &headers)?;
     let saved = api_result(
         state
             .dashboards
@@ -197,7 +208,7 @@ async fn set_visibility(
     ApiPath(id): ApiPath<Uuid>,
     ValidatedJson(input): ValidatedJson<SetDashboardVisibility>,
 ) -> HttpResult {
-    let actor = viewer(principal, &headers)?;
+    let actor = writer(&state, principal, &headers)?;
     if !actor.administrator {
         return api_result(Err(ApiError::Forbidden), &headers);
     }
@@ -230,7 +241,7 @@ async fn delete(
     ApiPath(id): ApiPath<Uuid>,
     ApiQuery(query): ApiQuery<DashboardRevision>,
 ) -> HttpResult {
-    let actor = viewer(principal, &headers)?;
+    let actor = writer(&state, principal, &headers)?;
     api_result(
         state.dashboards.delete(actor, id, query.revision).await,
         &headers,
@@ -247,7 +258,7 @@ async fn get_default(
     principal: Option<Extension<ActorPrincipal>>,
     headers: HeaderMap,
 ) -> HttpResult {
-    let actor = viewer(principal, &headers)?;
+    let actor = viewer(&state, principal, &headers)?;
     let dashboard_id = api_result(state.dashboards.default_for(actor).await, &headers)?;
     Ok(no_store(
         Json(DashboardDefault { dashboard_id }).into_response(),
@@ -265,7 +276,7 @@ async fn set_personal_default(
     headers: HeaderMap,
     ValidatedJson(input): ValidatedJson<DashboardDefault>,
 ) -> HttpResult {
-    let actor = viewer(principal, &headers)?;
+    let actor = writer(&state, principal, &headers)?;
     api_result(
         state
             .dashboards
@@ -287,7 +298,7 @@ async fn set_instance_default(
     headers: HeaderMap,
     ValidatedJson(input): ValidatedJson<DashboardDefault>,
 ) -> HttpResult {
-    let actor = viewer(principal, &headers)?;
+    let actor = writer(&state, principal, &headers)?;
     api_result(
         state
             .dashboards
@@ -310,7 +321,7 @@ async fn sources(
     ApiQuery(query): ApiQuery<DashboardSourceQuery>,
     axum::extract::RawQuery(raw): axum::extract::RawQuery,
 ) -> HttpResult {
-    let actor = viewer(principal, &headers)?;
+    let actor = viewer(&state, principal, &headers)?;
     let tags = api_result(
         crate::api::request_validation::parse_tag_filters(raw.as_deref()),
         &headers,
@@ -344,7 +355,7 @@ async fn fleet(
     ApiQuery(q): ApiQuery<DashboardFleetQuery>,
     axum::extract::RawQuery(raw): axum::extract::RawQuery,
 ) -> HttpResult {
-    let actor = viewer(principal, &headers)?;
+    let actor = viewer(&state, principal, &headers)?;
     let tags = api_result(
         crate::api::request_validation::parse_tag_filters(raw.as_deref()),
         &headers,

@@ -1,6 +1,6 @@
 param(
     [string]$DevContainer = 'citadel_devcontainer-workspace-1',
-    [string]$PostgresImage = 'postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5',
+    [string]$PostgresImage = 'postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f',
     [switch]$UseRustFs,
     [string]$RustFsImage = 'rustfs/rustfs@sha256:60f4f2f41ce95216f8cac676e69f9d90c0bfec458a3bc7fd7fb9b7c2452ac57a',
     [string]$AgentImage,

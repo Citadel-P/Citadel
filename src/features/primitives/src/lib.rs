@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod actor;
+pub mod postgres;
 pub use actor::ActorId;
 pub mod permissions;
 pub use permissions::{PermissionLevel, ResourceType, SpecificPermission};

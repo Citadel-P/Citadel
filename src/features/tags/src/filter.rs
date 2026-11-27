@@ -51,7 +51,10 @@ mod tests {
     #[test]
     fn validates_unicode_and_literal_names_with_an_aggregate_budget() {
         let name = "à".repeat(128);
-        assert_eq!(tag_filter_names([&name]).unwrap(), [name.clone()]);
+        assert_eq!(
+            tag_filter_names([&name]).unwrap().as_slice(),
+            std::slice::from_ref(&name)
+        );
         assert!(tag_filter_names([&name; 6]).is_err());
         assert_eq!(
             tag_filter_names([" x:y,+&%_ ", "x:y,+&%_"]).unwrap(),

@@ -56,6 +56,8 @@ RUN apk add --no-cache binutils \
     && strip --strip-unneeded /usr/local/bin/docker \
         /usr/local/libexec/docker/cli-plugins/docker-compose
 
+FROM postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f AS pg-client
+
 # Deno 2.9.8 on Alpine 3.24 includes isolated glibc libraries for Deno and Core.
 # Keep the GNU Rust build compatible with locally built development binaries.
 FROM docker.io/denoland/deno@sha256:75749604f68aea01d39bead15fd1c86343639e44eb8c58ab051da8a924799d01 AS runtime-base
@@ -83,6 +85,8 @@ LABEL com.citadel.system="true" \
 
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/ /usr/local/libexec/docker/cli-plugins/
+COPY --from=pg-client /usr/local/bin/pg_dump /usr/local/bin/pg_restore /usr/local/bin/psql /usr/local/bin/createdb /usr/local/bin/
+COPY --from=pg-client /usr/local/lib/libpq.so.5.19 /usr/local/lib/libpq.so.5
 COPY src/tools/container/install-server-deps.sh .
 RUN chmod +x install-server-deps.sh \
     && ./install-server-deps.sh \

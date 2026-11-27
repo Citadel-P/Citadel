@@ -23,7 +23,7 @@ DOCKER = ["docker", "--host", "unix:///var/run/docker.sock"]
 # Same fixture versions as Agent acceptance; no daemon TCP port is published.
 DIND = "docker@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0"
 REGISTRY = "registry@sha256:d4032d4cc323c1731c707931ecada07a53076eac38e3b61ae57533f170f2c6c3"
-POSTGRES = "postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5"
+POSTGRES = "postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f"
 
 
 def run(args, *, timeout=120, check=True, stdin=None):
@@ -262,7 +262,7 @@ class Fixture:
             require(self.execute("test", "-e", f"{state}/installation.lock", check=False).returncode != 0,
                     "Live check created a missing lock file")
             refresh(False)
-            register(False, "initialized, reachable Citadel database")
+            register(False, "initialized, reachable PostgreSQL 19.x database")
             require(self.execute("test", "-e", f"{state}/installation.json", check=False).returncode != 0,
                     "Registration must not persist before instance setup")
         port = "18010" if edge else "18000"

@@ -157,18 +157,18 @@ fn https_policy_checks_the_effective_configuration_and_only_the_deployment_conne
 #[test]
 fn database_pool_default_patch_and_per_core_override_are_distinct() {
     let saved: InstanceConfiguration = serde_json::from_str("{}").unwrap();
-    assert_eq!(saved.database_max_connections, 3);
+    assert_eq!(saved.database_max_connections, 5);
     let patch: PatchInstanceConfiguration =
         serde_json::from_str(r#"{"databaseMaxConnections":8}"#).unwrap();
     assert!(!patch.is_empty());
     let next = patch.apply(&saved, &Default::default()).unwrap();
     assert_eq!(next.database_max_connections, 8);
-    assert_eq!(saved.database_max_connections, 3);
+    assert_eq!(saved.database_max_connections, 5);
     let overrides = InstanceOverrides {
-        database_max_connections: Some(5),
+        database_max_connections: Some(7),
         ..Default::default()
     };
-    assert_eq!(next.effective(&overrides).database_max_connections, 5);
+    assert_eq!(next.effective(&overrides).database_max_connections, 7);
     assert!(patch.apply(&saved, &overrides).is_err());
     for input in [
         r#"{"databaseMaxConnections":0}"#,

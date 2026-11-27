@@ -2,7 +2,7 @@ param(
     [switch]$SkipBuild,
     [ValidatePattern('^citadel-rust-e2e-[a-z0-9-]+$')][string]$BuildCacheVolume,
     [string[]]$TestFiles = @('tests/compatibility/oidc.spec.ts'),
-    [string]$PostgresImage = 'postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5',
+    [string]$PostgresImage = 'postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f',
     [string]$KeycloakImage = 'quay.io/keycloak/keycloak@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13'
 )
 

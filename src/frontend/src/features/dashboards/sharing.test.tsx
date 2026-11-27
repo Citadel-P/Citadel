@@ -13,12 +13,15 @@ import Board from './board';
 const api = 'http://localhost/api/v1';
 const board = { id: 'board', name: 'On call', revision: 7, visibility: 'Restricted', canEdit: true, canDelete: true };
 const privateBoard = { ...board, id: 'mine', name: 'Personal', visibility: 'Private' };
-function setup(isAdministrator: boolean, team: boolean) {
+function setup(isAdministrator: boolean, team: boolean, isSharedAccount = false) {
   const getBoard = vi.fn(() => board);
   const list = vi.fn(() => HttpResponse.json({ dashboards: [getBoard(), privateBoard] }));
-  const profile = vi.fn(() => HttpResponse.json({ authorization: { isAdministrator } }));
+  const profile = vi.fn(() =>
+    HttpResponse.json({ authorization: { isAdministrator }, authentication: { isSharedAccount } }),
+  );
   server.use(
     http.get(api + '/profile', profile),
+    http.get(api + '/profile/dashboard-default', () => HttpResponse.json({ dashboardId: null })),
     http.get(api + '/license/entitlements', () =>
       HttpResponse.json({ capabilities: [{ capability: 'CustomAccessControl', enabled: team }] }),
     ),
@@ -117,7 +120,7 @@ it('groups board actions and marks the current board in the switcher', async () 
   const { user } = openPage('/dashboards/board');
   const actions = await screen.findByRole('group', { name: 'Dashboard actions' });
   for (const name of ['Edit dashboard', 'Set as home', 'Delete']) {
-    expect(within(actions).getByRole('button', { name })).toBeVisible();
+    expect(await within(actions).findByRole('button', { name })).toBeVisible();
   }
   expect(within(actions).queryByRole('button', { name: 'Duplicate' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Duplicate' })).toBeVisible();
@@ -128,4 +131,21 @@ it('groups board actions and marks the current board in the switcher', async () 
   await user.click(screen.getByRole('button', { name: board.name }));
   expect(await screen.findByRole('link', { current: 'page' })).toBeVisible();
   expect(list).toHaveBeenCalledTimes(1);
+});
+
+it('keeps dashboard viewing available to a shared account and hides dashboard changes', async () => {
+  const { getBoard } = setup(true, true, true);
+  getBoard.mockReturnValue({ ...board, canEdit: false, canDelete: false });
+  const { user, queryClient } = openPage('/dashboards');
+  const link = await screen.findByRole('link', { name: 'On call' });
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  expect(screen.queryByRole('button', { name: 'Create dashboard' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Reset home' })).not.toBeInTheDocument();
+
+  await user.click(link);
+  expect(await screen.findByRole('heading', { name: 'On call' })).toBeVisible();
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  for (const name of ['Edit dashboard', 'Duplicate', 'Sharing', 'Set as home', 'Delete']) {
+    expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+  }
 });

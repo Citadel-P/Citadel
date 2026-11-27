@@ -14,8 +14,6 @@ Build images from Git, deploy containers and Compose stacks, and manage Docker S
 
 ![Example Citadel dashboard filtered to Production and Storefront, showing fleet totals, CPU and memory trends, deployment health, and recent activity](docs/public/screenshots/dashboard.png)
 
-*This dashboard shows resources that match both **Production** and **Storefront**.*
-
 ## What Citadel does
 
 - **Deploy applications** — build images from Git, publish to registries, deploy containers and Compose stacks, and roll back releases.

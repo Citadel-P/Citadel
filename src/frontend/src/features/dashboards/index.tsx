@@ -8,12 +8,14 @@ import { CitadelIcons } from '@/lib/icons';
 import type { RegularResourceComponents } from '@/pages/types';
 import { DashboardHomePreference } from './home-preference';
 import { CreateDashboardDialog } from './create';
+import { useCanManageDashboards } from './access';
 
 const pageSize = 50;
 export const DashboardComponents: RegularResourceComponents = {
   Icon: CitadelIcons.Dashboard,
   showTaskSheet: false,
   header: {
+    subtitle: 'Create and manage dashboards for your infrastructure and workloads.',
     showAdd: false,
     showSearch: true,
     Actions: CreateDashboardButton,
@@ -24,6 +26,8 @@ export const DashboardComponents: RegularResourceComponents = {
 
 function CreateDashboardButton() {
   const [creating, setCreating] = useState(false);
+  const canManage = useCanManageDashboards();
+  if (!canManage) return null;
   return (
     <>
       <Button onClick={() => setCreating(true)}>

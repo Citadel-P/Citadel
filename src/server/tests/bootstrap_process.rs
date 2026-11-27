@@ -512,3 +512,49 @@ async fn offline_restore_rejects_missing_or_malformed_encryption_key_before_acce
         );
     }
 }
+
+#[tokio::test]
+#[ignore = "requires a fresh disposable older-major CITADEL_UNSUPPORTED_DATABASE_URL"]
+async fn unsupported_postgres_stops_before_creating_core_state() {
+    let url = std::env::var("CITADEL_UNSUPPORTED_DATABASE_URL").unwrap();
+    let mut connection = PgConnection::connect(&url).await.unwrap();
+    let version: String = sqlx::query_scalar("SHOW server_version_num")
+        .fetch_one(&mut connection)
+        .await
+        .unwrap();
+    let major = version.parse::<u32>().unwrap() / 10_000;
+    assert_ne!(major, 19);
+    let directory = std::env::temp_dir().join(format!("citadel-pg-admission-{}", Uuid::now_v7()));
+    std::fs::create_dir(&directory).unwrap();
+    for args in [
+        vec!["serve"],
+        vec!["migrate"],
+        vec!["instance-identity-json", "--verify-migrations"],
+    ] {
+        let output = tokio::time::timeout(
+            Duration::from_secs(15),
+            Command::new(env!("CARGO_BIN_EXE_citadel-server"))
+                .args(args)
+                .env_clear()
+                .env("CITADEL_DATABASE_URL", &url)
+                .env("CITADEL_DATA_ROOT", &directory)
+                .kill_on_drop(true)
+                .output(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success());
+        assert!(
+            error.contains("requires PostgreSQL 19.x") && error.contains(&format!("major {major}")),
+            "{error}"
+        );
+        assert!(!error.contains(&url));
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 0);
+        let untouched: bool = sqlx::query_scalar("SELECT to_regclass('public.citadel_schema_migrations') IS NULL AND to_regclass('public.citadelinstanceidentity') IS NULL")
+            .fetch_one(&mut connection).await.unwrap();
+        assert!(untouched);
+    }
+    std::fs::remove_dir(directory).unwrap();
+}

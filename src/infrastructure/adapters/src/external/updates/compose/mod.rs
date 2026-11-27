@@ -15,4 +15,6 @@ mod replacement_tests;
 pub(super) mod tests;
 
 mod database;
-pub(in crate::external::updates) use database::{database_update, validate_database_update};
+#[cfg(test)]
+pub(in crate::external::updates) use database::SYNTHETIC;
+pub(in crate::external::updates) use database::{QUALIFIED, QualifiedDatabase};

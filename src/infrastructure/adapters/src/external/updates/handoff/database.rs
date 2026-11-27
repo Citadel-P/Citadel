@@ -29,6 +29,7 @@ impl DatabaseReplacement {
     pub(super) async fn prepare(
         docker: &LocalDocker<'_>,
         intent: &HelperLaunchIntent,
+        qualified: super::super::compose::QualifiedDatabase,
     ) -> Result<Self, UpdateError> {
         check_database_source(
             docker,
@@ -39,6 +40,7 @@ impl DatabaseReplacement {
                 .database
                 .as_ref()
                 .ok_or_else(conflict)?,
+            qualified,
         )
         .await?;
         Ok(Self {
@@ -114,6 +116,7 @@ impl OwnedUpdateHelper {
                 .database
                 .as_ref()
                 .ok_or_else(conflict)?,
+            super::super::compose::QUALIFIED,
         )
         .await?;
         let plan = self
@@ -158,6 +161,7 @@ impl OwnedUpdateHelper {
         &self,
         docker: &LocalDocker<'_>,
         execution: &mut ExecutionJournal,
+        qualified: super::super::compose::QualifiedDatabase,
     ) -> Result<(), UpdateError> {
         let reg = &self.intent.registration;
         let plan = self
@@ -186,6 +190,7 @@ impl OwnedUpdateHelper {
                 .database
                 .as_ref()
                 .ok_or_else(conflict)?,
+            qualified,
         )
         .await?;
         // Replacement intent and checkpoint are already durable. Never replay any
@@ -263,7 +268,7 @@ impl OwnedUpdateHelper {
         let id = database["Id"].as_str().ok_or_else(conflict)?.to_owned();
         if id == reg.database_container_id
             || database["Config"]["Image"] != plan.target_image
-            || env(&database, "PGDATA")? != "/var/lib/postgresql/18/docker"
+            || env(&database, "PGDATA")? != "/var/lib/postgresql/19/docker"
         {
             return Err(conflict());
         }

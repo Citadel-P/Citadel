@@ -113,12 +113,14 @@ the versions and downtime, then confirm **Update and restart**. Citadel checkpoi
 stops Core, upgrades the database, verifies it and restarts Core. Completion or failure
 appears in the portal and Activities. Core and Agent versions do not change.
 
-Citadel requires PostgreSQL 18 or newer. This build offers minor updates within
-PostgreSQL 18 to the qualified 18.6 image, retaining the existing data directory.
-PostgreSQL 17 and earlier are unsupported. Future major-version transitions need
-separate qualification before they can be offered.
+Citadel requires PostgreSQL 19.x for its control-plane database. The bundled
+target is 19.0. A database already running 19.0 or a later 19.x minor has no
+engine update available in this build. Core updates preserve the database image.
+For installations on other majors, provision PostgreSQL 19 separately and preserve
+the existing cluster. Citadel cannot convert it during setup or update.
 
-The bundled Alpine cluster must use `/var/lib/postgresql/18/docker`, owned by UID 70.
+In-app checkpoints use the packaged PG19 binaries in `/usr/local/bin`.
+The bundled Alpine cluster must use `/var/lib/postgresql/19/docker`, owned by UID 70.
 Other layouts and external databases require operator/provider maintenance. Database
 updates are explicitly approved; the Core/Agent schedule does not include them.
 
@@ -136,9 +138,9 @@ state. Create and verify a [system backup](/operations/control-plane-recovery),
 including the Core recovery keys. Stop Core before stopping PostgreSQL. Do not run
 another updater or start another container against the same data during maintenance.
 
-### Minor updates within PostgreSQL 18
+### Minor updates within PostgreSQL 19
 
-Set `PG_IMAGE` in the existing `.env` to the approved official PostgreSQL 18 image
+Set `PG_IMAGE` in the existing `.env` to the approved official PostgreSQL 19 image
 **digest**, retaining the Alpine variant and data directory. Pull it before downtime:
 
 ```bash
@@ -176,8 +178,7 @@ update-check setting changes.
 
 ## Update Agents
 
-Available updates lists **Citadel Core**, **Database**, then **Agents**. Database currently
-offers a qualified PostgreSQL upgrade for registered supported installations.
+Available updates lists **Citadel Core**, **Database**, then **Agents**. Database offers an update when the registered installation is eligible for a newer qualified minor.
 **In-app updates unavailable** means PostgreSQL is managed outside Citadel's Compose
 installation. A bundled database shows **In-app updates not configured** until the
 [one-time update setup](#enable-in-app-updates) has completed. **Update blocked** reports

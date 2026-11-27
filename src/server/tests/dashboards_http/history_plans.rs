@@ -23,6 +23,7 @@ pub(super) async fn compare(admin: &ActorPrincipal, viewer: &ActorPrincipal, tag
             DashboardViewer {
                 actor: admin.actor_id,
                 administrator: true,
+                read_only: false,
             },
             FleetFilter {
                 read,

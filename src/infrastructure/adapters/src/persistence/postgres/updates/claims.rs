@@ -72,6 +72,18 @@ impl PostgresUpdateRepository {
                 "An update or unresolved recovery already owns this installation.".into(),
             ));
         }
+        let version = citadel_database::server_version(&mut tx)
+            .await
+            .map_err(|e| UpdateError::Conflict(e.to_string()))?;
+        if plan
+            .database
+            .as_ref()
+            .is_some_and(|p| p.source_version != version)
+        {
+            return Err(UpdateError::Conflict(
+                "PostgreSQL version changed since review.".into(),
+            ));
+        }
         let operation = UpdateOperation::approve(plan.clone(), actor.actor_id, key, now)?;
         sqlx::query("INSERT INTO instanceupdates(id,instanceid,actorid,idempotencykey,revision,operation) VALUES($1,$2,$3,$4,0,$5)")
                 .bind(operation.id).bind(instance).bind(actor.actor_id.value()).bind(key).bind(sqlx::types::Json(&operation)).execute(&mut *tx).await.map_err(storage)?;

@@ -25,7 +25,6 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         "recovery source and target must be different databases"
     );
     MigrationRunner::migrate(&source_url).await.unwrap();
-    MigrationRunner::migrate(&target_url).await.unwrap();
 
     let source = PgPoolOptions::new()
         .max_connections(2)
@@ -61,10 +60,35 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         Uuid::now_v7().simple()
     ));
     let cancellation = CancellationToken::new();
+    let dump = std::env::var_os("CITADEL_PG_DUMP").unwrap_or_else(|| "pg_dump".into());
+    let restore = std::env::var_os("CITADEL_PG_RESTORE").unwrap_or_else(|| "pg_restore".into());
+    // An invalid selected client must fail before the first backup creates identity.
+    for (dumper, inspector) in [(&restore, &restore), (&dump, &dump)] {
+        let builder = PgDumpSystemBackupBuilder::new(
+            source.clone(),
+            source_url.clone(),
+            dumper,
+            inspector,
+            staging.clone(),
+            4096,
+            "0.1.1".into(),
+        );
+        let error = builder
+            .build(Uuid::now_v7(), &cancellation)
+            .await
+            .unwrap_err();
+        assert!(matches!(error, citadel_backups::BackupError::Validation(_)));
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM citadelinstanceidentity")
+            .fetch_one(&source)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
     let builder = PgDumpSystemBackupBuilder::new(
         source.clone(),
         source_url.clone(),
-        std::env::var_os("CITADEL_PG_DUMP").unwrap_or_else(|| "pg_dump".into()),
+        dump,
+        restore,
         staging.clone(),
         256 * 1024,
         "0.1.1".into(),
@@ -73,6 +97,10 @@ async fn system_bundle_restores_state_into_a_clean_database() {
     let manifest: serde_json::Value =
         serde_json::from_slice(&tokio::fs::read(bundle.join("manifest.json")).await.unwrap())
             .unwrap();
+    assert_eq!(manifest["formatVersion"], 2);
+    for key in ["serverVersionNum", "dumpToolVersionNum"] {
+        assert_eq!(manifest["database"][key].as_u64().unwrap() / 10000, 19);
+    }
     assert_eq!(manifest["coreVersion"], "0.1.1");
     let instance = Uuid::parse_str(manifest["instanceId"].as_str().unwrap()).unwrap();
     assert!(
@@ -83,12 +111,6 @@ async fn system_bundle_restores_state_into_a_clean_database() {
     );
     source.close().await;
 
-    let target = PgPoolOptions::new()
-        .max_connections(1)
-        .connect(&target_url)
-        .await
-        .unwrap();
-    target.close().await;
     // ControlPlaneRecoveryTests.Restore_ShouldRejectDatabaseArchiveWithoutSecretEncryptionKey:
     // This fixture supplies key material through external configuration.
     // Reject before pg_restore can alter the target, even with a valid bundle.
@@ -97,8 +119,19 @@ async fn system_bundle_restores_state_into_a_clean_database() {
         .connect(&target_url)
         .await
         .unwrap();
-    sqlx::raw_sql("CREATE TABLE recovery_untouched(marker text); INSERT INTO recovery_untouched VALUES('untouched')")
-        .execute(&sentinel).await.unwrap();
+    // These objects belong to this disposable test. The real recovery destination
+    // must start empty, as specified by the operator recovery procedure.
+    sqlx::raw_sql(
+        "CREATE TABLE recovery_untouched(marker text);
+         INSERT INTO recovery_untouched VALUES('untouched');
+         CREATE TABLE statisticssamples (created integer PRIMARY KEY) PARTITION BY RANGE (created);
+         CREATE TABLE statisticssamples_default PARTITION OF statisticssamples DEFAULT;
+         INSERT INTO statisticssamples VALUES(42);
+         CREATE VIEW recovery_partition_marker AS SELECT created FROM statisticssamples",
+    )
+    .execute(&sentinel)
+    .await
+    .unwrap();
     for key in [None, Some(zeroize::Zeroizing::new(vec![7; 31]))] {
         let error = restore_citadel_system(
             &CitadelSystemRestoreOptions {
@@ -121,25 +154,101 @@ async fn system_bundle_restores_state_into_a_clean_database() {
             "untouched"
         );
     }
-    sqlx::query("DROP TABLE recovery_untouched")
+    // Re-bind the inventory checksum so each rejection exercises provenance itself.
+    use sha2::{Digest, Sha256};
+    let manifest_path = bundle.join("manifest.json");
+    let inventory_path = bundle.join("checksums.json");
+    let original_manifest = tokio::fs::read(&manifest_path).await.unwrap();
+    let original_inventory = tokio::fs::read(&inventory_path).await.unwrap();
+    for (field, value) in [
+        ("formatVersion", Some(1)),
+        ("serverVersionNum", None),
+        ("dumpToolVersionNum", Some(180006)),
+        (
+            "serverVersionNum",
+            Some(manifest["database"]["serverVersionNum"].as_u64().unwrap() + 1),
+        ),
+        (
+            "dumpToolVersionNum",
+            Some(manifest["database"]["dumpToolVersionNum"].as_u64().unwrap() + 1),
+        ),
+    ] {
+        let mut invalid = manifest.clone();
+        if field == "formatVersion" {
+            invalid[field] = value.unwrap().into();
+        } else if let Some(value) = value {
+            invalid["database"][field] = value.into();
+        } else {
+            invalid["database"].as_object_mut().unwrap().remove(field);
+        }
+        let bytes = serde_json::to_vec(&invalid).unwrap();
+        let mut inventory: serde_json::Value = serde_json::from_slice(&original_inventory).unwrap();
+        use std::fmt::Write;
+        let mut checksum = String::with_capacity(64);
+        for byte in Sha256::digest(&bytes) {
+            write!(checksum, "{byte:02x}").unwrap();
+        }
+        inventory["manifest.json"] = checksum.into();
+        tokio::fs::write(&manifest_path, bytes).await.unwrap();
+        tokio::fs::write(&inventory_path, serde_json::to_vec(&inventory).unwrap())
+            .await
+            .unwrap();
+        let result = restore_citadel_system(
+            &CitadelSystemRestoreOptions {
+                bundle: bundle.clone(),
+                database_url: target_url.clone(),
+                pg_restore: std::env::var_os("CITADEL_PG_RESTORE")
+                    .unwrap_or_else(|| "pg_restore".into()),
+                maximum_output: 4096,
+                secret_encryption_key: Some(zeroize::Zeroizing::new(vec![7; 32])),
+            },
+            &cancellation,
+        )
+        .await;
+        assert!(
+            matches!(result, Err(citadel_backups::BackupError::Validation(_))),
+            "{field}"
+        );
+        let imported: bool = sqlx::query_scalar("SELECT to_regclass('public.tags') IS NOT NULL")
+            .fetch_one(&sentinel)
+            .await
+            .unwrap();
+        assert!(!imported);
+    }
+    tokio::fs::write(&manifest_path, original_manifest)
+        .await
+        .unwrap();
+    tokio::fs::write(&inventory_path, original_inventory)
+        .await
+        .unwrap();
+    let options = CitadelSystemRestoreOptions {
+        bundle: bundle.clone(),
+        database_url: target_url.clone(),
+        pg_restore: std::env::var_os("CITADEL_PG_RESTORE").unwrap_or_else(|| "pg_restore".into()),
+        maximum_output: 256 * 1024,
+        secret_encryption_key: Some(zeroize::Zeroizing::new(vec![7; 32])),
+    };
+    // The inherited constraint (PG19.0) or the external dependent view prevents
+    // replacement. Both belong to this target and must survive the failed restore.
+    let error = restore_citadel_system(&options, &cancellation)
+        .await
+        .unwrap_err();
+    assert!(matches!(error, citadel_backups::BackupError::External(_)));
+    assert_eq!(
+        sqlx::query_scalar::<_, i32>("SELECT created FROM recovery_partition_marker")
+            .fetch_one(&sentinel)
+            .await
+            .unwrap(),
+        42
+    );
+    sqlx::raw_sql("DROP VIEW recovery_partition_marker; DROP TABLE statisticssamples; DROP TABLE recovery_untouched")
         .execute(&sentinel)
         .await
         .unwrap();
+    restore_citadel_system(&options, &cancellation)
+        .await
+        .unwrap();
     sentinel.close().await;
-    restore_citadel_system(
-        &CitadelSystemRestoreOptions {
-            bundle: bundle.clone(),
-            database_url: target_url.clone(),
-            pg_restore: std::env::var_os("CITADEL_PG_RESTORE")
-                .unwrap_or_else(|| "pg_restore".into()),
-            maximum_output: 256 * 1024,
-            secret_encryption_key: Some(zeroize::Zeroizing::new(vec![7; 32])),
-        },
-        &cancellation,
-    )
-    .await
-    .unwrap();
-
     let restored = PgPoolOptions::new()
         .max_connections(1)
         .connect(&target_url)

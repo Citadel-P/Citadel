@@ -189,10 +189,17 @@ async fn git_and_backup_realtime_rows_include_actor_capabilities() {
                     assert_eq!(row["capabilities"], expected, "{group_name}");
                 }
             }
-            assert!(
-                reader.read(&denied, &group, None).await.is_err(),
-                "{group_name}"
-            );
+            let denied_snapshot = reader.read(&denied, &group, None).await;
+            if group_name == list && kind != ResourceType::BackupRepository {
+                let snapshot = denied_snapshot.unwrap();
+                assert!(
+                    snapshot.rows.iter().all(|batch| batch.rows.is_empty()),
+                    "{group_name}"
+                );
+                assert!(snapshot.events.is_empty(), "{group_name}");
+            } else {
+                assert!(denied_snapshot.is_err(), "{group_name}");
+            }
         }
     }
     f.docker_server.abort();

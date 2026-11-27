@@ -41,8 +41,8 @@ bounded deletes, and vacuum makes that space reusable without necessarily shrink
 the volume. Maintenance can also reclaim eligible mostly empty old partitions,
 skipping busy ones. It does not impose a PostgreSQL memory limit or guarantee a
 RAM reduction. See PostgreSQL's
-[partition maintenance](https://www.postgresql.org/docs/18/ddl-partitioning.html#DDL-PARTITIONING-DECLARATIVE-MAINTENANCE)
-and [routine vacuuming](https://www.postgresql.org/docs/18/routine-vacuuming.html).
+[partition maintenance](https://www.postgresql.org/docs/19/ddl-partitioning.html#DDL-PARTITIONING-DECLARATIVE-MAINTENANCE)
+and [routine vacuuming](https://www.postgresql.org/docs/19/routine-vacuuming.html).
 
 Upgrades that copy statistics need temporary space for both tables and WAL.
 Compaction catches up incrementally after startup; summaries can temporarily

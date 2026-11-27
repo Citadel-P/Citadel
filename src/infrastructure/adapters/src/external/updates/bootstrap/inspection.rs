@@ -48,6 +48,18 @@ pub(super) async fn inspect_installation(
     )
     .await?;
     let first = observe(&docker, inputs, &config, &checked, &state_directory).await?;
+    // Verify the registered database independently of the source Core executable.
+    let version = docker.run(&["exec", &first.database, "sh", "-ec",
+        "exec psql -XAt -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -c 'SHOW server_version_num'"]).await?;
+    let version = std::str::from_utf8(&version)
+        .ok()
+        .and_then(|raw| raw.trim().parse().ok())
+        .ok_or_else(|| {
+            refuse(
+                "Cannot verify the registered database version. Citadel requires PostgreSQL 19.x.",
+            )
+        })?;
+    citadel_primitives::postgres::require_supported(version).map_err(UpdateError::Conflict)?;
     let mut command = vec![
         "exec",
         &first.core,
@@ -59,8 +71,8 @@ pub(super) async fn inspect_installation(
     }
     let identity = docker.json(&command).await.map_err(|error| match error {
         UpdateError::Cancelled => error,
-        _ if preflight => refuse("Core must have initialized identity, a fully applied matching migration catalog and no owned update."),
-        _ => refuse("Core must support instance-identity-json and have an initialized, reachable Citadel database."),
+        _ if preflight => refuse("Inspection requires reachable PostgreSQL 19.x, initialized identity, a fully applied matching migration catalog and no owned update."),
+        _ => refuse("Core must support instance-identity-json and have an initialized, reachable PostgreSQL 19.x database."),
     })?;
     let source = if preflight {
         let database: citadel_updates::UpdateDatabaseState =

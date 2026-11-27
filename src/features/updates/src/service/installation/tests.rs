@@ -104,7 +104,7 @@ impl Fixture {
 }
 impl ReleaseCheckRepository for Fixture {
     fn database_version(&self) -> BoxFuture<'_, Result<u32, UpdateError>> {
-        Box::pin(async { Ok(180006) })
+        Box::pin(async { Ok(190000) })
     }
 
     fn observe_core_availability<'a>(
@@ -764,8 +764,8 @@ async fn database_review_reuses_the_claim_and_rechecks_engine_drift_before_launc
     let mut fixture = Fixture::new();
     fixture.plan.target = fixture.plan.source.clone();
     fixture.plan.database = Some(DatabaseUpdatePlan {
-        source_version: 180001,
-        target_version: 180006,
+        source_version: 190000,
+        target_version: 190001,
         target_image: format!("postgres@sha256:{}", "e".repeat(64)),
     });
     let (service, mut queue) = fixture.service();
@@ -815,8 +815,8 @@ async fn replacement_eligibility_blocks_review_and_approval_before_ownership() {
         if database {
             fixture.plan.target = fixture.plan.source.clone();
             fixture.plan.database = Some(DatabaseUpdatePlan {
-                source_version: 180001,
-                target_version: 180006,
+                source_version: 190000,
+                target_version: 190001,
                 target_image: format!("postgres@sha256:{}", "e".repeat(64)),
             });
         }

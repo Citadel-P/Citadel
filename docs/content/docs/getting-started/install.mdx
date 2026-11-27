@@ -7,6 +7,11 @@ Install Citadel and PostgreSQL with Docker Compose. You need a Linux Docker
 host, Docker Compose **2.30 or newer**, curl, and a text editor.
 The installation uses published container images.
 
+Citadel's control-plane database requires PostgreSQL 19.x. The installer pins the
+official Alpine 19.0 image and mounts a dedicated volume at `/var/lib/postgresql`.
+Provision a separate PG19 installation when moving from an older major. Preserve
+the original volume. This requirement applies only to Citadel's own database.
+
 ## 1. Download the installation files
 
 For a new installation, create a directory and download the Compose file and

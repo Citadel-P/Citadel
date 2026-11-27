@@ -5,15 +5,45 @@ use axum::{
 };
 use citadel_adapters::persistence::postgres::{
     dashboards::PostgresDashboardRepository,
-    identity::authentication::store::StaticEntitlementService,
+    identity::authentication::store::{PostgresIdentityStore, StaticEntitlementService},
 };
-use citadel_identity::{ActorPrincipal, AuthenticatedPrincipalType};
+use citadel_adapters::security::identity::crypto::{
+    Argon2PasswordHasher, JwtSessionTokenCodec, OpaqueServiceAccountTokenCodec,
+};
+use citadel_identity::{
+    ActorPrincipal, AuthenticatedPrincipalType, CredentialWork, IdentityService,
+    NoopServiceAccountLastUsedTracker, SystemClock,
+};
 use citadel_primitives::{ActorId, PermissionLevel, ResourceType};
 use citadel_server::api::routes::dashboards::{DashboardsHttpState, router};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tower::ServiceExt;
 use uuid::Uuid;
+
+fn identity(
+    pool: &sqlx::PgPool,
+    shared_user_ids: impl IntoIterator<Item = Uuid>,
+) -> Arc<IdentityService> {
+    Arc::new(
+        IdentityService::new(
+            Arc::new(PostgresIdentityStore::new(pool.clone())),
+            Arc::new(CredentialWork::new(Arc::new(
+                Argon2PasswordHasher::default(),
+            ))),
+            Arc::new(
+                JwtSessionTokenCodec::new(&[7; 32], "fixture".into(), "fixture".into()).unwrap(),
+            ),
+            Arc::new(OpaqueServiceAccountTokenCodec),
+            Arc::new(StaticEntitlementService::new(true)),
+            Arc::new(SystemClock),
+            Arc::new(NoopServiceAccountLastUsedTracker),
+            chrono::Duration::minutes(15),
+            chrono::Duration::days(30),
+        )
+        .with_shared_user_ids(shared_user_ids),
+    )
+}
 
 async fn actor(pool: &sqlx::PgPool, admin: bool) -> ActorPrincipal {
     let id = Uuid::now_v7();
@@ -90,6 +120,7 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
         router(DashboardsHttpState {
             dashboards: repository.clone(),
             entitlements: Arc::new(StaticEntitlementService::new(team)),
+            identity: identity(&pool, []),
         })
     };
     let (community, team) = (app(false), app(true));
@@ -558,6 +589,7 @@ async fn dashboard_sharing_enforces_visibility_revision_and_entitlement() {
         router(DashboardsHttpState {
             dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
             entitlements: Arc::new(StaticEntitlementService::new(team)),
+            identity: identity(&pool, []),
         })
     };
     let (team, community) = (app(true), app(false));
@@ -718,6 +750,7 @@ async fn widget_sources_enforce_access_and_upcoming_orders_enabled_schedules() {
     let app = router(DashboardsHttpState {
         dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
         entitlements: Arc::new(StaticEntitlementService::new(false)),
+        identity: identity(&pool, []),
     });
     let viewer = actor(&pool, false).await;
     let admin = actor(&pool, true).await;
@@ -931,6 +964,7 @@ async fn fleet_ranks_before_limiting_and_counts_only_visible_owners() {
     let app = router(DashboardsHttpState {
         dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
         entitlements: Arc::new(StaticEntitlementService::new(false)),
+        identity: identity(&pool, []),
     });
     sqlx::query("INSERT INTO platforms(id,name,address,connectortype,cpucount,imagecount,memtotal,networkcount,platformdescriptor,status,volumecount) VALUES($1,'Scale fixture',$1::uuid::text,'Local',1,0,1024,0,'{}','Online',0)").bind(platform).execute(&pool).await.unwrap();
     let problem = Uuid::now_v7();
@@ -1166,3 +1200,132 @@ mod history_plans;
 
 #[path = "dashboards_http/activity.rs"]
 mod activity;
+
+#[tokio::test]
+#[ignore = "requires a disposable CITADEL_DASHBOARD_DATABASE_URL"]
+async fn shared_accounts_can_read_dashboards_but_cannot_change_them() {
+    let url = std::env::var("CITADEL_DASHBOARD_DATABASE_URL").unwrap();
+    citadel_database::MigrationRunner::migrate(&url)
+        .await
+        .unwrap();
+    let pool = sqlx::PgPool::connect(&url).await.unwrap();
+    let mut user = actor(&pool, false).await;
+    user.subject_id = Uuid::now_v7();
+    let administrator = actor(&pool, true).await;
+    let dashboard = Uuid::now_v7();
+    let name = format!("Shared account board {dashboard}");
+    let config = json!({"schemaVersion":2,"rangeMinutes":60,"tags":[],"widgets":[]});
+    let app = |shared| {
+        router(DashboardsHttpState {
+            dashboards: Arc::new(PostgresDashboardRepository::new(pool.clone())),
+            entitlements: Arc::new(StaticEntitlementService::new(true)),
+            identity: identity(&pool, shared),
+        })
+    };
+    let regular = app(vec![]);
+    let payload =
+        json!({"id": dashboard, "name": name, "visibility": "Private", "configuration": config});
+    let created = call(
+        &regular,
+        &user,
+        Method::POST,
+        "dashboards",
+        payload.clone(),
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(created["summary"]["canEdit"], true);
+    let revision = created["summary"]["revision"].as_i64().unwrap();
+    let path = format!("dashboards/{dashboard}");
+    let shared = app(vec![user.subject_id]);
+    let summary = call(
+        &shared,
+        &user,
+        Method::GET,
+        &path,
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(summary["summary"]["canEdit"], false);
+    assert_eq!(summary["summary"]["canDelete"], false);
+    let list = call(
+        &shared,
+        &user,
+        Method::GET,
+        "dashboards",
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    let listed = list["dashboards"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["id"] == dashboard.to_string())
+        .unwrap();
+    assert_eq!(listed["canEdit"], false);
+    assert_eq!(listed["canDelete"], false);
+
+    for (method, route, body) in [
+        (
+            Method::POST,
+            "dashboards".into(),
+            json!({"id":Uuid::now_v7(),"name":"Blocked create","visibility":"Private","configuration":config}),
+        ),
+        (
+            Method::PUT,
+            path.clone(),
+            json!({"revision":revision,"name":"Blocked update","configuration":config}),
+        ),
+        (
+            Method::DELETE,
+            format!("{path}?revision={revision}"),
+            Value::Null,
+        ),
+        (
+            Method::PUT,
+            "profile/dashboard-default".into(),
+            json!({"dashboardId":dashboard}),
+        ),
+    ] {
+        call(&shared, &user, method, &route, body, StatusCode::FORBIDDEN).await;
+    }
+    // A configured account remains read-only even if it has the administrator role.
+    user.roles = vec!["Admin".into()];
+    for (route, body) in [
+        (
+            format!("{path}/visibility"),
+            json!({"revision":revision,"visibility":"Restricted"}),
+        ),
+        (
+            "instance/dashboard-default".into(),
+            json!({"dashboardId":null}),
+        ),
+    ] {
+        call(
+            &shared,
+            &user,
+            Method::PUT,
+            &route,
+            body,
+            StatusCode::FORBIDDEN,
+        )
+        .await;
+    }
+    let persisted = call(
+        &shared,
+        &user,
+        Method::GET,
+        &path,
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(persisted, summary);
+    let other = Uuid::now_v7();
+    call(&shared,&administrator, Method::POST,"dashboards",
+        json!({"id":other,"name":format!("Admin board {other}"),"visibility":"InstanceShared","configuration":config}),
+        StatusCode::OK,
+    ).await;
+}

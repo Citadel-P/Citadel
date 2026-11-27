@@ -30,6 +30,7 @@ impl From<DashboardSharingMode> for DashboardVisibility {
 pub struct DashboardViewer {
     pub actor: ActorId,
     pub administrator: bool,
+    pub read_only: bool,
 }
 
 #[derive(Debug, Serialize)]

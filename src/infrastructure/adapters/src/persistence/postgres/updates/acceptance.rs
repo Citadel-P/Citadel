@@ -26,6 +26,18 @@ pub async fn check_committed_update_receipt(
     receipt.validate_for(journal)?;
     let mut tx = pool.begin().await.map_err(|_| failed())?;
     sqlx::raw_sql("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY; SET LOCAL statement_timeout = '5s'; SET LOCAL lock_timeout = '2s';").execute(&mut *tx).await.map_err(|_| failed())?;
+    let version = citadel_database::server_version(&mut tx)
+        .await
+        .map_err(|e| UpdateError::Conflict(e.to_string()))?;
+    if journal
+        .operation
+        .plan
+        .database
+        .as_ref()
+        .is_some_and(|p| version != p.target_version)
+    {
+        return Err(failed());
+    }
     let row = sqlx::query("SELECT * FROM instanceupdates WHERE id=$1 AND ownsinstallation AND instanceid=(SELECT instanceid FROM citadelinstanceidentity WHERE id=1)")
         .bind(journal.operation.id).fetch_optional(&mut *tx).await.map_err(|_| failed())?.ok_or_else(failed)?;
     let committed = super::queries::read_operation(&row).map_err(|_| failed())?;
@@ -56,7 +68,16 @@ pub async fn check_target_update_database(
         .fetch_one(&mut *tx)
         .await
         .map_err(|_| failed())?;
-    let entries = checked_migrations(probe.0, journal)?;
+    let entries = checked_migrations(
+        probe.0,
+        journal,
+        journal
+            .operation
+            .plan
+            .database
+            .as_ref()
+            .map(|p| p.target_version),
+    )?;
     match source_catalog {
         Some(manifest) => MigrationRunner::validate_upgrade_source(
             &entries,

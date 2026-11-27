@@ -1,4 +1,5 @@
 SELECT json_build_object(
+    'version', current_setting('server_version_num')::int,
     'instance', (SELECT instanceid FROM public.citadelinstanceidentity WHERE id = 1),
     'initialized', EXISTS(SELECT 1 FROM public.instancesetupstates WHERE id = 1 AND initializedat IS NOT NULL),
     'migrations', (SELECT json_agg(m) FROM (

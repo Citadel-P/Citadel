@@ -31,14 +31,14 @@ const rowActions: Record<string, DropdownActionComponent<DashboardSummaryView>> 
   open: dropdown.open,
   home: function Home({ resource, onAction }) {
     const home = useDashboardHomeAction(resource);
-    return (
+    return home.canSet ? (
       <DropdownActionButton
         title={home.label}
         disabled={home.disabled}
         icon={home.current ? <Check /> : <House />}
         onClick={() => onAction?.('home')}
       />
-    );
+    ) : null;
   },
   sharing: function Sharing({ resource, onAction }) {
     const canShare = useCanManageSharing(resource);
@@ -76,6 +76,7 @@ export function DashboardRowActions({ board }: { board: DashboardSummaryView }) 
 export function SetSelectedHome({ resources }: { resources: DashboardSummaryView[] }) {
   const [board, setBoard] = useState<DashboardSummaryView>();
   const home = useDashboardHomeAction(resources.length === 1 ? resources[0] : undefined);
+  if (!home.canSet) return null;
   return (
     <>
       <ActionButton

@@ -17,7 +17,16 @@ pub(crate) async fn check_checkpoint_source(
     .await
     .map_err(|_| failed())?
     .map_err(|_| failed())?;
-    let entries = checked_migrations(probe.0, journal)?;
+    let entries = checked_migrations(
+        probe.0,
+        journal,
+        journal
+            .operation
+            .plan
+            .database
+            .as_ref()
+            .map(|p| p.source_version),
+    )?;
     let catalog = MigrationRunner::validate_applied_catalog(&entries).map_err(|_| failed())?;
     if catalog != journal.operation.plan.source.catalog_sha256 {
         return Err(failed());
@@ -27,6 +36,7 @@ pub(crate) async fn check_checkpoint_source(
 
 #[derive(Deserialize)]
 pub(super) struct Probe {
+    version: u32,
     instance: Uuid,
     initialized: bool,
     migrations: Vec<Migration>,
@@ -52,7 +62,13 @@ struct Owner {
 pub(super) fn checked_migrations(
     probe: Probe,
     journal: &UpdateJournal,
+    expected_version: Option<u32>,
 ) -> Result<Vec<AppliedMigration>, UpdateError> {
+    if expected_version.is_some_and(|version| version != probe.version) {
+        return Err(UpdateError::Conflict(
+            "Live PostgreSQL version differs from the approved update.".into(),
+        ));
+    }
     checked_owner_migrations(probe, &journal.operation, &journal.history)
 }
 
@@ -68,6 +84,8 @@ fn checked_owner_migrations(
     operation: &UpdateOperation,
     history: &[UpdateOperation],
 ) -> Result<Vec<AppliedMigration>, UpdateError> {
+    citadel_primitives::postgres::require_supported(probe.version)
+        .map_err(UpdateError::Conflict)?;
     if probe.instance != operation.instance_id
         || !probe.initialized
         || probe.migrations.len() > 1024

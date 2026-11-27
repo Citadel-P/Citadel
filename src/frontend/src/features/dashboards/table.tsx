@@ -17,7 +17,9 @@ const HomeDashboardId = createContext<string | null | undefined>(undefined);
 
 function HomeCell({ id }: { id: string }) {
   const homeId = useContext(HomeDashboardId);
-  return id === homeId ? <StateBadge value={true} label="Current home" indicator={<House aria-hidden="true" />} /> : null;
+  return id === homeId ? (
+    <StateBadge value={true} label="Current home" indicator={<House aria-hidden="true" />} />
+  ) : null;
 }
 
 const columns: ColumnDef<StockFeatures, DashboardSummaryView>[] = [

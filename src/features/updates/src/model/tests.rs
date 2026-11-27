@@ -374,8 +374,8 @@ fn database_review_keeps_core_identity_and_rejects_downgrades_or_combined_change
     reviewed.target = reviewed.source.clone();
     assert!(reviewed.validate(reviewed.reviewed_at).is_err());
     reviewed.database = Some(DatabaseUpdatePlan {
-        source_version: 180001,
-        target_version: 180006,
+        source_version: 190000,
+        target_version: 190001,
         target_image: format!("postgres@sha256:{}", "a".repeat(64)),
     });
     reviewed.validate(reviewed.reviewed_at).unwrap();
@@ -385,11 +385,11 @@ fn database_review_keeps_core_identity_and_rejects_downgrades_or_combined_change
     reviewed.target.version = "0.1.2".into();
     assert!(reviewed.validate(reviewed.reviewed_at).is_err());
     reviewed.target = reviewed.source.clone();
-    for source in [160011, 170011, 180006, 180007, 190000] {
+    for source in [160011, 170011, 180007, 190001, 190002, 200000] {
         reviewed.database.as_mut().unwrap().source_version = source;
         assert!(reviewed.validate(reviewed.reviewed_at).is_err());
     }
-    reviewed.database.as_mut().unwrap().source_version = 180005;
+    reviewed.database.as_mut().unwrap().source_version = 190000;
     reviewed.validate(reviewed.reviewed_at).unwrap();
     reviewed.database.as_mut().unwrap().target_image = "postgres:latest".into();
     assert!(reviewed.validate(reviewed.reviewed_at).is_err());

@@ -36,7 +36,7 @@ docker create --name "$container" \
   --env POSTGRES_USER=citadel_test \
   --env POSTGRES_PASSWORD=citadel_test \
   --env POSTGRES_DB=citadel_authorization \
-  postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5 \
+  postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f \
   -c shared_preload_libraries=pg_stat_statements
 owned=true
 timeout --kill-after=5s 60s docker start "$container"
@@ -84,10 +84,27 @@ docker exec "$container" createdb -h 127.0.0.1 -U citadel_test citadel_resource_
   export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_resource_copies"
   run_cargo test --locked --workspace --test execution_resources_http resource_copies -- --ignored --test-threads=1
 )
+# Dashboard cases exercise instance-wide listings and home defaults.
+dashboard_fixture=0
+for test_name in \
+    shared_accounts_can_read_dashboards_but_cannot_change_them \
+    activity::dashboard_activity_tracks_committed_changes_and_current_audience \
+    dashboard_sharing_enforces_visibility_revision_and_entitlement \
+    dashboard_visibility_revisions_and_defaults_follow_the_viewer \
+    fleet_ranks_before_limiting_and_counts_only_visible_owners \
+    widget_sources_enforce_access_and_upcoming_orders_enabled_schedules; do
+  dashboard_fixture=$((dashboard_fixture + 1))
+  database="citadel_dashboards_$dashboard_fixture"
+  docker exec "$container" createdb -h 127.0.0.1 -U citadel_test "$database"
+  (
+    export CITADEL_DASHBOARD_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/$database"
+    run_cargo test --locked --workspace --test dashboards_http "$test_name" -- --ignored --exact --list | grep -Fx "$test_name: test"
+    run_cargo test --locked --workspace --test dashboards_http "$test_name" -- --ignored --exact --test-threads=1
+  )
+done
 # These ignored fixtures exercise real completion transactions and fault injection.
 for selection in \
   'activities_http recent_activity_filters_before_limit_for_a_seeded_viewer' \
-  'dashboards_http activity::dashboard_activity_tracks_committed_changes_and_current_audience dashboard_sharing_enforces_visibility_revision_and_entitlement dashboard_visibility_revisions_and_defaults_follow_the_viewer fleet_ranks_before_limiting_and_counts_only_visible_owners widget_sources_enforce_access_and_upcoming_orders_enabled_schedules' \
   'swarm_services_http managed_swarm_service_endpoints_enforce_auth_and_persist_lifecycle' \
   'swarm_service_persistence authoritative_swarm_observation_completes_or_fails_operations_once' \
   'resources_http metadata_endpoints_enforce_authorization_and_persist_complete_lifecycles' \
@@ -106,7 +123,6 @@ for selection in \
   (
     export CITADEL_EXECUTION_DATABASE_URL="postgres://citadel_test:citadel_test@127.0.0.1:$port/citadel_$target"
     case "$target" in
-      dashboards_http) export CITADEL_DASHBOARD_DATABASE_URL="$CITADEL_EXECUTION_DATABASE_URL" ;;
       resources_http) export CITADEL_METADATA_DATABASE_URL="$CITADEL_EXECUTION_DATABASE_URL" ;;
       swarm_services_http|swarm_service_persistence) export CITADEL_WORKLOAD_DATABASE_URL="$CITADEL_EXECUTION_DATABASE_URL" ;;
     esac

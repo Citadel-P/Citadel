@@ -679,10 +679,17 @@ fn early_admission_failure_identifies_the_phase_without_configuration_secrets() 
     let result = run(&root, &[("CITADEL_DATABASE_URL", &database)], &["serve"]);
     assert!(!result.status.success());
     let stderr = String::from_utf8_lossy(&result.stderr);
-    assert!(stderr.contains("background-job admission"), "{stderr}");
+    assert!(stderr.contains("PostgreSQL version admission"), "{stderr}");
+    assert!(
+        stderr.contains("Citadel requires PostgreSQL 19.x."),
+        "{stderr}"
+    );
     assert!(!stderr.contains("private-test-password"));
     assert!(!stderr.contains(&database));
-    std::fs::remove_dir_all(root).unwrap();
+    assert!(
+        !root.exists(),
+        "database admission must precede Core state creation"
+    );
 }
 
 #[test]

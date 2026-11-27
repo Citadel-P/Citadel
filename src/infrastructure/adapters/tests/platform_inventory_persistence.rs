@@ -664,7 +664,11 @@ async fn disk_metrics_survive_persistence_dashboard_and_history_reads() {
         1
     );
     let views = PostgresPlatformReader::new(pool.clone())
-        .list_authorized(ActorId::new(actor), true, &[tag.to_string()])
+        .list_authorized(
+            ActorId::new(actor),
+            true,
+            &[format!("platform-{}", tag.simple())],
+        )
         .await
         .unwrap();
     let current = &views[0].stats.as_ref().unwrap()[0];

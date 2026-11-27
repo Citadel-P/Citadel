@@ -69,17 +69,30 @@ fn decode_postgres_component(value: &str) -> Result<String, BackupError> {
 fn postgres_environment(database_url: &str) -> Result<ProcessEnvironment, BackupError> {
     let url = postgres_url(database_url)?;
     let database = decode_postgres_component(url.path().trim_start_matches('/'))?;
+    // SQLx honors PGPORT when the URL omits it. The bounded tool runner clears
+    // ambient PostgreSQL variables, so pass the same effective endpoint to libpq.
+    let port = url
+        .port()
+        .or_else(|| std::env::var("PGPORT").ok()?.parse::<u16>().ok())
+        .unwrap_or(5432);
+    let host = match url.host() {
+        Some(url::Host::Ipv6(address)) => address.to_string(),
+        Some(host) => decode_postgres_component(&host.to_string())?,
+        None => {
+            return Err(BackupError::Validation(
+                "PostgreSQL URL must include a host.".into(),
+            ));
+        }
+    };
     let mut environment = vec![
-        ("PGHOST".into(), url.host_str().unwrap_or_default().into()),
+        ("PGHOST".into(), host.into()),
+        ("PGPORT".into(), port.to_string().into()),
         (
             "PGUSER".into(),
             decode_postgres_component(url.username())?.into(),
         ),
         ("PGDATABASE".into(), database.into()),
     ];
-    if let Some(port) = url.port() {
-        environment.push(("PGPORT".into(), port.to_string().into()));
-    }
     if let Some(password) = url.password() {
         environment.push((
             "PGPASSWORD".into(),
@@ -107,6 +120,14 @@ fn postgres_url(database_url: &str) -> Result<Url, BackupError> {
         return Err(BackupError::Validation(
             "PostgreSQL URL must include host, user, and database.".into(),
         ));
+    }
+    if url.query_pairs().any(|(key, _)| {
+        matches!(
+            key.as_ref(),
+            "host" | "hostaddr" | "port" | "dbname" | "user" | "password"
+        )
+    }) {
+        return Err(BackupError::Validation("Use the PostgreSQL URL authority and path to identify the backup or restore database. Query overrides are ambiguous.".into()));
     }
     Ok(url)
 }

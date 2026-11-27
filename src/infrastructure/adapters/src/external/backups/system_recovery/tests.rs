@@ -176,12 +176,14 @@ async fn recovery_bundle_detects_database_tampering_before_restore() {
     let key = root.join("recovery/jwtsecret");
     tokio::fs::write(&key, b"original-key").await.unwrap();
     let manifest = RecoveryManifest {
-        format_version: 1,
+        format_version: 2,
         product: "citadel",
         core_version: "test",
         instance_id: Uuid::now_v7(),
         created_at: chrono::Utc::now(),
         database: DatabaseManifest {
+            server_version_num: 190000,
+            dump_tool_version_num: 190000,
             engine: "PostgreSQL",
             path: "database/citadel.dump",
             sha256: dump_hash.clone(),

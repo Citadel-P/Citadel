@@ -21,7 +21,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Could not obtain the isolated Docker daemon image.' }
     & docker pull registry@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
     if ($LASTEXITCODE -ne 0) { throw 'Could not obtain the Registry test image.' }
-    & docker run --detach --name $postgres --network $network --tmpfs /var/lib/postgresql --env POSTGRES_USER=citadel --env POSTGRES_PASSWORD=citadel --env POSTGRES_DB=citadel postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5 | Out-Null
+    & docker run --detach --name $postgres --network $network --tmpfs /var/lib/postgresql --env POSTGRES_USER=citadel --env POSTGRES_PASSWORD=citadel --env POSTGRES_DB=citadel postgres@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not start the isolated test database.' }
     foreach ($attempt in 1..30) { & docker exec $postgres pg_isready -U citadel -d citadel *> $null; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep -Milliseconds 500 }
     & docker exec --user "${testUid}:0" --workdir /workspace --env DOCKER_HOST=unix:///var/run/docker-host.sock `

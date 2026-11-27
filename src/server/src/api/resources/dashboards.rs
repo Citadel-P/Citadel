@@ -1,8 +1,20 @@
 use super::schema_models::dashboards::{DashboardConfigurationSchema, DashboardVisibilitySchema};
-use citadel_dashboards::{DashboardContent, DashboardVisibility};
+use citadel_dashboards::{DashboardContent, DashboardViewer, DashboardVisibility};
+use citadel_identity::{ActorPrincipal, IdentityService};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+pub(crate) fn dashboard_viewer(
+    identity: &IdentityService,
+    principal: &ActorPrincipal,
+) -> DashboardViewer {
+    DashboardViewer {
+        actor: principal.actor_id,
+        administrator: principal.is_administrator(),
+        read_only: identity.is_shared_user(principal.subject_id),
+    }
+}
 
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

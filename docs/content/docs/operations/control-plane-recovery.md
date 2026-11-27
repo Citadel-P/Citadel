@@ -26,6 +26,11 @@ This procedure restores Citadel's management state. It does not restore Docker
 workload volumes, application databases, or the hosts themselves. Protect those
 separately with [workload backups](/resources/backups).
 
+System backups and update checkpoints require PostgreSQL 19.x and PG19 client
+tools. Recovery bundle format 2 records the source server and dump tool versions.
+Restore checks the archive against both, verifies the destination major and
+rejects older bundles before writing to PostgreSQL.
+
 ## System containers
 
 On the local Docker Platform, Citadel marks its Core and PostgreSQL containers
@@ -121,8 +126,8 @@ recovery assets in a private directory, sends that directory to restic, and
 deletes the plaintext staging directory before completing the run.
 
 The official Citadel Core image includes the PostgreSQL client. Native
-installations and custom images must install a `pg_dump` version that supports
-the PostgreSQL server and can set `CITADEL_PG_DUMP_PATH` to its executable.
+installations and custom images require PG19 `pg_dump` and `pg_restore`. Set
+`CITADEL_PG_DUMP_PATH` and `CITADEL_PG_RESTORE_PATH` to select their executables.
 
 The recovery bundle directory contains:
 
@@ -183,7 +188,9 @@ before modifying PostgreSQL.
 
 Use an empty PostgreSQL database and an empty Citadel data volume. The restore
 command can replace existing database objects; the confirmation flag is not a
-check that the target is empty.
+check that the target is empty. An existing partitioned Citadel schema can also cause
+PostgreSQL to reject the restore when it encounters an inherited constraint. In
+that case the transaction rolls back. Retry with a new empty database.
 
 These steps assume the supplied published-image Compose file, with PostgreSQL
 at `PG_HOST=pg_db` and project-scoped volumes. A different project name does

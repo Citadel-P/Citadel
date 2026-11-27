@@ -13,6 +13,7 @@ pub struct ExternalToolsConfig {
     pub docker: OsString,
     pub restic: OsString,
     pub pg_dump: OsString,
+    pub pg_restore: OsString,
     pub shoutrrr: OsString,
 }
 
@@ -215,6 +216,7 @@ impl ExecutionConfig {
             tools: ExternalToolsConfig {
                 docker: get("CITADEL_DOCKER_PATH").unwrap_or_else(|| "docker".into()),
                 restic: get("CITADEL_RESTIC_PATH").unwrap_or_else(|| "restic".into()),
+                pg_restore: get("CITADEL_PG_RESTORE_PATH").unwrap_or_else(|| "pg_restore".into()),
                 pg_dump: get("CITADEL_PG_DUMP_PATH").unwrap_or_else(|| "pg_dump".into()),
                 shoutrrr: get("CITADEL_SHOUTRRR_PATH").unwrap_or_else(|| "shoutrrr".into()),
             },

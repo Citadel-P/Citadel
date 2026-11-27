@@ -103,7 +103,12 @@ pub async fn prepare_update_checkpoint(
         () = cancellation.cancelled() => return Err(UpdateError::Cancelled),
         checked = inspect_recovery_bundle(&bundle) => checked.map_err(|_| failed())?,
     };
-    if checked.instance_id != operation.instance_id
+    if operation
+        .plan
+        .database
+        .as_ref()
+        .is_some_and(|plan| plan.source_version != checked.server_version_num)
+        || checked.instance_id != operation.instance_id
         || checked.core_version != operation.plan.source.version
     {
         return Err(failed());

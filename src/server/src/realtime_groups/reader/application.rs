@@ -1047,7 +1047,6 @@ impl ApplicationGroupReader {
                             resource_ids: selection.owners,
                             container_ids: selection.references,
                             limit: Some(catalog_limit),
-                            ..Default::default()
                         },
                     )
                     .await
@@ -1112,7 +1111,6 @@ impl ApplicationGroupReader {
                             resource_ids: selection.owners,
                             container_ids: selection.references,
                             limit: Some(catalog_limit),
-                            ..Default::default()
                         },
                     )
                     .await
@@ -1254,7 +1252,6 @@ impl ApplicationGroupReader {
                             resource_ids: selection.owners,
                             container_ids: selection.references,
                             limit: Some(catalog_limit),
-                            ..Default::default()
                         },
                     )
                     .await

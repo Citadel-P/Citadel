@@ -30,7 +30,7 @@ impl DatabaseRunner {
     fn new(base: Arc<Runner>) -> Self {
         Self {
             base,
-            facts: json!({"version":180001,"data":"/var/lib/postgresql/18/docker","recovery":false,"slots":0,"replicas":0,"subscriptions":0,"tablespaces":0}),
+            facts: json!({"version":190000,"data":"/var/lib/postgresql/19/docker","recovery":false,"slots":0,"replicas":0,"subscriptions":0,"tablespaces":0}),
             helper: None,
             alpine: true,
             stopped: AtomicBool::new(false),
@@ -66,7 +66,7 @@ impl ProcessRunner for DatabaseRunner {
                 }
             } else if args.ends_with(&["container", "inspect", DATABASE]) {
                 let mut db = self.base.fixture.runner.database.clone();
-                db["Config"]["Env"] = json!(["PGDATA=/var/lib/postgresql/18/docker"]);
+                db["Config"]["Env"] = json!(["PGDATA=/var/lib/postgresql/19/docker"]);
                 db["State"]["Running"] = json!(!self.stopped.load(Ordering::SeqCst));
                 db["State"]["ExitCode"] = json!(0);
                 db["State"]["OOMKilled"] = json!(false);
@@ -103,7 +103,8 @@ impl ProcessRunner for DatabaseRunner {
     }
 }
 fn plan() -> DatabaseUpdatePlan {
-    super::super::compose::database_update(180001)
+    super::super::compose::SYNTHETIC
+        .update(190000)
         .unwrap()
         .unwrap()
 }
@@ -120,7 +121,7 @@ async fn eligibility_reports_database_blockers_without_mutation() {
         ("tablespaces", json!(1), "tablespaces"),
         ("recovery", json!(true), "recovery"),
         ("data", json!("/custom"), "PGDATA"),
-        ("version", json!(180002), "version changed"),
+        ("version", json!(190002), "version changed"),
         ("alpine", json!(false), "Alpine"),
         ("normal", Value::Null, ""),
     ] {
@@ -133,7 +134,13 @@ async fn eligibility_reports_database_blockers_without_mutation() {
             home: home.path(),
             deadline: Instant::now() + Duration::from_secs(30),
         };
-        let result = check_database_source(&docker, &base.intent.registration, &plan()).await;
+        let result = check_database_source(
+            &docker,
+            &base.intent.registration,
+            &plan(),
+            super::super::compose::SYNTHETIC,
+        )
+        .await;
         if field == "normal" {
             result.unwrap();
         } else {
@@ -230,9 +237,13 @@ async fn edits_during_database_shutdown_prevent_compose_submission() {
             deadline: Instant::now() + Duration::from_secs(30),
         };
         execution.replacement.as_mut().unwrap().database = Some(
-            super::database::DatabaseReplacement::prepare(&docker, &helper.intent)
-                .await
-                .unwrap(),
+            super::database::DatabaseReplacement::prepare(
+                &docker,
+                &helper.intent,
+                super::super::compose::SYNTHETIC,
+            )
+            .await
+            .unwrap(),
         );
         execution.save(&helper.state, &helper.owner).unwrap();
         assert_eq!(
@@ -241,7 +252,7 @@ async fn edits_during_database_shutdown_prevent_compose_submission() {
         );
         assert!(
             helper
-                .replace_database(&docker, &mut execution)
+                .replace_database(&docker, &mut execution, super::super::compose::SYNTHETIC)
                 .await
                 .is_err()
         );

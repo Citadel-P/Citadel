@@ -67,7 +67,7 @@ impl UpdateInstallationRuntime for DockerUpdateInstallation {
             );
             let version =
                 citadel_updates::ReleaseCheckRepository::database_version(&repository).await?;
-            super::super::compose::database_update(version)
+            super::super::compose::QUALIFIED.update(version)
         })
     }
 

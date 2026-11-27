@@ -92,7 +92,11 @@ enum ProbeScope {
 fn rust_permission_matrix_matches_the_shared_dotnet_contract() {
     let expected: AuthorizationMatrix = serde_json::from_str(AUTHORIZATION_CASES).unwrap();
     assert_eq!(expected.schema_version, 1);
-    let actual = permission_matrix();
+    let mut actual = permission_matrix();
+    // Dashboard is a Rust-only resource. Keep the shared .NET fixture unchanged.
+    let dashboard = actual.remove(&ResourceType::Dashboard).unwrap();
+    assert_eq!(dashboard.maximum_level, PermissionLevel::Write);
+    assert!(dashboard.specifics.is_empty());
     assert_eq!(actual.len(), expected.permission_matrix.len());
 
     for (resource_type, mut expected_capability) in expected.permission_matrix {
