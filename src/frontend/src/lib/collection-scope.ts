@@ -36,8 +36,7 @@ export async function reconcileTaggedEventPages(
     | 'getDashboardFleet'
     | 'getUpcomingSchedules',
 ) {
-  // Paused dashboards retain their last rendered values after removing observers.
-  // Invalidate those snapshots without starting background reads.
+  // Mark cached scopes stale without reading pages that have no observers.
   await client.invalidateQueries({
     queryKey: [resource],
     type: 'inactive',

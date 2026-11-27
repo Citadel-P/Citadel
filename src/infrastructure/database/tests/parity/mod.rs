@@ -312,7 +312,7 @@ async fn initial_baseline_includes_appearance_defaults_and_restart_preserves_pre
             "Europe/Paris".into(),
             "TwentyFourHour".into(),
             "Dark".into(),
-            "Neutral".into(),
+            "Blue".into(),
             "Geist".into(),
             "None".into(),
             "Full".into(),

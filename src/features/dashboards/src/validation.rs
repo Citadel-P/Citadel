@@ -47,6 +47,15 @@ impl DashboardContent {
         if self.name.is_empty() || self.name.chars().count() > 128 || self.name.contains('\0') {
             return Err(invalid("Enter a dashboard name of 1 to 128 characters."));
         }
+        if config
+            .description
+            .as_ref()
+            .is_some_and(|text| text.contains('\0') || text.chars().count() > 4096)
+        {
+            return Err(invalid(
+                "Use a dashboard description of up to 4096 characters without null characters.",
+            ));
+        }
         if config.schema_version != 2 {
             return Err(invalid("This dashboard version cannot be edited."));
         }
@@ -155,6 +164,7 @@ mod tests {
             name: " Board ".into(),
             configuration: DashboardConfiguration {
                 schema_version: 2,
+                description: None,
                 tags: vec![],
                 range_minutes: 60,
                 widgets: vec![Widget {

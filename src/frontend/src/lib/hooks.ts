@@ -3,7 +3,6 @@ import { resources } from '@/api/generated/resources';
 import { invokeResource, resourceQueryKey } from '@/api/dispatch';
 import { resourceReadOptions } from '@/api/read-options';
 import {
-  hashKey,
   useMutation,
   UseMutationOptions,
   UseMutationResult,
@@ -13,7 +12,7 @@ import {
   UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClientContext } from '@/api/api-client-context';
-import { ReadAdmissionContext, ReadScopeContext } from './read-admission';
+import { ReadAdmissionContext } from './read-admission';
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -55,11 +54,6 @@ export function useRead<
   const { apiClient } = useApiClientContext();
   const admit = useContext(ReadAdmissionContext);
   const query = resourceReadOptions(apiClient, resource, args);
-  const scope = useContext(ReadScopeContext);
-  const observedHash = scope && query.enabled && options?.enabled !== false ? hashKey(query.queryKey) : undefined;
-  useLayoutEffect(() => {
-    if (observedHash) scope?.add(observedHash);
-  }, [scope, observedHash]);
   return useQuery<TResult, Error, TResult, ReturnType<typeof resourceQueryKey<TResource>>>({
     queryKey: query.queryKey,
     queryFn: (context) => {

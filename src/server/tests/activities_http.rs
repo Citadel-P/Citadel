@@ -67,6 +67,24 @@ impl ActivityQueryStore for Store {
 }
 
 #[tokio::test]
+async fn dashboard_resource_filter_accepts_activity_page_query() {
+    let (app, store, _) = app(AuthenticatedPrincipalType::User);
+    let (status, body) = get(
+        &app,
+        "/api/v1/activities?Page=1&PageSize=50&ResourceType=Dashboard",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["pagedResult"]["pageSize"], 50);
+    let filters = store.filters.lock().unwrap();
+    assert_eq!(
+        filters[0].resource_type,
+        Some(citadel_activities::ActivityResourceType::Dashboard)
+    );
+    assert_eq!(filters[0].page, 1);
+}
+
+#[tokio::test]
 async fn failed_backup_filter_preserves_event_type_and_failure_status() {
     let (app, store, _) = app(AuthenticatedPrincipalType::User);
     let (status, _) = get(

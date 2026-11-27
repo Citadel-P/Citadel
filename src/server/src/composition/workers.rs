@@ -92,6 +92,7 @@ pub async fn register(
         citadel_adapters::persistence::postgres::tags::links::USAGE_CHANGED_CHANNEL,
         "citadel_backup_coverage",
         "citadel_resource_recovery",
+        "citadel_dashboard_changes",
         "citadel_resource_copies",
         "citadel_stack_drift",
         "citadel_schedules",

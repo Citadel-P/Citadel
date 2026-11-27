@@ -21,7 +21,7 @@ disabled or deleted; Citadel does not convert them or queue builds against them.
 
 ## Configure a pool
 
-Open **Providers → Build Pools** in the sidebar to configure a pool.
+Open **Builds → Build Pools** in the sidebar to configure a pool.
 
 For a self-managed VM pool, choose one connection mode.
 

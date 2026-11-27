@@ -18,6 +18,16 @@ pub struct FleetRow {
     pub name: String,
     pub state: String,
     pub reasons: Vec<FleetReason>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub platform_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub release_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub published_ports: Option<Vec<String>>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,7 +46,7 @@ pub struct FleetPage {
     pub updates: i64,
     pub rows: Vec<FleetRow>,
 }
-#[derive(Clone, Copy, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize)]
 pub enum FleetRead {
     Summary,
     Attention,
@@ -44,11 +54,13 @@ pub enum FleetRead {
     States,
     Members,
 }
+#[derive(Clone, Debug, PartialEq)]
 pub struct FleetFilter {
     pub read: FleetRead,
     pub tags: Vec<String>,
     pub kinds: Vec<String>,
     pub state: Option<String>,
+    pub search: Option<String>,
     pub tab: crate::AttentionTab,
     pub offset: i64,
     pub limit: i64,

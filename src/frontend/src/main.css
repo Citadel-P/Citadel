@@ -388,18 +388,18 @@
   --surface-padding: 1rem;
   --section-gap: 1rem;
 }
-:root:not([data-theme-color]),
 :root[data-theme-color='neutral'] {
   --primary: oklch(0.269 0 0);
 }
-.dark:not([data-theme-color]),
 .dark[data-theme-color='neutral'] {
   --primary: oklch(0.87 0 0);
   --primary-foreground: oklch(0.145 0 0);
 }
+:root:not([data-theme-color]),
 :root[data-theme-color='blue'] {
   --primary: #2563eb;
 }
+.dark:not([data-theme-color]),
 .dark[data-theme-color='blue'] {
   --primary: #60a5fa;
   --primary-foreground: #0f172a;

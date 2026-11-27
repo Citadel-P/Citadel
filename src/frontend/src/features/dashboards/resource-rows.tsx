@@ -1,5 +1,4 @@
 import type { DashboardMetricSource } from '@/api/generated/api.types';
-import { useFrozenDashboard } from './tile';
 import { useNavigate } from 'react-router';
 import { ChartNoAxesCombined, ExternalLink, FileText, Link as LinkIcon } from 'lucide-react';
 import { DropdownActions } from '@/components/custom/dropdown-with-dialog';
@@ -55,17 +54,11 @@ export function ResourceMenu({
   );
 }
 export function WorkloadDetail({ kind, id }: { kind: Exclude<DashboardMetricSource['kind'], 'Platform'>; id: string }) {
-  const paused = useFrozenDashboard();
   const opts = { staleTime: 15000, retry: false };
-  const deployment = useRead(
-    'getDeployment',
-    { deploymentId: id },
-    { ...opts, enabled: !paused && kind === 'Deployment' },
-  );
-  const stack = useRead('getStack', { stackId: id }, { ...opts, enabled: !paused && kind === 'Stack' });
-  const service = useRead('getManagedSwarmService', { id }, { ...opts, enabled: !paused && kind === 'SwarmService' });
+  const deployment = useRead('getDeployment', { deploymentId: id }, { ...opts, enabled: kind === 'Deployment' });
+  const stack = useRead('getStack', { stackId: id }, { ...opts, enabled: kind === 'Stack' });
+  const service = useRead('getManagedSwarmService', { id }, { ...opts, enabled: kind === 'SwarmService' });
   const query = kind === 'Stack' ? stack : kind === 'Deployment' ? deployment : service;
-  if (paused) return <p>Resume the dashboard to load resource details.</p>;
   if (query.isError) return <p role="status">Resource details unavailable.</p>;
   if (!query.data) return <Loader />;
   const resource = query.data.data;

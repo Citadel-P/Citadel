@@ -29,20 +29,33 @@ const renderIcon = (Icon?: React.ComponentType<{ className?: string }>, classNam
 
 const MenuItems: IMenuItem[] = [
   {
-    group: 'Overview',
+    group: '',
     items: [{ icon: renderIcon(House), label: 'Home', route: '/' }],
   },
   {
-    group: 'Resources',
+    group: 'Infrastructure',
     items: [
-      { icon: renderIcon(CitadelIcons.Dashboard), label: 'Dashboards', route: '/dashboards' },
       { icon: renderIcon(CitadelIcons.Platform), label: 'Platforms', route: '/platforms' },
       { icon: renderIcon(CitadelIcons.BackupPolicy), label: 'Backups', route: '/backup-policies' },
+    ],
+  },
+  {
+    group: 'Orchestration',
+    items: [
       { icon: renderIcon(CitadelIcons.Deployment), label: 'Deployments', route: '/deployments' },
       { icon: renderIcon(CitadelIcons.Stack), label: 'Stacks', route: '/stacks' },
       { icon: renderIcon(CitadelIcons.SwarmService), label: 'Swarm Services', route: '/swarm-services' },
-      { icon: renderIcon(CitadelIcons.Script), label: 'Scripts', route: '/scripts' },
+    ],
+  },
+  {
+    group: 'Automation',
+    items: [{ icon: renderIcon(CitadelIcons.Script), label: 'Scripts', route: '/scripts' }],
+  },
+  {
+    group: 'Builds',
+    items: [
       { icon: renderIcon(CitadelIcons.Build), label: 'Build Projects', route: '/builds' },
+      { icon: renderIcon(CitadelIcons.BuildAgentPool), label: 'Build Pools', route: '/build-pools' },
     ],
   },
   {
@@ -50,7 +63,6 @@ const MenuItems: IMenuItem[] = [
     items: [
       { icon: renderIcon(CitadelIcons.Registry), label: 'Registries', route: '/registries' },
       { icon: renderIcon(CitadelIcons.GitRepository), label: 'Repositories', route: '/git-repos' },
-      { icon: renderIcon(CitadelIcons.BuildAgentPool), label: 'Build Pools', route: '/build-pools' },
     ],
   },
   {
@@ -67,6 +79,7 @@ export const UtilityItems: ISubMenuItem[] = [
     icon: <Settings className="w-4 h-4" />,
     label: 'Configuration',
     children: [
+      { icon: renderIcon(CitadelIcons.Dashboard), label: 'Dashboards', route: '/dashboards' },
       {
         icon: renderIcon(CitadelIcons.AlertRule),
         label: 'Alert Rules',

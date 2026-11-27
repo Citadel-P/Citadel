@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { Link, useLocation } from 'react-router';
 import { PlatformType } from '@/api/generated/api.types';
 import { Sidebar as SidebarRoot, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
@@ -107,39 +107,18 @@ it('highlights the resource family on edit pages', () => {
   expect(screen.getByRole('link', { name: 'Platforms' })).not.toHaveAttribute('aria-current');
 });
 
-it('opens the home dashboard separately from the dashboard list and groups Build Pools under Providers', async () => {
+it('keeps Home separate from the Platforms list', async () => {
   const { user } = renderCitadel(<Harness />, { route: '/' });
   const home = screen.getByRole('link', { name: 'Home' });
+  const platforms = screen.getByRole('link', { name: 'Platforms' });
   expect(home).toHaveAttribute('aria-current', 'page');
-  const dashboards = screen.getByRole('link', { name: 'Dashboards' });
-  await user.click(dashboards);
-  expect(screen.getByTestId('location')).toHaveTextContent(/^\/dashboards$/);
-  expect(dashboards).toHaveAttribute('aria-current', 'page');
+  expect(platforms).not.toHaveAttribute('aria-current');
+  await user.click(platforms);
+  expect(screen.getByTestId('location')).toHaveTextContent(/^\/platforms$/);
+  expect(platforms).toHaveAttribute('aria-current', 'page');
   expect(home).not.toHaveAttribute('aria-current');
-  expect(
-    within(screen.getByRole('group', { name: 'Providers' })).getByRole('link', { name: 'Build Pools' }),
-  ).toHaveAttribute('href', '/build-pools');
   await user.click(home);
   expect(screen.getByTestId('location')).toHaveTextContent(/^\/$/);
-});
-
-it.each([true, false])('lists resources as direct links with the sidebar open=%s', async (open) => {
-  const { user } = renderCitadel(<Harness open={open} />, { route: '/builds/edit/project-id' });
-  const resources = within(screen.getByRole('group', { name: 'Resources' }));
-  expect(resources.getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
-    'Dashboards',
-    'Platforms',
-    'Backups',
-    'Deployments',
-    'Stacks',
-    'Swarm Services',
-    'Scripts',
-    'Build Projects',
-  ]);
-  expect(resources.getByRole('link', { name: 'Build Projects' })).toHaveAttribute('aria-current', 'page');
-  await user.click(resources.getByRole('link', { name: 'Scripts' }));
-  expect(screen.getByTestId('location')).toHaveTextContent('/scripts');
-  expect(screen.getByTestId('sidebar-state')).toHaveTextContent(open ? 'expanded' : 'collapsed');
 });
 
 it('retains the selected platform and its collapse state on global pages', async () => {
@@ -204,11 +183,10 @@ it('shows Configuration independently of Administration for permitted non-admini
   expect(configuration).toHaveAttribute('aria-expanded', 'false');
 });
 
-it('opens Instance from the collapsed sidebar without expanding it and hides empty Configuration', async () => {
+it('opens Instance from the collapsed sidebar without expanding it', async () => {
   const { user } = renderCitadel(<Harness open={false} />, { route: '/instance' });
   const administration = screen.getByRole('button', { name: 'Administration' });
   expect(administration).toHaveAttribute('data-active', 'true');
-  expect(screen.queryByRole('button', { name: 'Configuration' })).not.toBeInTheDocument();
   await user.click(administration);
   expect(screen.getByRole('menuitem', { name: 'Instance' })).toHaveAttribute('aria-current', 'page');
   expect(screen.getByTestId('sidebar-state')).toHaveTextContent('collapsed');
@@ -223,6 +201,18 @@ it('keeps All platforms available from the platform browser', async () => {
   await user.click(screen.getByRole('button', { name: 'Select platform' }));
   await user.click(screen.getByRole('menuitem', { name: 'All platforms' }));
   expect(screen.getByTestId('location')).toHaveTextContent(/^\/platforms$/);
+});
+
+it('opens Dashboards under Configuration for regular users', async () => {
+  mocks.administrator = false;
+  const { user } = renderCitadel(<Harness />);
+  expect(screen.queryByRole('link', { name: 'Dashboards' })).not.toBeInTheDocument();
+  const configuration = screen.getByRole('button', { name: 'Configuration' });
+  await user.click(configuration);
+  expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Dashboards']);
+  await user.click(screen.getByRole('menuitem', { name: 'Dashboards' }));
+  expect(screen.getByTestId('location')).toHaveTextContent(/^\/dashboards$/);
+  expect(configuration).toHaveAttribute('data-active', 'true');
 });
 
 it('supports keyboard selection in utility menus', async () => {
@@ -244,7 +234,7 @@ it('filters individual Configuration destinations by permission', async () => {
   expect(screen.queryByRole('menuitem', { name: 'Bindings' })).not.toBeInTheDocument();
 });
 
-it('closes mobile navigation after a utility or resource is selected', async () => {
+it('opens utility menus inside mobile navigation and closes the drawer after selection', async () => {
   vi.mocked(window.matchMedia).mockImplementation(
     (media) =>
       ({
@@ -263,9 +253,5 @@ it('closes mobile navigation after a utility or resource is selected', async () 
   expect(screen.getByTestId('location')).toHaveTextContent('/instance');
   expect(screen.getByTestId('sidebar-state')).toHaveTextContent('expanded:false');
   expect(screen.queryByRole('menu')).not.toBeInTheDocument();
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: 'Open navigation' }));
-  await user.click(screen.getByRole('link', { name: 'Dashboards' }));
-  expect(screen.getByTestId('location')).toHaveTextContent('/dashboards');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

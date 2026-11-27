@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Eye, House, Trash } from 'lucide-react';
+import { Check, Eye, House, Trash } from 'lucide-react';
 import type { DashboardSummaryView } from '@/api/generated/api.types';
 import { createActionsBuilder } from '@/components/custom/actions-builder';
 import { ActionButton } from '@/components/custom/action-with-dialog';
 import { DropdownActionButton, RowActionDropdown } from '@/components/custom/dropdown-with-dialog';
 import type { ButtonGroupComponent, DropdownActionComponent } from '@/pages/types';
-import { PreferenceDialog } from './home-preference';
+import { PreferenceDialog, useDashboardHomeAction } from './home-preference';
 import { DashboardDeleteDialog } from './delete-dialog';
 import { SharingDialog, SharingItem, useCanManageSharing } from './sharing';
 
@@ -29,9 +29,17 @@ const { dropdown, group } = createActionsBuilder<DashboardSummaryView>()
 
 const rowActions: Record<string, DropdownActionComponent<DashboardSummaryView>> = {
   open: dropdown.open,
-  home: ({ onAction }) => (
-    <DropdownActionButton title="Set as home" icon={<House />} onClick={() => onAction?.('home')} />
-  ),
+  home: function Home({ resource, onAction }) {
+    const home = useDashboardHomeAction(resource);
+    return (
+      <DropdownActionButton
+        title={home.label}
+        disabled={home.disabled}
+        icon={home.current ? <Check /> : <House />}
+        onClick={() => onAction?.('home')}
+      />
+    );
+  },
   sharing: function Sharing({ resource, onAction }) {
     const canShare = useCanManageSharing(resource);
     return canShare ? <SharingItem board={resource} select={() => onAction?.('sharing')} /> : null;
@@ -65,16 +73,17 @@ export function DashboardRowActions({ board }: { board: DashboardSummaryView }) 
   );
 }
 
-function SetSelectedHome({ resources }: { resources: DashboardSummaryView[] }) {
+export function SetSelectedHome({ resources }: { resources: DashboardSummaryView[] }) {
   const [board, setBoard] = useState<DashboardSummaryView>();
+  const home = useDashboardHomeAction(resources.length === 1 ? resources[0] : undefined);
   return (
     <>
       <ActionButton
-        title="Set as home"
+        title={home.label}
         variant="outline"
         iconPosition="left"
-        icon={<House className="size-4" />}
-        disabled={resources.length !== 1}
+        icon={home.current ? <Check className="size-4" /> : <House className="size-4" />}
+        disabled={resources.length !== 1 || home.disabled}
         onClick={() => setBoard(resources[0])}
       />
       {board && <PreferenceDialog board={board} close={() => setBoard(undefined)} />}

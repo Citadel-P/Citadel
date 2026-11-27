@@ -27,6 +27,7 @@ impl GroupConnection {
             streams,
             stream_guards,
             terminal_inputs,
+            ..
         } = self;
         // StreamMap removes completed streams, but their input/guard entries
         // must also be released so a finished or expired terminal can reconnect.

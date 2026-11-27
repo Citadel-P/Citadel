@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { type DashboardConfiguration, DashboardVisibility, LicenseCapability } from '@/api/generated/api.types';
+import { MarkdownDescriptionEditor } from '@/components/custom/markdown-description';
 import { FieldInput } from '@/components/custom/form-builder';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,7 +20,8 @@ import { useMutate, useRead } from '@/lib/hooks';
 import { requestErrorMessage } from '@/lib/request-error';
 import { randomUuid } from '@/lib/utils';
 import { dashboardTemplates, fromTemplate, type DashboardTemplate } from './templates';
-import { MetricSourcePicker, ScopeField } from './widget-settings';
+import { ScopeField } from './display-controls';
+import { MetricSourcePicker } from './widget-settings';
 import { widgetError } from './catalogue';
 import { audiences } from './visibility';
 
@@ -36,6 +38,7 @@ export function CreateDashboardDialog({
   const client = useQueryClient();
   const [id] = useState(randomUuid);
   const [name, setName] = useState(copy ? ('Copy of ' + copy.name).slice(0, 128) : '');
+  const [description, setDescription] = useState(copy?.configuration.description ?? '');
   const [template, setTemplate] = useState<DashboardTemplate>(initialTemplate);
   // Keep widget IDs stable if a committed create loses its response and the user retries.
   const [configuration, setConfiguration] = useState(() =>
@@ -88,18 +91,42 @@ export function CreateDashboardDialog({
           <DialogDescription>Choose a name and starting layout.</DialogDescription>
         </DialogHeader>
         <form
-          className="space-y-4"
+          className="grid min-w-0 gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            if (canSubmit) create.mutate({ data: { id, name: trimmed, visibility: audience, configuration: content } });
+            if (canSubmit)
+              create.mutate({
+                data: {
+                  id,
+                  name: trimmed,
+                  visibility: audience,
+                  configuration: { ...content, description: description.trim() || undefined },
+                },
+              });
           }}>
-          <div className="space-y-2">
+          <div className="grid min-w-0 gap-2">
             <Label htmlFor="dashboard-name">Name</Label>
-            <FieldInput id="dashboard-name" value={name} onChange={setName} disabled={create.isPending} />
+            <FieldInput
+              className="w-full max-w-none"
+              id="dashboard-name"
+              value={name}
+              onChange={setName}
+              disabled={create.isPending}
+            />
             {nameLength > 128 && <p role="alert">Use up to 128 characters.</p>}
           </div>
+          <div className="grid min-w-0 gap-2">
+            <Label htmlFor="dashboard-description">Description</Label>
+            <MarkdownDescriptionEditor
+              id="dashboard-description"
+              value={description}
+              maxLength={4096}
+              disabled={create.isPending}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </div>
           {!copy && (
-            <div className="space-y-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="dashboard-template">Template</Label>
               <Select
                 value={template}
@@ -108,7 +135,7 @@ export function CreateDashboardDialog({
                   setTemplate(value);
                   setConfiguration(fromTemplate(value));
                 }}>
-                <SelectTrigger id="dashboard-template">
+                <SelectTrigger className="w-full" id="dashboard-template">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -122,7 +149,10 @@ export function CreateDashboardDialog({
             </div>
           )}
           {!copy && template === 'Application' && (
-            <ScopeField value={configuration.tags} change={(tags) => setConfiguration({ ...configuration, tags })} />
+            <div className="grid gap-2 [&_button[aria-haspopup=dialog]]:w-full">
+              <Label>Match all tags</Label>
+              <ScopeField value={configuration.tags} change={(tags) => setConfiguration({ ...configuration, tags })} />
+            </div>
           )}
           {!copy && metric?.kind === 'Metrics' && (
             <MetricSourcePicker
@@ -138,13 +168,13 @@ export function CreateDashboardDialog({
             />
           )}
           {admin && (
-            <div className="space-y-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="dashboard-audience">Who can read</Label>
               <Select
                 value={audience}
                 onValueChange={(value: DashboardVisibility) => setAudience(value)}
                 disabled={create.isPending}>
-                <SelectTrigger id="dashboard-audience">
+                <SelectTrigger className="w-full" id="dashboard-audience">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

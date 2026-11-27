@@ -15,6 +15,11 @@ export function useOpenAlertEventSheet() {
   );
 }
 
+export function useOpenActivitySheet() {
+  const { open } = useTaskSheet('Activity');
+  return useCallback((id: string) => open({ kind: 'activity', payload: { id } }), [open]);
+}
+
 export function AlertTaskSheet() {
   return <RouteAwareEventTaskSheet type="Alert" routePrefix="alerts" taskKind="alertEvent" />;
 }

@@ -1,4 +1,5 @@
 import { useContext, useState } from 'react';
+import { useOpenActivitySheet } from '@/features/alerters/alert-events/alert-task-sheet';
 import { Link } from 'react-router';
 import { TargetCell } from '@/components/custom/common';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,7 @@ export function ActivityActions({ id }: { id: string }) {
   return (
     <Popover open={open && !paused} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button disabled={paused} size="sm" variant="ghost" aria-label="Activity links">
+        <Button disabled={paused} size="icon-xs" variant="ghost" aria-label="Activity links">
           <MoreHorizontal />
         </Button>
       </PopoverTrigger>
@@ -23,6 +24,7 @@ export function ActivityActions({ id }: { id: string }) {
 }
 
 function ActivityTarget({ id }: { id: string }) {
+  const openActivity = useOpenActivitySheet();
   const result = useRead('getActivity', { id }, { retry: false });
   const activity = result.data?.data;
   if (!activity || result.isError) return <p>{result.isLoading ? 'Loading…' : 'Target unavailable.'}</p>;
@@ -32,9 +34,9 @@ function ActivityTarget({ id }: { id: string }) {
   ];
   return (
     <div className="space-y-2 text-sm">
-      <Link className="table-link" to={'/activities/' + id}>
+      <button type="button" className="table-link" onClick={() => openActivity(id)}>
         Activity details
-      </Link>
+      </button>
       {resourceId && <TargetCell resourceType={resourceType} resourceId={resourceId} resourceName={resourceName} />}
       {prefix && resourceId && 'runId' in info && info.runId && (
         <Link

@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 #[ignore = "requires disposable CITADEL_TEST_DATABASE_URL with CREATE DATABASE permission"]
-async fn dashboard_upgrade_preserves_existing_role_grants_and_starts_without_defaults() {
+async fn dashboard_upgrade_preserves_existing_role_grants_and_seeds_the_example_home() {
     let database = Database::create().await;
     let mut connection = PgConnection::connect(&database.url).await.unwrap();
     let manifest: serde_json::Value =
@@ -47,7 +47,7 @@ async fn dashboard_upgrade_preserves_existing_role_grants_and_starts_without_def
         .bind(permission).bind(role).execute(&mut connection).await.unwrap();
     let migration = MigrationRunner::migrate(&database.url).await.unwrap();
     assert_eq!(migration.already_applied, 10);
-    assert_eq!(migration.applied, super::super::migration_count() - 10);
+    assert_eq!(migration.applied, 1);
     let retained: bool = sqlx::query_scalar("SELECT EXISTS (SELECT FROM permissions WHERE id=$1 AND roleid=$2 AND resourcetype=0 AND permissionlevel=1)")
         .bind(permission).bind(role)
         .fetch_one(&mut connection)
@@ -56,7 +56,26 @@ async fn dashboard_upgrade_preserves_existing_role_grants_and_starts_without_def
     assert!(retained);
     let counts: (i64,i64,i64,i64) = sqlx::query_as("SELECT (SELECT count(*) FROM dashboards), (SELECT count(*) FROM instancedashboarddefault), (SELECT count(*) FROM personaldashboarddefaults), (SELECT count(*) FROM permissions WHERE resourcetype=22)")
         .fetch_one(&mut connection).await.unwrap();
-    assert_eq!(counts, (0, 0, 0, 0));
+    assert_eq!(counts, (1, 1, 0, 0));
+    let home: (String, String) = sqlx::query_as(
+        "SELECT name, visibility FROM dashboards JOIN instancedashboarddefault ON id = dashboardid",
+    )
+    .fetch_one(&mut connection)
+    .await
+    .unwrap();
+    assert_eq!(home, ("Overview".into(), "InstanceShared".into()));
+    let duplicate = sqlx::query(
+        "INSERT INTO dashboards(id, name, visibility, configuration)
+         VALUES ($1, 'overview', 'InstanceShared', '{}')",
+    )
+    .bind(Uuid::now_v7())
+    .execute(&mut connection)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        duplicate.as_database_error().unwrap().constraint(),
+        Some("ix_dashboards_unique_name")
+    );
     assert_eq!(
         MigrationRunner::migrate(&database.url)
             .await

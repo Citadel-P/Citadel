@@ -107,11 +107,105 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
         .unwrap();
         assert_eq!(grant.rows_affected(), 1);
     }
+    let examples = call(
+        &community,
+        &other,
+        Method::GET,
+        "dashboards?search=Overview",
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    let example = &examples["dashboards"][0];
+    assert_eq!(example["name"], "Overview");
+    assert_eq!(example["visibility"], "InstanceShared");
+    assert_eq!(example["canEdit"], false);
+    assert_eq!(example["canDelete"], false);
+    let example_id = example["id"].as_str().unwrap();
+    let example_path = format!("dashboards/{example_id}");
+    let saved_example = call(
+        &community,
+        &admin,
+        Method::GET,
+        &example_path,
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(saved_example["summary"]["canEdit"], true);
+    assert_eq!(saved_example["summary"]["canDelete"], true);
+    let mut example_configuration = saved_example["configuration"].clone();
+    let kinds: Vec<_> = example_configuration["widgets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|widget| widget["settings"]["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            "FleetSummary",
+            "NeedsAttention",
+            "ResourceState",
+            "RecentActivity"
+        ]
+    );
+    example_configuration["rangeMinutes"] = json!(360);
+    let updated_example = call(
+        &community,
+        &admin,
+        Method::PUT,
+        &example_path,
+        json!({"revision":1,"name":"Edited Overview","configuration":example_configuration}),
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(updated_example["summary"]["id"], json!(example_id));
+    assert_eq!(updated_example["summary"]["name"], "Edited Overview");
+    assert_eq!(updated_example["summary"]["revision"], 2);
+    call(
+        &community,
+        &admin,
+        Method::PUT,
+        "instance/dashboard-default",
+        json!({"dashboardId":example_id}),
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+    call(
+        &community,
+        &admin,
+        Method::DELETE,
+        &format!("{example_path}?revision=2"),
+        Value::Null,
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+    assert_eq!(
+        citadel_database::MigrationRunner::migrate(&db)
+            .await
+            .unwrap()
+            .applied,
+        0
+    );
+    assert_eq!(
+        call(
+            &community,
+            &other,
+            Method::GET,
+            "profile/dashboard-default",
+            Value::Null,
+            StatusCode::OK
+        )
+        .await,
+        json!({"dashboardId":null})
+    );
+
     let private = Uuid::now_v7();
     let shared = Uuid::now_v7();
     let restricted = Uuid::now_v7();
-    let config = json!({"schemaVersion":2,"rangeMinutes":60,"tags":[],"widgets":[]});
-    let board = |id, visibility| json!({"id":id,"name":"System","visibility":visibility,"configuration":config});
+    let config = json!({"schemaVersion":2,"description":"**On call**","rangeMinutes":60,"tags":[],"widgets":[]});
+    let board = |id, visibility| json!({"id":id,"name":format!("System {visibility}"),"visibility":visibility,"configuration":config});
     let private_path = format!("dashboards/{private}");
     let restricted_path = format!("dashboards/{restricted}");
     let saved = call(
@@ -123,6 +217,7 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
         StatusCode::OK,
     )
     .await;
+    assert_eq!(saved["configuration"]["description"], "**On call**");
     assert_eq!(saved["summary"]["revision"], 1);
     let container_pin = json!({"kind":"Container","id":Uuid::now_v7(),"platformId":Uuid::now_v7()});
     for settings in [
@@ -139,7 +234,7 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
             &owner,
             Method::PUT,
             &private_path,
-            json!({"revision":1,"name":"System","configuration":retired}),
+            json!({"revision":1,"name":"System Private","configuration":retired}),
             StatusCode::BAD_REQUEST,
         )
         .await;
@@ -228,6 +323,22 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
     assert_eq!(picker["dashboards"].as_array().unwrap().len(), 1);
     assert_eq!(picker["dashboards"][0]["id"], json!(shared));
     assert!(picker["dashboards"][0].get("configuration").is_none());
+    // A private name is reserved instance-wide even for someone who cannot read the board.
+    let mut duplicate = board(Uuid::now_v7(), "Private");
+    duplicate["name"] = json!("  system private  ");
+    let rejected = call(
+        &community,
+        &other,
+        Method::POST,
+        "dashboards",
+        duplicate,
+        StatusCode::BAD_REQUEST,
+    )
+    .await;
+    assert_eq!(
+        rejected["detail"],
+        "That dashboard name is already in use. Choose a different name."
+    );
     call(
         &community,
         &other,
@@ -249,6 +360,19 @@ async fn dashboard_visibility_revisions_and_defaults_follow_the_viewer() {
         StatusCode::NOT_FOUND,
     )
     .await;
+    let rejected = call(
+        &community,
+        &other,
+        Method::PUT,
+        &restricted_path,
+        json!({"revision":1,"name":"SYSTEM INSTANCESHARED","configuration":config}),
+        StatusCode::BAD_REQUEST,
+    )
+    .await;
+    assert_eq!(
+        rejected["detail"],
+        "That dashboard name is already in use. Choose a different name."
+    );
     let mut patch = json!({"name":"Updated","revision":1,"configuration":config});
     patch["visibility"] = json!("InstanceShared");
     call(
@@ -444,8 +568,7 @@ async fn dashboard_sharing_enforces_visibility_revision_and_entitlement() {
     let path = format!("dashboards/{id}");
     let sharing = format!("{path}/visibility");
     let settings = json!({"schemaVersion":2,"rangeMinutes":60,"tags":[],"widgets":[]});
-    let board =
-        |id, mode| json!({"id":id,"name":"Operations","visibility":mode,"configuration":settings});
+    let board = |id, mode| json!({"id":id,"name":format!("{mode} operations"),"visibility":mode,"configuration":settings});
     let change = |revision, mode| json!({"revision":revision,"visibility":mode});
     let share = |app, actor, revision, mode, status| {
         call(
@@ -813,6 +936,99 @@ async fn fleet_ranks_before_limiting_and_counts_only_visible_owners() {
     let problem = Uuid::now_v7();
     sqlx::query(r#"INSERT INTO deployments(id,createdbyactorid,name,platformid,spec,status,autoupdatestate_status,autoupdatestate_currentdigest,autoupdatestate_remotedigest) VALUES($1,$2,'zz-last',$3,'{"Image":{"ResolvedDigest":"sha256:applied"}}','Failed','UpdateAvailable','sha256:applied','sha256:new')"#).bind(problem).bind(admin.actor_id.value()).bind(platform).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO resourceaccesses(id,actorid,resourceid,resourcetype,permissionlevel,specificpermissions) VALUES (gen_random_uuid(),$1,$2,$3,$4,0)").bind(reader.actor_id.value()).bind(problem).bind(ResourceType::Deployment as i32).bind(PermissionLevel::Read as i32).execute(&pool).await.unwrap();
+    let member_query = "dashboards/fleet?read=Members&kinds=Deployment&state=Failed";
+    let member = call(
+        &app,
+        &reader,
+        Method::GET,
+        member_query,
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(member["total"], 1);
+    assert_eq!(member["rows"][0]["id"], json!(problem));
+    assert!(member["rows"][0].get("platformName").is_none());
+    let platform_search = format!("{member_query}&search=Scale%20Fixture");
+    assert_eq!(
+        call(
+            &app,
+            &reader,
+            Method::GET,
+            &platform_search,
+            Value::Null,
+            StatusCode::OK
+        )
+        .await["total"],
+        0,
+    );
+    let visible_platform = call(
+        &app,
+        &admin,
+        Method::GET,
+        &platform_search,
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(visible_platform["rows"][0]["platformName"], "Scale fixture");
+
+    let running = Uuid::now_v7();
+    let stopped = Uuid::now_v7();
+    sqlx::query(r#"INSERT INTO containers(id,name,platformid,dockercontainerid,dockerimageid,state,created,updated,ports)
+        VALUES($1,'Web container',$3,$1::uuid::text,'sha256:public-web','Running',1700000000,1700000000,'{"80/tcp":[{"hostIP":"::","hostPort":"8080"},{"hostIP":"0.0.0.0","hostPort":"8080"}],"443/tcp":[],"53/udp":[{"HostPort":"5353"}]}'),
+              ($2,'Legacy container',$3,$2::uuid::text,'sha256:public-old','Exited',1700000000,1700000000,'[{"PrivatePort":80,"PublicPort":8181,"Type":"tcp"},{"PrivatePort":443,"Type":"tcp"}]')"#)
+        .bind(running).bind(stopped).bind(platform).execute(&pool).await.unwrap();
+    let containers = "dashboards/fleet?read=Members&kinds=Container&search=SHA256%3APUBLIC&limit=1";
+    let first = call(
+        &app,
+        &admin,
+        Method::GET,
+        containers,
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(first["total"], 2);
+    assert_eq!(first["rows"][0]["id"], json!(stopped));
+    assert_eq!(first["rows"][0]["publishedPorts"], json!(["8181/tcp"]));
+    let second = call(
+        &app,
+        &admin,
+        Method::GET,
+        &format!("{containers}&state=Running"),
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(second["total"], 1);
+    assert_eq!(second["rows"][0]["id"], json!(running));
+    assert_eq!(second["rows"][0]["image"], "sha256:public-web");
+    assert!(second["rows"][0]["createdAt"].is_string());
+    assert_eq!(
+        second["rows"][0]["publishedPorts"],
+        json!(["5353/udp", "8080/tcp"])
+    );
+    let forbidden_rows = call(
+        &app,
+        &reader,
+        Method::GET,
+        containers,
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(forbidden_rows["total"], 0);
+    let literal = call(
+        &app,
+        &admin,
+        Method::GET,
+        &format!("{member_query}&search=%25"),
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(literal["total"], 0);
     let mut previous = 1;
     for size in [10, 1_000, 10_000] {
         sqlx::query("INSERT INTO deployments(id,createdbyactorid,name,platformid,spec,status) SELECT gen_random_uuid(),$1,'app-'||i,$2,'{}','Healthy' FROM generate_series($3::int+1,$4::int) i").bind(admin.actor_id.value()).bind(platform).bind(previous).bind(size).execute(&pool).await.unwrap();
@@ -900,6 +1116,14 @@ async fn fleet_ranks_before_limiting_and_counts_only_visible_owners() {
     let alerts = get("dashboards/fleet?read=OpenAlerts").await;
     assert_eq!(summary["alerts"], 3);
     assert_eq!(alerts["total"], summary["alerts"]);
+    let alert_rows = alerts["rows"].as_array().unwrap();
+    assert_eq!(alert_rows.len(), 3);
+    for alert in alert_rows {
+        let event = &alert["reasons"][0];
+        assert_eq!(event["target"], alert["id"]);
+        assert!(event["code"].as_str().is_some_and(|code| !code.is_empty()));
+        assert!(event["observedAt"].is_string());
+    }
     let last = get("dashboards/fleet?read=Attention&tab=Updates&limit=25").await;
     assert!(
         last["rows"]
@@ -935,3 +1159,6 @@ async fn fleet_ranks_before_limiting_and_counts_only_visible_owners() {
         0
     );
 }
+
+#[path = "dashboards_http/activity.rs"]
+mod activity;

@@ -1,3 +1,5 @@
+use super::activity;
+use citadel_activities::ActivityEventInfo;
 use citadel_dashboards::{
     DashboardContent, DashboardError as Error, DashboardRepository, DashboardSharingMode,
     DashboardSummary, DashboardViewer, DashboardVisibility, SavedDashboard,
@@ -9,6 +11,7 @@ use uuid::Uuid;
 type ResultFuture<'a, T> = BoxFuture<'a, Result<T, Error>>;
 const ACCESS: &str = concat!(
     include_str!("../enabled_actor_scope.sql"),
+    ", dashboard_viewer AS (SELECT $2::boolean AS administrator)",
     include_str!("visibility.sql")
 );
 const _: () = assert!(citadel_primitives::ResourceType::Dashboard as i32 == 22);
@@ -25,6 +28,16 @@ impl PostgresDashboardRepository {
 
 fn storage(error: sqlx::Error) -> Error {
     Error::Storage(error.to_string())
+}
+
+fn dashboard_write_error(error: sqlx::Error) -> Error {
+    if error.as_database_error().is_some_and(|db| {
+        db.is_unique_violation() && db.constraint() == Some("ix_dashboards_unique_name")
+    }) {
+        Error::Invalid("That dashboard name is already in use. Choose a different name.".into())
+    } else {
+        storage(error)
+    }
 }
 
 fn visibility_name(visibility: DashboardVisibility) -> &'static str {
@@ -150,7 +163,7 @@ impl DashboardRepository for PostgresDashboardRepository {
             let config = serde_json::to_value(content.configuration)
                 .map_err(|e| Error::Invalid(e.to_string()))?;
             let inserted=sqlx::query("INSERT INTO dashboards(id,owneractorid,name,visibility,configuration) VALUES($1,$2,$3,$4,$5) ON CONFLICT(id) DO NOTHING")
-                .bind(id).bind(viewer.actor.value()).bind(&content.name).bind(mode).bind(&config).execute(&mut *tx).await.map_err(storage)?.rows_affected();
+                .bind(id).bind(viewer.actor.value()).bind(&content.name).bind(mode).bind(&config).execute(&mut *tx).await.map_err(dashboard_write_error)?.rows_affected();
             let saved = read(&mut tx, viewer, id, false).await?;
             if inserted == 0 {
                 let owned: bool = sqlx::query_scalar(
@@ -169,6 +182,27 @@ impl DashboardRepository for PostgresDashboardRepository {
                 {
                     return Err(Error::Conflict);
                 }
+            } else {
+                // Retained activity and grants must never attach to a different board with a recycled ID.
+                let retired: bool = sqlx::query_scalar("SELECT EXISTS(SELECT FROM activityevents WHERE resourcetype='Dashboard' AND resourceid=$1)")
+                    .bind(id).fetch_one(&mut *tx).await.map_err(storage)?;
+                if retired {
+                    return Err(Error::Conflict);
+                }
+                activity::record(
+                    &mut tx,
+                    viewer,
+                    id,
+                    &saved.summary.name,
+                    ActivityEventInfo::DashboardCreated {
+                        visibility: mode.into(),
+                        configuration: Some(activity::configuration_snapshot(
+                            &saved.summary.name,
+                            &saved.configuration,
+                        )),
+                    },
+                )
+                .await?;
             }
             tx.commit().await.map_err(storage)?;
             Ok(saved)
@@ -191,20 +225,43 @@ impl DashboardRepository for PostgresDashboardRepository {
             if revision != saved.summary.revision {
                 return Err(Error::Conflict);
             }
-            if !serde_json::from_value::<citadel_dashboards::DashboardConfiguration>(
-                saved.configuration,
+            let previous = serde_json::from_value::<citadel_dashboards::DashboardConfiguration>(
+                saved.configuration.clone(),
             )
-            .is_ok_and(|configuration| {
-                configuration.schema_version == content.configuration.schema_version
-            }) {
-                return Err(Error::Invalid(
-                    "This dashboard contains unsupported settings.".into(),
-                ));
+            .ok()
+            .filter(|old| old.schema_version == content.configuration.schema_version)
+            .ok_or_else(|| {
+                Error::Invalid("This dashboard contains unsupported settings.".into())
+            })?;
+            let changes = activity::changes(
+                saved.summary.name != content.name,
+                &previous,
+                &content.configuration,
+            );
+            if changes.is_empty() {
+                tx.commit().await.map_err(storage)?;
+                return Ok(saved);
             }
             let config = serde_json::to_value(content.configuration)
                 .map_err(|e| Error::Invalid(e.to_string()))?;
+            let previous_snapshot =
+                activity::configuration_snapshot(&saved.summary.name, &saved.configuration);
+            let snapshot = activity::configuration_snapshot(&content.name, &config);
+            let has_diff = previous_snapshot != snapshot;
             sqlx::query("UPDATE dashboards SET name=$2, configuration=$3, updatedat=now(), revision=revision+1 WHERE id=$1")
-                .bind(id).bind(&content.name).bind(config).execute(&mut *tx).await.map_err(storage)?;
+                .bind(id).bind(&content.name).bind(config).execute(&mut *tx).await.map_err(dashboard_write_error)?;
+            activity::record(
+                &mut tx,
+                viewer,
+                id,
+                &content.name,
+                ActivityEventInfo::DashboardUpdated {
+                    changes,
+                    previous_configuration: has_diff.then_some(previous_snapshot),
+                    configuration: has_diff.then_some(snapshot),
+                },
+            )
+            .await?;
             let saved = read(&mut tx, viewer, id, false).await?;
             tx.commit().await.map_err(storage)?;
             Ok(saved)
@@ -251,6 +308,16 @@ impl DashboardRepository for PostgresDashboardRepository {
                 board.revision = sqlx::query_scalar("UPDATE dashboards SET visibility=$2, revision=revision+1, updatedat=now() WHERE id=$1 RETURNING revision")
                     .bind(id).bind(visibility_name(visibility)).fetch_one(&mut *tx).await.map_err(storage)?;
                 board.visibility = visibility;
+                activity::record(
+                    &mut tx,
+                    viewer,
+                    id,
+                    &board.name,
+                    ActivityEventInfo::DashboardSharingChanged {
+                        visibility: visibility_name(visibility).into(),
+                    },
+                )
+                .await?;
             }
             tx.commit().await.map_err(storage)?;
             Ok(board)
@@ -271,6 +338,28 @@ impl DashboardRepository for PostgresDashboardRepository {
                 .execute(&mut *tx)
                 .await
                 .map_err(storage)?;
+            let cleared_home =
+                sqlx::query("DELETE FROM instancedashboarddefault WHERE dashboardid=$1")
+                    .bind(id)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(storage)?
+                    .rows_affected()
+                    != 0;
+            if cleared_home {
+                activity::instance_home_changed(&mut tx, viewer, None).await?;
+            }
+            activity::record(
+                &mut tx,
+                viewer,
+                id,
+                &saved.summary.name,
+                ActivityEventInfo::DashboardDeleted {
+                    visibility: visibility_name(saved.summary.visibility).into(),
+                    configuration: activity::deleted_configuration_snapshot(&saved),
+                },
+            )
+            .await?;
             sqlx::query("DELETE FROM dashboards WHERE id=$1")
                 .bind(id)
                 .execute(&mut *tx)
@@ -303,10 +392,11 @@ impl DashboardRepository for PostgresDashboardRepository {
                 return Err(Error::Forbidden);
             }
             let mut tx = self.pool.begin().await.map_err(storage)?;
+            let mut dashboard_name = None;
             if let Some(id) = id {
-                let sql = format!("{ACCESS} SELECT a.visibility FROM dashboard_access a JOIN dashboards d USING(id)
-                    WHERE a.id=$3 AND a.can_read FOR KEY SHARE OF d");
-                let visibility: String = sqlx::query_scalar(sqlx::AssertSqlSafe(sql.as_str()))
+                let sql = format!("{ACCESS} SELECT a.visibility, a.name FROM dashboard_access a JOIN dashboards d USING(id)
+                    WHERE a.id=$3 AND a.can_read FOR SHARE OF d");
+                let board = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
                     .bind(viewer.actor.value())
                     .bind(viewer.administrator)
                     .bind(id)
@@ -314,14 +404,16 @@ impl DashboardRepository for PostgresDashboardRepository {
                     .await
                     .map_err(storage)?
                     .ok_or(Error::Unavailable)?;
-                if instance && visibility == "Private" {
+                dashboard_name = Some(board.try_get("name").map_err(storage)?);
+                if instance && board.try_get::<&str, _>("visibility").map_err(storage)? == "Private"
+                {
                     return Err(Error::Invalid(
                         "Choose a shared dashboard as the instance default.".into(),
                     ));
                 }
             }
             let write = match (instance, id) {
-                (true, Some(id)) => sqlx::query("INSERT INTO instancedashboarddefault(dashboardid) VALUES($1) ON CONFLICT(singleton) DO UPDATE SET dashboardid=excluded.dashboardid")
+                (true, Some(id)) => sqlx::query("INSERT INTO instancedashboarddefault(dashboardid) VALUES($1) ON CONFLICT(singleton) DO UPDATE SET dashboardid=excluded.dashboardid WHERE instancedashboarddefault.dashboardid IS DISTINCT FROM excluded.dashboardid")
                     .bind(id),
                 (true, None) => sqlx::query("DELETE FROM instancedashboarddefault"),
                 (false, Some(id)) => sqlx::query("INSERT INTO personaldashboarddefaults(actorid,dashboardid) VALUES($1,$2) ON CONFLICT(actorid) DO UPDATE SET dashboardid=excluded.dashboardid")
@@ -329,7 +421,15 @@ impl DashboardRepository for PostgresDashboardRepository {
                 (false, None) => sqlx::query("DELETE FROM personaldashboarddefaults WHERE actorid=$1")
                     .bind(viewer.actor.value()),
             };
-            write.execute(&mut *tx).await.map_err(storage)?;
+            let changed = write
+                .execute(&mut *tx)
+                .await
+                .map_err(storage)?
+                .rows_affected()
+                != 0;
+            if instance && changed {
+                activity::instance_home_changed(&mut tx, viewer, dashboard_name).await?;
+            }
             tx.commit().await.map_err(storage)
         })
     }

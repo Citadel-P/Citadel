@@ -1,3 +1,6 @@
+#[path = "realtime_groups/dashboard.rs"]
+mod dashboard;
+
 #[path = "realtime_groups/builds.rs"]
 mod builds;
 
@@ -49,6 +52,7 @@ pub(super) fn reader(f: &Fixture) -> ApplicationGroupReader {
         scripts: Arc::new(PostgresScriptRepository::new(f.pool.clone())),
         builds: Arc::new(PostgresBuildRepository::new(f.pool.clone())),
         backups: Arc::new(PostgresBackupPersistence::new(f.pool.clone())),
+        dashboards: Arc::new(citadel_adapters::persistence::postgres::dashboards::PostgresDashboardRepository::new(f.pool.clone())),
         activities: Arc::new(citadel_activities::ActivityService::new(Arc::new(
             PostgresActivityStore::new(f.pool.clone()),
         ))),

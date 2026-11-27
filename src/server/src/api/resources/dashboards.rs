@@ -164,8 +164,97 @@ pub struct DashboardFleetQuery {
     pub read: citadel_dashboards::FleetRead,
     pub kinds: Option<String>,
     pub state: Option<String>,
+    #[param(max_length = 128)]
+    pub search: Option<String>,
     #[param(value_type=Option<String>)]
     pub tab: Option<citadel_dashboards::AttentionTab>,
     pub offset: Option<u32>,
     pub limit: Option<u8>,
+}
+
+impl DashboardSourceQuery {
+    pub(crate) fn filter(
+        self,
+        tags: Vec<String>,
+    ) -> Result<citadel_dashboards::SourceFilter, &'static str> {
+        let ids = self
+            .ids
+            .as_deref()
+            .into_iter()
+            .flat_map(|ids| ids.split(','))
+            .take(9)
+            .map(Uuid::parse_str)
+            .collect::<Result<Vec<_>, _>>();
+        let ids = ids.map_err(|_| "Invalid pinned resource ID.")?;
+        let search = self.search.unwrap_or_default();
+        let limit = self.limit.unwrap_or(10);
+        if ids.len() > 8 || search.chars().count() > 128 || !(1..=25).contains(&limit) {
+            return Err(
+                "Search up to 128 characters, select up to eight IDs, and request 1–25 results.",
+            );
+        }
+        Ok(citadel_dashboards::SourceFilter {
+            kind: self.kind,
+            search,
+            ids,
+            tags,
+            limit: i64::from(limit),
+        })
+    }
+}
+impl DashboardFleetQuery {
+    pub(crate) fn filter(
+        self,
+        tags: Vec<String>,
+    ) -> Result<citadel_dashboards::FleetFilter, &'static str> {
+        let kinds: Vec<_> = self
+            .kinds
+            .as_deref()
+            .into_iter()
+            .flat_map(|s| s.split(','))
+            .map(str::to_owned)
+            .collect();
+        let limit = self.limit.unwrap_or(5);
+        let search = self
+            .search
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        if !(1..=25).contains(&limit)
+            || kinds.len() > 12
+            || kinds.iter().any(|s| {
+                !matches!(
+                    s.as_str(),
+                    "Platform"
+                        | "Deployment"
+                        | "Stack"
+                        | "SwarmService"
+                        | "Container"
+                        | "BackupPolicy"
+                        | "Build"
+                        | "BuildAgentPool"
+                        | "Registry"
+                        | "GitRepository"
+                        | "Script"
+                )
+            })
+            || self.state.as_ref().is_some_and(|s| s.len() > 64)
+            || search.is_some_and(|s| {
+                !matches!(self.read, citadel_dashboards::FleetRead::Members)
+                    || s.chars().count() > 128
+            })
+        {
+            return Err("Invalid dashboard fleet filter.");
+        }
+        Ok(citadel_dashboards::FleetFilter {
+            read: self.read,
+            tags,
+            kinds,
+            tab: self.tab.unwrap_or(citadel_dashboards::AttentionTab::All),
+            state: self.state,
+            search: search.map(str::to_owned),
+            limit: i64::from(limit),
+            offset: i64::from(self.offset.unwrap_or(0)),
+        })
+    }
 }

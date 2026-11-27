@@ -1,4 +1,5 @@
 mod collection_scope;
+mod dashboard;
 mod model;
 mod reader;
 

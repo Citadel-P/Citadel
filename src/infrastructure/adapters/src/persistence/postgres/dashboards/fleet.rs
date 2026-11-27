@@ -149,11 +149,9 @@ pub(super) async fn read(
         FleetRead::States => {
             ", groups AS (SELECT kind,state,count(*) AS count FROM owners GROUP BY kind,state) SELECT jsonb_build_object('states',coalesce((SELECT jsonb_agg(to_jsonb(g) ORDER BY count DESC,state) FROM groups g),'[]'),'alerts',0,'rows','[]'::jsonb,'total',0,'problems',0,'updates',0)"
         }
-        FleetRead::Members => {
-            ", members AS (SELECT * FROM owners WHERE $4::text IS NULL OR state=$4), page AS (SELECT kind,id,platform_id AS \"platformId\",name,state,'[]'::jsonb AS reasons FROM members ORDER BY name,id LIMIT $5 OFFSET $6) SELECT jsonb_build_object('states','[]'::jsonb,'alerts',0,'rows',coalesce((SELECT jsonb_agg(to_jsonb(p) ORDER BY name,id) FROM page p),'[]'),'total',(SELECT count(*) FROM members),'problems',0,'updates',0)"
-        }
-        FleetRead::OpenAlerts => ", page AS (SELECT e.kind,e.target AS id,o.name,e.severity AS state,e.createdat FROM events e JOIN owners o USING(kind,id) ORDER BY e.createdat DESC,e.target LIMIT $4 OFFSET $5)
-            SELECT jsonb_build_object('states','[]'::jsonb,'alerts',0,'total',(SELECT count(*) FROM events),'problems',0,'updates',0,'rows',coalesce((SELECT jsonb_agg((to_jsonb(p)-'createdat')||jsonb_build_object('reasons','[]'::jsonb) ORDER BY createdat DESC,id) FROM page p),'[]'))",
+        FleetRead::Members => include_str!("fleet_members.sql"),
+        FleetRead::OpenAlerts => ", page AS (SELECT e.kind,e.target AS id,o.name,e.severity AS state,e.createdat,jsonb_build_array(jsonb_build_object('code',e.type,'occurrences',1,'observedAt',e.createdat,'target',e.target)) AS reasons FROM events e JOIN owners o USING(kind,id) ORDER BY e.createdat DESC,e.target LIMIT $4 OFFSET $5)
+            SELECT jsonb_build_object('states','[]'::jsonb,'alerts',0,'total',(SELECT count(*) FROM events),'problems',0,'updates',0,'rows',coalesce((SELECT jsonb_agg((to_jsonb(p)-'createdat') ORDER BY createdat DESC,id) FROM page p),'[]'))",
         FleetRead::Attention => include_str!("attention.sql"),
     };
     sql.push_str(result);
@@ -163,7 +161,14 @@ pub(super) async fn read(
         .bind(f.tags);
     match f.read {
         FleetRead::OpenAlerts => query = query.bind(f.limit).bind(f.offset),
-        FleetRead::Members => query = query.bind(f.state).bind(f.limit).bind(f.offset),
+        FleetRead::Members => {
+            query = query
+                .bind(f.state)
+                .bind(f.limit)
+                .bind(f.offset)
+                .bind(f.search)
+                .bind(ResourceType::Platform as i32);
+        }
         FleetRead::Attention => {
             query = query
                 .bind(match f.tab {

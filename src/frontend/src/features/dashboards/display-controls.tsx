@@ -1,3 +1,4 @@
+import { TagNameFilter, useResolvedTagFilter } from '@/features/tags/components';
 import type { ComponentType } from 'react';
 import { StatsRangePicker } from '@/components/custom/stats-range-picker';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -61,4 +62,9 @@ export function RangeField({ value, change }: { value: number; change: (v: numbe
       />
     </div>
   );
+}
+
+export function ScopeField({ value, change }: { value: string[]; change: (tags: string[]) => void }) {
+  const { selection } = useResolvedTagFilter(value);
+  return <TagNameFilter selection={selection} setSelectedTagNames={change} />;
 }

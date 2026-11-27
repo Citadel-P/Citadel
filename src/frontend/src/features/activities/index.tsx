@@ -16,6 +16,7 @@ const activityEventPrefixes = {
   [ActivityResourceType.Registry]: 'Registry',
   [ActivityResourceType.Platform]: 'Platform',
   [ActivityResourceType.Stack]: 'Stack',
+  [ActivityResourceType.Dashboard]: 'Dashboard',
   [ActivityResourceType.AlertRule]: 'AlertRule',
   [ActivityResourceType.GitRepository]: 'GitRepo',
   [ActivityResourceType.OidcProvider]: 'OidcProvider',
@@ -55,6 +56,7 @@ const activityLookupTargets = {
   [ActivityResourceType.License]: LookupResourceType.License,
   [ActivityResourceType.Updates]: undefined,
   [ActivityResourceType.Instance]: undefined,
+  [ActivityResourceType.Dashboard]: undefined,
   [ActivityResourceType.Volume]: LookupResourceType.Platform,
   [ActivityResourceType.Build]: LookupResourceType.Build,
   [ActivityResourceType.BuildAgentPool]: LookupResourceType.BuildAgentPool,
@@ -142,6 +144,7 @@ function SearchSection() {
 
   const eventOptions = useMemo(() => getActivityEventOptions(query.resourceType), [query.resourceType]);
 
+  const lookupTarget = query.resourceType === 'All' ? undefined : activityLookupTargets[query.resourceType];
   const handleResourceTypeChange = (value: string) => {
     setQuery({
       ...query,
@@ -177,19 +180,17 @@ function SearchSection() {
         allIcon={SquareStack}
         className={filterFieldClassName}
       />
-      {query.resourceType !== 'All' &&
-        query.resourceType !== ActivityResourceType.Updates &&
-        query.resourceType !== ActivityResourceType.Instance && (
-          <ResourceSelectorField
-            targetType={activityLookupTargets[query.resourceType]}
-            onSelect={handleResourceChange as any}
-            selected={query.resourceId}
-            placeholder={
-              query.resourceType === ActivityResourceType.Volume ? 'Select Platform' : 'Select ' + query.resourceType
-            }
-            className={filterFieldClassName}
-          />
-        )}
+      {lookupTarget && (
+        <ResourceSelectorField
+          targetType={lookupTarget}
+          onSelect={handleResourceChange as any}
+          selected={query.resourceId}
+          placeholder={
+            query.resourceType === ActivityResourceType.Volume ? 'Select Platform' : 'Select ' + query.resourceType
+          }
+          className={filterFieldClassName}
+        />
+      )}
       <SelectField
         value={query.eventType}
         options={eventOptions}

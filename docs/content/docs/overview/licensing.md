@@ -78,6 +78,7 @@ not revoked.
 | Webhooks and GitOps | Receive and authenticate repository webhooks, synchronize source, and show pending updates | Automatically build, deploy, apply, run an action, or start a backup from a webhook | Future approval and organization-wide deployment policy |
 | Build execution | Manual builds on existing Local, Agent, and Edge Agent platforms; build-pool configuration remains manageable | Execute builds through external build pools | Future governed elastic capacity and organizational build policy |
 | Alerts | Seeded system rules, in-app notifications, external channels, and external delivery | Custom rules, quiet hours, cooldowns, thresholds, required matches, severity, and resource scoping | Future escalation, immutable delivery, and compliance integration |
+| [Dashboards](/resources/dashboards) | Private dashboards and administrator-managed instance dashboards | Restricted dashboards and delegated editing through Dashboard permissions | Team capabilities |
 | Drift and updates | Manual drift checks, reconciliation, updates, and rollback | Continuous drift monitoring, opt-in reconciliation, and auto-update safeguards | Future fleet-wide policy and remediation controls |
 | Activity and audit | Local activity history | Local activity history | Future immutable audit delivery and compliance reporting |
 | Citadel control plane | Single-instance operation | Single-instance operation | Future highly available control plane and validated recovery |

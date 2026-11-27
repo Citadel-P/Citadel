@@ -8,10 +8,10 @@ import {
   CHART_ACTIVE_DOT,
   CHART_HOVER_CURSOR,
 } from '@/components/ui/chart';
-import Loader from '@/components/ui/loader';
 import { monitoringLink } from '@/lib/monitoring-link';
 import { useId, useContext, useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router';
+import { ArrowUpRight } from 'lucide-react';
 import { Area, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
 import type { ContainerStatView, DashboardMetricSource, DashboardSourceView } from '@/api/generated/api.types';
 import { statsChartData, statsValueAxis } from '@/lib/stats-chart';
@@ -31,7 +31,7 @@ import { sourcePath } from './source-path';
 import { Timestamp } from '@/components/custom/timestamp';
 import type { DateTimeFormatter } from '@/lib/date-time';
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
-import { Tile, WidgetNotice } from './tile';
+import { Tile, WidgetNotice, WidgetSkeleton } from './tile';
 
 import type { MetricTile } from './requirements';
 type Sample = { created: number } & Partial<
@@ -105,8 +105,29 @@ function Chart({
   const measured = data.some((s) => keys.some((k) => s[k as keyof Sample] != null));
   const latest = data.at(-1);
   const format = statsValueAxis(unit).tickFormatter;
+  // Summarize only plotted samples. Gap markers and missing measurements contribute nothing.
+  const range = useMemo(() => {
+    if (tile.layout.h < 5 || (metric !== 'Cpu' && !(platform && metric === 'Memory'))) return;
+    const singleKey = metric === 'Cpu' ? 'cpuUsage' : 'memoryUsage';
+    let low = Infinity,
+      high = -Infinity;
+    for (const sample of data) {
+      const value = sample[singleKey];
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        low = Math.min(low, value);
+        high = Math.max(high, value);
+      }
+    }
+    if (low <= high) return { low, high };
+  }, [data, metric, platform, tile.layout.h]);
   const config = Object.fromEntries(
-    keys.map((key, i) => [key, { label: labels[key], color: i ? 'var(--chart-2)' : chartPalette[color] }]),
+    keys.map((key, i) => [
+      key,
+      {
+        label: labels[key],
+        color: i ? (color === 'Amber' ? chartPalette.Cyan : chartPalette.Amber) : chartPalette[color],
+      },
+    ]),
   );
   if (!platform && metric === 'Memory' && measured)
     return (
@@ -117,7 +138,7 @@ function Chart({
             controls={
               latest && (
                 <span className="text-muted-foreground">
-                  <Timestamp value={latest.created * 1000} formatDateTime={formatTime} />
+                  Latest sample <Timestamp value={latest.created * 1000} formatDateTime={formatTime} />
                 </span>
               )
             }
@@ -131,17 +152,22 @@ function Chart({
   return (
     <div ref={frame} className="flex min-h-40 min-w-0 flex-1 flex-col md:min-h-0">
       {measured && latest && (
-        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2">
-          <span className="font-mono text-base font-semibold tabular-nums">
+        <div className="dashboard-reading mb-1 flex flex-wrap items-baseline gap-x-3">
+          <span style={{ color: chartPalette[color] }} className="text-3xl font-semibold tracking-tight tabular-nums">
             {keys
               .map((k) => {
                 const v = latest[k as keyof Sample];
-                return labels[k] + ' ' + (v == null ? '—' : format(v));
+                return (keys.length > 1 ? labels[k] + ' ' : '') + (v == null ? '—' : format(v));
               })
               .join(' · ')}
           </span>
-          <span className="text-xs text-muted-foreground">
-            <Timestamp value={latest.created * 1000} formatDateTime={formatTime} />
+          {range && (
+            <span className="dashboard-reading-range" title="Lowest and highest displayed samples">
+              Range {format(range.low)} – {format(range.high)}
+            </span>
+          )}
+          <span className="ms-auto text-xs text-muted-foreground">
+            Latest sample <Timestamp value={latest.created * 1000} formatDateTime={formatTime} />
           </span>
         </div>
       )}
@@ -157,16 +183,19 @@ function Chart({
                     <defs>
                       {keys.map((k) => (
                         <linearGradient key={k} id={gradientId + k} x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="0%" stopColor={`var(--color-${k})`} stopOpacity={0.32} />
+                          <stop offset="0%" stopColor={`var(--color-${k})`} stopOpacity={0.16} />
                           <stop offset="100%" stopColor={`var(--color-${k})`} stopOpacity={0.03} />
                         </linearGradient>
                       ))}
                     </defs>
                   )}
-                  <CartesianGrid vertical={false} stroke="var(--border)" />
+                  <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 4" />
                   <XAxis
                     dataKey="created"
                     type="number"
+                    axisLine={false}
+                    tickLine={false}
+                    minTickGap={36}
                     domain={[bounds.from, bounds.to]}
                     tick={{ fontSize: 10 }}
                     tickFormatter={(v) =>
@@ -191,11 +220,12 @@ function Chart({
                         key={k}
                         dataKey={k}
                         name={labels[k]}
-                        stroke={i ? 'var(--chart-2)' : chartPalette[color]}
+                        stroke={`var(--color-${k})`}
+                        strokeWidth={1.75}
                         strokeDasharray={i ? '4 3' : undefined}
                         activeDot={CHART_ACTIVE_DOT}
                         fill={presentation === 'Gradient' ? `url(#${gradientId + k})` : `var(--color-${k})`}
-                        fillOpacity={presentation === 'Gradient' ? 1 : 0.18}
+                        fillOpacity={presentation === 'Gradient' ? 1 : 0.1}
                         isAnimationActive={false}
                       />
                     ) : (
@@ -203,7 +233,8 @@ function Chart({
                         key={k}
                         dataKey={k}
                         name={labels[k]}
-                        stroke={i ? 'var(--chart-2)' : chartPalette[color]}
+                        stroke={`var(--color-${k})`}
+                        strokeWidth={1.75}
                         strokeDasharray={i ? '4 3' : undefined}
                         dot={false}
                         isAnimationActive={false}
@@ -278,23 +309,20 @@ export function MetricHistory({
   row,
   minutes,
   interval,
-  manual,
 }: {
   tiles: MetricTile[];
   source: DashboardMetricSource;
   row: DashboardSourceView;
   minutes: number;
   interval: number | false;
-  manual: boolean;
 }) {
   const app = useAppContext();
   const canReadPlatform = app.platforms?.some((p) => p.id === row.platformId) === true;
   const query = statsRangeQuery({ kind: 'relative', minutes }, resolveStatsRange({ kind: 'relative', minutes }));
   const seconds = statsBucketSeconds(resolveStatsRange({ kind: 'relative', minutes }));
-  const platformSource =
-    !manual && source.kind === 'Platform' ? app.platforms?.find((p) => p.id === source.id) : undefined;
+  const platformSource = source.kind === 'Platform' ? app.platforms?.find((p) => p.id === source.id) : undefined;
   const platformLive = usePlatformLiveStats(platformSource, seconds, minutes * 60);
-  const allowedPlatform = !manual && canReadPlatform ? (row.platformId ?? '') : '';
+  const allowedPlatform = canReadPlatform ? (row.platformId ?? '') : '';
   const taskLive = useTaskStatsStream(
     source.kind === 'Deployment' ? allowedPlatform : '',
     row.containerProjectionId ?? undefined,
@@ -308,7 +336,7 @@ export function MetricHistory({
   // Stack and Swarm history also supplies membership for aggregating replicas.
   const receivingSamples = !!latest && now - latest <= 65 && !!streamGroup && groups?.isGroupLive(streamGroup);
   const opts = {
-    staleTime: manual ? 0 : 15000,
+    staleTime: 15000,
     refetchInterval: receivingSamples ? (false as const) : interval,
     retry: (attempt: number, error: Error) => attempt < 2 && requestErrorStatus(error) === 429,
     retryDelay: (attempt: number) => 500 * 2 ** attempt + Math.random() * 350,
@@ -351,7 +379,7 @@ export function MetricHistory({
           ? serviceLive.stats
           : emptyStats;
   const stackSeries = useStackSeries(
-    !manual && source.kind === 'Stack' && stack.data && stack.data.data.services.length <= 8 ? source.id : undefined,
+    source.kind === 'Stack' && stack.data && stack.data.data.services.length <= 8 ? source.id : undefined,
     stack.data?.data.services,
     seconds,
     minutes * 60,
@@ -376,11 +404,11 @@ export function MetricHistory({
         let body: ReactNode;
         if (read.isError || !series)
           body = read.isLoading ? (
-            <Loader />
+            <WidgetSkeleton kind="Metrics" />
           ) : (
             <WidgetNotice>
               {requestErrorStatus(read.error) === 429
-                ? 'Statistics reads are busy. Try Refresh shortly.'
+                ? 'Statistics reads are busy.'
                 : 'Unavailable'}
             </WidgetNotice>
           );
@@ -400,16 +428,6 @@ export function MetricHistory({
           );
         return (
           <Tile tile={tile} key={tile.id}>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <Link
-                className="table-link max-w-full truncate rounded border bg-muted/35 px-2 py-0.5 font-mono text-xs font-medium text-foreground"
-                to={link}>
-                {row.name}
-              </Link>
-              <Link className="table-link ml-auto" to={monitoringLink(link, source.kind, 'stats', minutes)}>
-                Full statistics
-              </Link>
-            </div>
             {delayed && !read.isError && (
               <p className="text-xs text-muted-foreground">
                 Latest measurement <Timestamp value={latestMeasurement * 1000} formatDateTime={formatDateTime} />
@@ -421,6 +439,19 @@ export function MetricHistory({
               </p>
             )}
             {body}
+            <div className="dashboard-metric-footer flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <Link
+                className="table-link max-w-full truncate rounded border bg-muted/35 px-2 py-0.5 font-mono text-xs font-medium text-foreground"
+                to={link}>
+                {row.name}
+              </Link>
+              <span>{minutes % 60 === 0 ? minutes / 60 + 'h' : minutes + 'm'} · Auto scale</span>
+              <Link
+                className="table-link ml-auto inline-flex items-center gap-1"
+                to={monitoringLink(link, source.kind, 'stats', minutes)}>
+                Full statistics <ArrowUpRight aria-hidden="true" className="size-3" />
+              </Link>
+            </div>
           </Tile>
         );
       })}

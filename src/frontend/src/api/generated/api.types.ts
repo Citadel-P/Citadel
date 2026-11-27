@@ -1163,6 +1163,7 @@ export enum ActivityResourceType {
   Volume = "Volume",
   BackupPolicy = "BackupPolicy",
   SwarmService = "SwarmService",
+  Dashboard = "Dashboard",
   ServiceAccount = "ServiceAccount",
 }
 
@@ -1317,6 +1318,11 @@ export enum ActivityEventType {
   SwarmServiceOperationFailed = "SwarmServiceOperationFailed",
   SwarmServiceDuplicated = "SwarmServiceDuplicated",
   SwarmServiceWebhookReceived = "SwarmServiceWebhookReceived",
+  DashboardCreated = "DashboardCreated",
+  DashboardUpdated = "DashboardUpdated",
+  DashboardSharingChanged = "DashboardSharingChanged",
+  DashboardDeleted = "DashboardDeleted",
+  InstanceHomeDashboardChanged = "InstanceHomeDashboardChanged",
   ServiceAccountCreated = "ServiceAccountCreated",
   ServiceAccountUpdated = "ServiceAccountUpdated",
   ServiceAccountRenamed = "ServiceAccountRenamed",
@@ -3131,6 +3137,7 @@ export interface CurrentProfileView {
 }
 
 export interface DashboardConfiguration {
+  description?: string | null;
   /**
    * @format int32
    * @min 0
@@ -3174,13 +3181,18 @@ export interface DashboardFleetReason {
 }
 
 export interface DashboardFleetRow {
+  createdAt?: string | null;
   /** @format uuid */
   id: string;
+  image?: string | null;
   kind: string;
   name: string;
   /** @format uuid */
   platformId?: string | null;
+  platformName?: string | null;
+  publishedPorts?: string[] | null;
   reasons: DashboardFleetReason[];
+  releaseVersion?: string | null;
   state: string;
 }
 
@@ -6274,6 +6286,30 @@ export type PublicActivityEventInfo =
   | {
       $type: "RoleDeleted";
       role: RoleActivitySnapshot;
+    }
+  | {
+      $type: "DashboardCreated";
+      configuration?: any;
+      visibility: string;
+    }
+  | {
+      $type: "DashboardUpdated";
+      changes: string[];
+      configuration?: any;
+      previousConfiguration?: any;
+    }
+  | {
+      $type: "DashboardSharingChanged";
+      visibility: string;
+    }
+  | {
+      $type: "DashboardDeleted";
+      configuration?: any;
+      visibility: string;
+    }
+  | {
+      $type: "InstanceHomeDashboardChanged";
+      dashboardName?: string | null;
     }
   | {
       $type: "ServiceAccountCreated";
@@ -13357,6 +13393,8 @@ export class Api<
         read: string;
         kinds?: string;
         state?: string;
+        /** @maxLength 128 */
+        search?: string;
         tab?: string;
         /**
          * @format int32

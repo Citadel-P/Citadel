@@ -49,7 +49,7 @@ describe('Markdown descriptions', () => {
     const help = screen.getByRole('button', { name: 'Markdown formatting help' });
     help.focus();
     await user.keyboard('{Enter}');
-    const dialog = screen.getByRole('dialog', { name: 'Formatting descriptions' });
+    const dialog = screen.getByRole('dialog', { name: 'Markdown formatting' });
     expect(within(dialog).getByText('**Important**')).toBeVisible();
     expect(within(dialog).getByText('[Runbook](https://example.com)')).toBeVisible();
     await user.keyboard('{Escape}');

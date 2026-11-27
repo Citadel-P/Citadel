@@ -44,6 +44,8 @@ schema_model! {
     #[schema(as = DashboardConfiguration)]
     pub struct DashboardConfigurationSchema {
         pub schema_version: u16,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub description: Option<String>,
         pub tags: Vec<String>,
         pub range_minutes: u16,
         #[schema(value_type = Vec<crate::api::resources::schema_models::dashboards::DashboardWidgetSchema>)]
@@ -249,6 +251,11 @@ pub name: String,
 pub state: String,
 #[schema(value_type=Vec<crate::api::resources::schema_models::dashboards::DashboardFleetReasonSchema>)]
 pub reasons: Vec<domain::FleetReason>,
+pub platform_name: Option<String>,
+pub image: Option<String>,
+pub created_at: Option<String>,
+pub release_version: Option<String>,
+pub published_ports: Option<Vec<String>>,
 }}
 schema_model! { domain::StateCount => #[derive(serde::Serialize,utoipa::ToSchema)] #[serde(rename_all="camelCase")] #[schema(as=DashboardStateCount)] pub struct DashboardStateCountSchema {
 pub kind: String,

@@ -32,6 +32,3 @@ export function createReadAdmission(limit: number) {
   };
 }
 export const ReadAdmissionContext = createContext<ReturnType<typeof createReadAdmission> | undefined>(undefined);
-
-// Descendant reads register their exact cache identities with the owning view.
-export const ReadScopeContext = createContext<Set<string> | undefined>(undefined);

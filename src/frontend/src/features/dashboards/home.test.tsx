@@ -28,10 +28,10 @@ function setup(admin = false, homeId: string | null = null) {
     HttpResponse.json({
       summary: {
         id: params.id,
-        name: 'Board ' + params.id,
-        visibility: params.id === 'mine' ? 'Private' : 'Restricted',
-        canEdit: params.id === 'mine',
-        canDelete: params.id === 'mine',
+        name: params.id === 'example' ? 'Overview' : 'Board ' + params.id,
+        visibility: params.id === 'example' ? 'InstanceShared' : params.id === 'mine' ? 'Private' : 'Restricted',
+        canEdit: params.id === 'mine' || (params.id === 'example' && admin),
+        canDelete: params.id === 'mine' || (params.id === 'example' && admin),
         revision: 1,
       },
       configuration: { schemaVersion: 2, tags: [], rangeMinutes: 60, widgets: [] },
@@ -49,6 +49,7 @@ function setup(admin = false, homeId: string | null = null) {
     http.get(api + '/profile', () => HttpResponse.json({ authorization: { isAdministrator: admin } })),
     http.get(api + '/license/entitlements', () => HttpResponse.json({ capabilities: [] })),
     http.get(api + '/platforms', () => HttpResponse.json({ platforms: [] })),
+    http.get(api + '/tags', () => HttpResponse.json([])),
     http.get(api + '/activities/recent', () => HttpResponse.json([])),
     http.get(api + '/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], pageSize: 5, totalCount: 0 } })),
     http.get(api + '/dashboards', () => HttpResponse.json({ dashboards: [] })),
@@ -69,22 +70,62 @@ it('opens the freshly resolved home without loading the previously cached board'
   expect(board.mock.calls.map(([{ params }]) => params.id)).toEqual(['mine']);
 });
 
-it('shows an empty installation its built-in Overview and lets the user start a copy without writing on visit', async () => {
+it('links to saved dashboards when there is no home preference', async () => {
   const { board, writes } = setup();
   const create = vi.fn(() => HttpResponse.json({}));
   server.use(http.post(api + '/dashboards', create));
-  const { user } = renderCitadelRoutes(appRoutes);
-  await screen.findByRole('heading', { name: 'Overview' });
-  expect(screen.getAllByRole('region')).toHaveLength(4);
-  expect(await screen.findByText('No known issues or updates.')).toBeVisible();
-  await user.click(screen.getByRole('button', { name: 'Dashboard options' }));
-  expect(screen.getByRole('menuitem', { name: 'Dashboards' })).toHaveAttribute('href', '/dashboards');
-  await user.click(screen.getByRole('menuitem', { name: 'Save a copy' }));
-  expect(within(screen.getByRole('dialog')).getByLabelText('Template')).toHaveTextContent('Overview');
-  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+  renderCitadelRoutes(appRoutes);
+  await screen.findByRole('heading', { name: 'Choose a home dashboard' });
+  expect(screen.getByRole('link', { name: 'Browse dashboards' })).toHaveAttribute('href', '/dashboards');
+  expect(screen.queryByRole('button', { name: 'Edit dashboard' })).toBeNull();
   expect(create).not.toHaveBeenCalled();
   expect(board).not.toHaveBeenCalled();
   expect(writes).toEqual([]);
+});
+
+it('edits the Overview example in place as an administrator', async () => {
+  setup(true, 'example');
+  const create = vi.fn(() => HttpResponse.json({}));
+  const save = vi.fn(async ({ request }: { request: Request }) => {
+    const { name, configuration, revision } = await request.json();
+    expect(revision).toBe(1);
+    return HttpResponse.json({
+      summary: {
+        id: 'example',
+        name,
+        visibility: 'InstanceShared',
+        canEdit: true,
+        canDelete: true,
+        revision: 2,
+      },
+      configuration,
+    });
+  });
+  server.use(http.post(api + '/dashboards', create), http.put(api + '/dashboards/example', save));
+  const { user, router } = renderCitadelRoutes(appRoutes);
+  await screen.findByRole('heading', { name: 'Overview' });
+  expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Edit dashboard' }));
+  await user.click(await screen.findByRole('button', { name: 'Edit name' }));
+  await user.type(screen.getByLabelText('Dashboard name'), ' for operations');
+  await user.click(screen.getByRole('button', { name: 'Save changes' }));
+  await screen.findByRole('heading', { name: 'Overview for operations' });
+  expect(router.state.location.pathname).toBe('/');
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(create).not.toHaveBeenCalled();
+});
+
+it.each([true, false])('shows the empty dashboard state with edit access=%s', async (canEdit) => {
+  setup(canEdit, 'example');
+  const { user } = renderCitadelRoutes(appRoutes);
+  expect(await screen.findByRole('heading', { name: 'No widgets yet' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: /tag filter/i })).not.toBeInTheDocument();
+  if (canEdit) {
+    await user.click(screen.getByRole('button', { name: 'Add widget' }));
+    expect(await screen.findByRole('heading', { name: 'Widget library' })).toBeVisible();
+  } else {
+    expect(screen.queryByRole('button', { name: 'Add widget' })).not.toBeInTheDocument();
+  }
 });
 
 it.each(['/', '/dashboards/mine'])(
@@ -119,8 +160,7 @@ it('deletes the selected dashboard at its displayed revision only after confirma
   );
   const { user, router } = renderCitadelRoutes(appRoutes, { route: '/dashboards/mine' });
   const openConfirmation = async () => {
-    await user.click(await screen.findByRole('button', { name: 'Dashboard options' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Delete dashboard' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
     return within(await screen.findByRole('dialog', { name: 'Confirm Delete' }));
   };
   const first = await openConfirmation();
@@ -177,7 +217,7 @@ it('scopes dashboard actions to the current page and checks every selected grant
   expect(screen.queryByRole('link', { name: 'Board 50' })).toBeNull();
   await user.click(select(0));
   expect(screen.getByRole('button', { name: 'Set as home' })).toBeEnabled();
-  for (const name of ['Open dashboard', 'Set as home', 'Delete']) {
+  for (const name of ['Open', 'Set as home', 'Delete']) {
     expect(screen.getByRole('button', { name }).firstElementChild?.tagName).toBe('svg');
   }
   await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -195,12 +235,12 @@ it('scopes dashboard actions to the current page and checks every selected grant
     within(screen.getByRole('row', { name: /Board 2 Private/ })).getByRole('button', { name: 'Open menu' }),
   );
   expect(screen.getByRole('menuitem', { name: 'Set as home' })).toBeVisible();
-  expect(screen.queryByRole('menuitem', { name: 'Delete dashboard' })).toBeNull();
+  expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull();
   await user.keyboard('{Escape}');
   await user.click(
     within(screen.getByRole('row', { name: /Board 0 Private/ })).getByRole('button', { name: 'Open menu' }),
   );
-  await user.click(screen.getByRole('menuitem', { name: 'Delete dashboard' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
   const rowDialog = within(await screen.findByRole('dialog', { name: 'Confirm Delete' }));
   expect(rowDialog.getByRole('textbox', { name: 'Enter Board 0 to confirm' })).toBeVisible();
   expect(rowDialog.getByRole('button', { name: 'Delete' })).toBeDisabled();
@@ -235,6 +275,34 @@ it('offers retry when resolving home fails', async () => {
   expect(home).toHaveBeenCalledTimes(2);
 });
 
+it('marks the resolved home in the dashboard list and updates the badge after a preference change', async () => {
+  const { home } = setup(false, 'shared');
+  const dashboards = [
+    { id: 'shared', name: 'Shared board', visibility: 'InstanceShared', revision: 1 },
+    { id: 'mine', name: 'My board', visibility: 'Private', revision: 1 },
+  ];
+  server.use(
+    http.get(api + '/dashboards', () => HttpResponse.json({ dashboards })),
+    http.put(api + '/profile/dashboard-default', async ({ request }) => {
+      const { dashboardId } = (await request.json()) as { dashboardId: string };
+      home.mockImplementation(() => HttpResponse.json({ dashboardId }));
+      return new HttpResponse(null, { status: 204 });
+    }),
+  );
+  const { user } = renderCitadelRoutes(appRoutes, { route: '/dashboards' });
+  const shared = within(await screen.findByRole('row', { name: /Shared board/ }));
+  const mine = within(screen.getByRole('row', { name: /My board/ }));
+  expect(screen.getByRole('columnheader', { name: 'Home' })).toBeVisible();
+  expect(await shared.findByText('Current home')).toBeVisible();
+  expect(mine.queryByText('Current home')).toBeNull();
+
+  await user.click(mine.getByRole('checkbox', { name: 'Select My board' }));
+  await user.click(screen.getByRole('button', { name: 'Set as home' }));
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save my home' }));
+  expect(await mine.findByText('Current home')).toBeVisible();
+  expect(shared.queryByText('Current home')).toBeNull();
+});
+
 it.each([
   { admin: false, path: '/dashboards/shared', scope: 'profile', id: 'shared' },
   { admin: true, path: '/dashboards/mine', scope: 'profile', id: 'mine' },
@@ -244,8 +312,7 @@ it.each([
 ])('saves $scope home from $path (administrator=$admin)', async ({ admin, path, scope, id }) => {
   const { home, writes } = setup(admin, 'other');
   const { user } = renderCitadelRoutes(appRoutes, { route: path });
-  if (id) await user.click(await screen.findByRole('button', { name: 'Dashboard options' }));
-  await user.click(await screen.findByRole(id ? 'menuitem' : 'button', { name: id ? 'Set as home' : 'Reset home' }));
+  await user.click(await screen.findByRole('button', { name: id ? 'Set as home' : 'Reset home' }));
   const dialog = within(screen.getByRole('dialog'));
   if (scope === 'instance') await user.click(await dialog.findByRole('radio', { name: 'Instance default' }));
   else expect(dialog.queryByRole('radio', { name: 'Instance default' })).toBeNull();
@@ -254,7 +321,7 @@ it.each([
   );
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(writes).toEqual([{ path: '/api/v1/' + scope + '/dashboard-default', body: { dashboardId: id } }]);
-  expect(home).not.toHaveBeenCalled();
+  await waitFor(() => expect(home).toHaveBeenCalledTimes(id ? 2 : 0));
 });
 
 it.each(['Discard', 'Save and leave'])('keeps a dirty dashboard open until the user chooses %s', async (choice) => {
@@ -271,6 +338,7 @@ it.each(['Discard', 'Save and leave'])('keeps a dirty dashboard open until the u
   await screen.findByRole('heading', { name: 'Board shared' });
   await act(() => router.navigate('/dashboards/mine'));
   await user.click(await screen.findByRole('button', { name: 'Edit dashboard' }));
+  await user.click(await screen.findByRole('button', { name: 'Edit name' }));
   const name = await screen.findByLabelText('Dashboard name');
   await user.type(name, ' draft');
 
@@ -285,4 +353,48 @@ it.each(['Discard', 'Save and leave'])('keeps a dirty dashboard open until the u
   await user.click(dialog().getByRole('button', { name: choice }));
   expect(await screen.findByRole('heading', { name: 'Board shared' })).toBeVisible();
   expect(save).toHaveBeenCalledTimes(choice === 'Discard' ? 0 : 1);
+});
+
+it('marks the private home and reuses the picker result when reopened', async () => {
+  setup(false, 'mine');
+  const list = vi.fn(() => HttpResponse.json({ dashboards: [{ id: 'mine', name: 'Board mine' }] }));
+  server.use(http.get(api + '/dashboards', list));
+  const { user } = renderCitadelRoutes(appRoutes, { route: '/dashboards/mine' });
+  const picker = await screen.findByRole('button', { name: 'Board mine' });
+  for (let i = 0; i < 2; i++) {
+    await user.click(picker);
+    expect(await screen.findByRole('link', { name: 'Board mine' })).toHaveAttribute('aria-current', 'page');
+    await user.keyboard('{Escape}');
+  }
+  expect(list).toHaveBeenCalledTimes(1);
+  expect(await screen.findByRole('button', { name: 'Current home' })).toBeDisabled();
+});
+
+it('switches between a saved Home dashboard and the Overview example without changing Home', async () => {
+  const { board, writes } = setup(false, 'mine');
+  server.use(
+    http.get(api + '/dashboards', () =>
+      HttpResponse.json({
+        dashboards: [
+          { id: 'mine', name: 'Board mine', visibility: 'Private' },
+          { id: 'example', name: 'Overview', visibility: 'InstanceShared' },
+        ],
+      }),
+    ),
+  );
+  const { user, router } = renderCitadelRoutes(appRoutes);
+  await user.click(await screen.findByRole('button', { name: 'Board mine' }));
+  const overview = await screen.findByRole('link', { name: 'Overview Everyone in this instance' });
+  expect(overview).not.toHaveAttribute('aria-current');
+  await user.click(overview);
+  expect(router.state.location.pathname).toBe('/dashboards/example');
+  await user.click(await screen.findByRole('button', { name: 'Overview' }));
+  expect(screen.getByRole('link', { name: 'Overview Everyone in this instance' })).toHaveAttribute('aria-current', 'page');
+  await user.click(screen.getByRole('link', { name: 'Board mine Private' }));
+  expect(router.state.location.pathname).toBe('/dashboards/mine');
+  expect(await screen.findByRole('heading', { name: 'Board mine' })).toBeVisible();
+  await act(() => router.navigate('/'));
+  expect(await screen.findByRole('heading', { name: 'Board mine' })).toBeVisible();
+  expect(new Set(board.mock.calls.map(([{ params }]) => params.id))).toEqual(new Set(['mine', 'example']));
+  expect(writes).toEqual([]);
 });

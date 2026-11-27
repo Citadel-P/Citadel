@@ -1,3 +1,7 @@
+import type { DashboardRequirements } from './requirements';
+import { metricColors } from './catalogue';
+import { WidgetThumbnail } from './widget-thumbnail';
+import { sizePresets } from './size-presets';
 import { useState, type ReactNode } from 'react';
 import {
   DashboardFleetKind,
@@ -14,29 +18,20 @@ import {
 } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { MarkdownDescriptionEditor } from '@/components/custom/markdown-description';
 import { ResourceSelectorField } from '@/components/custom/common';
 import { useDebounce } from '@/hooks/useDebounce';
 import { CitadelIcons } from '@/lib/icons';
 import { useRead } from '@/lib/hooks';
 import { ResourceMultiFilter } from '@/components/custom/resource-filter';
+import { useResolvedTagFilter } from '@/features/tags/components';
 import { Choice, chartPalette } from './display-controls';
-import { TagNameFilter, useResolvedTagFilter } from '@/features/tags/components';
 
 import { ChartArea, ChartLine, Blend } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 
-export function ScopeField({ value, change }: { value: string[]; change: (v: string[]) => void }) {
-  const { selection } = useResolvedTagFilter(value);
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm">Match all tags</span>
-      <TagNameFilter selection={selection} setSelectedTagNames={change} />
-    </div>
-  );
-}
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="grid gap-1 text-sm">
@@ -45,12 +40,19 @@ export function Field({ label, children }: { label: string; children: ReactNode 
     </label>
   );
 }
+type SourceLookup = { batches: DashboardRequirements['batches']; tags: string[] };
 export function MetricSourcePicker({
   source,
   change,
   fixedKind = false,
+  label = 'Target resource',
+  excludes,
+  lookup,
 }: {
   fixedKind?: boolean;
+  label?: string;
+  excludes?: DashboardMetricSource[];
+  lookup?: SourceLookup;
   source: DashboardMetricSource;
   change: (s: DashboardMetricSource) => void;
 }) {
@@ -62,13 +64,18 @@ export function MetricSourcePicker({
     { query: { kind: source.kind, search: term, limit: 25 } },
     { enabled: open, staleTime: 15000 },
   );
+  const batch = lookup?.batches.find((b) => b.kind === source.kind && b.ids.includes(source.id));
+  const ids = batch?.ids ?? [source.id];
+  // The editor observes the canvas batch. Only standalone pickers own a separate pin lookup.
   const pinned = useRead(
     'listDashboardSources',
-    { query: { kind: source.kind, tags: [], ids: source.id, limit: 1 } },
-    { enabled: !!source.id, staleTime: 15000 },
+    { query: { kind: source.kind, tags: lookup?.tags ?? [], ids: ids.join(','), limit: ids.length } },
+    { enabled: !lookup && !!source.id, staleTime: 15000 },
   );
-  const items = candidates.isError ? [] : (candidates.data?.data ?? []);
-  const selected = items.find((i) => i.id === source.id) ?? pinned.data?.data.find((i) => i.id === source.id);
+  const items = !open || candidates.isError ? [] : (candidates.data?.data ?? []);
+  const selected =
+    items.find((i) => i.id === source.id) ??
+    (!pinned.isError && (!lookup || batch) ? pinned.data?.data.find((i) => i.id === source.id) : undefined);
   return (
     <>
       {fixedKind ? (
@@ -88,10 +95,12 @@ export function MetricSourcePicker({
       )}
 
       <div className="grid gap-1 text-sm">
-        <span>Target resource</span>
+        <span>{label}</span>
         <ResourceSelectorField
           key={source.kind}
-          aria-label="Metric resource"
+          className="max-w-none"
+          aria-label={label === 'Target resource' ? 'Metric resource' : label}
+          isItemDisabled={(item) => !!excludes?.some((p) => p.kind === source.kind && p.id === item.id)}
           searchPlaceholder="Find a resource by name…"
           onOpenChange={setOpen}
           onSearchChange={setSearch}
@@ -116,15 +125,27 @@ export function MetricSourcePicker({
     </>
   );
 }
-function Pins({ pins, change }: { pins: DashboardMetricSource[]; change: (pins: DashboardMetricSource[]) => void }) {
+function Pins({
+  pins,
+  change,
+  lookup,
+}: {
+  lookup: SourceLookup;
+  pins: DashboardMetricSource[];
+  change: (pins: DashboardMetricSource[]) => void;
+}) {
   const [choice, setChoice] = useState<DashboardMetricSource>({ kind: DashboardSourceKind.Platform, id: '' });
+  const [adding, setAdding] = useState(false);
   return (
     <div className="space-y-3">
       {pins.map((p, i) => (
         <div key={p.kind + p.id} className="space-y-1 border-b py-2">
           <MetricSourcePicker
+            lookup={lookup}
             source={p}
             fixedKind
+            label={'Pinned resource ' + (i + 1)}
+            excludes={pins.filter((_, j) => j !== i)}
             change={(v) => {
               if (v.id && !pins.some((p, j) => j !== i && p.kind === v.kind && p.id === v.id))
                 change(pins.map((old, j) => (j === i ? v : old)));
@@ -148,38 +169,56 @@ function Pins({ pins, change }: { pins: DashboardMetricSource[]; change: (pins: 
           </div>
         </div>
       ))}
-      {pins.length < 8 && (
-        <MetricSourcePicker
-          source={choice}
-          change={(p) => {
-            if (!p.id) {
-              setChoice(p);
-              return;
-            }
-            if (!pins.some((v) => v.kind === p.kind && v.id === p.id)) change([...pins, p]);
-            setChoice({ ...p, id: '' });
-          }}
-        />
-      )}
+      {pins.length < 8 &&
+        (adding || pins.length === 0 ? (
+          <MetricSourcePicker
+            label="Add resource to watchlist"
+            excludes={pins}
+            lookup={lookup}
+            source={choice}
+            change={(p) => {
+              if (!p.id) {
+                setChoice(p);
+                return;
+              }
+              if (!pins.some((v) => v.kind === p.kind && v.id === p.id)) change([...pins, p]);
+              setChoice({ ...p, id: '' });
+              setAdding(false);
+            }}
+          />
+        ) : (
+          <Button type="button" variant="outline" onClick={() => setAdding(true)}>
+            Add resource
+          </Button>
+        ))}
     </div>
   );
 }
 export function WidgetSettings({
   widget,
+  batches,
+  tags,
   change,
   place,
 }: {
   widget: DashboardWidget;
+  batches: SourceLookup['batches'];
+  tags: string[];
   change: (w: DashboardWidget) => void;
-  place: (layout: DashboardWidget['layout']) => void;
+  place: (layout: DashboardWidget['layout'], limit?: number) => void;
 }) {
+  const { selectedTagNames } = useResolvedTagFilter(tags);
+  const lookup = { batches, tags: selectedTagNames };
   const s = widget.settings;
   const settings = (value: DashboardWidgetSettings) => change({ ...widget, settings: value });
   return (
     <div className="space-y-4">
-      <Field label="Widget title">
-        <Input value={widget.title} maxLength={128} onChange={(e) => change({ ...widget, title: e.target.value })} />
-      </Field>
+      <div className="dashboard-inspector-identity">
+        <WidgetThumbnail kind={s.kind} color={s.kind === 'Metrics' ? chartPalette[s.color] : undefined} />
+        <Field label="Widget title">
+          <Input value={widget.title} maxLength={128} onChange={(e) => change({ ...widget, title: e.target.value })} />
+        </Field>
+      </div>
       {s.kind === 'ResourceState' && (
         <Choice
           label="Resource type"
@@ -230,7 +269,7 @@ export function WidgetSettings({
           onChange={(v) => settings({ ...s, measures: v as DashboardFleetMeasure[] })}
         />
       )}
-      {s.kind === 'Watchlist' && <Pins pins={s.pins} change={(pins) => settings({ ...s, pins })} />}
+      {s.kind === 'Watchlist' && <Pins lookup={lookup} pins={s.pins} change={(pins) => settings({ ...s, pins })} />}
       {(s.kind === 'Backups' || s.kind === 'RecentActivity') && (
         <Choice
           label="Activity preset"
@@ -253,10 +292,9 @@ export function WidgetSettings({
       )}
       {s.kind === 'Metrics' && (
         <>
-          <h3 className="border-t pt-5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Data configuration
-          </h3>
-          <MetricSourcePicker source={s.source} change={(source) => settings({ ...s, source })} />
+          <h3 className="font-medium">Data</h3>
+          <p className="text-xs text-muted-foreground">Uses the dashboard chart range.</p>
+          <MetricSourcePicker lookup={lookup} source={s.source} change={(source) => settings({ ...s, source })} />
           <Choice
             label="Metric"
             value={s.metric}
@@ -264,9 +302,7 @@ export function WidgetSettings({
             labels={{ Cpu: 'CPU', DiskIo: 'Disk I/O' }}
             change={(metric) => settings({ ...s, metric })}
           />
-          <h3 className="border-t pt-5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Appearance
-          </h3>
+          <h3 className="border-t pt-3 font-medium">Appearance</h3>
           <div className="grid gap-1.5 text-sm">
             Chart style
             <SegmentedControl
@@ -289,7 +325,14 @@ export function WidgetSettings({
             />
           </div>
           <div className="grid gap-1.5 text-sm">
-            Color
+            <div className="flex min-h-6 items-center justify-between">
+              Color
+              {s.color !== metricColors[s.metric] && (
+                <Button variant="link" size="xs" onClick={() => settings({ ...s, color: metricColors[s.metric] })}>
+                  Use suggested {metricColors[s.metric].toLowerCase()}
+                </Button>
+              )}
+            </div>
             <RadioGroup
               aria-label="Chart color"
               value={s.color}
@@ -319,9 +362,15 @@ export function WidgetSettings({
       )}
       {s.kind === 'Notes' && (
         <>
-          <Field label="Note">
-            <Textarea value={s.text} maxLength={2048} onChange={(e) => settings({ ...s, text: e.target.value })} />
-          </Field>
+          <div className="grid gap-1 text-sm">
+            <label htmlFor="dashboard-note">Note</label>
+            <MarkdownDescriptionEditor
+              id="dashboard-note"
+              value={s.text}
+              maxLength={2048}
+              onChange={(e) => settings({ ...s, text: e.target.value })}
+            />
+          </div>
           {s.links.map((link, i) => (
             <div key={i} className="space-y-2 border-t pt-2">
               {(['label', 'href'] as const).map((k) => (
@@ -342,18 +391,31 @@ export function WidgetSettings({
               </Button>
             </div>
           ))}
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={s.links.length >= 8}
-            onClick={() => settings({ ...s, links: [...s.links, { label: '', href: '' }] })}>
-            Add link
-          </Button>
         </>
       )}
+      <div className="grid gap-2 border-t pt-3">
+        <span className="text-sm font-medium">Layout</span>
+        <div className="flex flex-wrap gap-1">
+          {sizePresets[s.kind].map(([w, h, limit], i) => (
+            <Button
+              size="sm"
+              variant="outline"
+              key={i}
+              aria-pressed={
+                widget.layout.w === w &&
+                widget.layout.h === h &&
+                (limit === undefined || ('limit' in s && s.limit === limit))
+              }
+              onClick={() => place({ ...widget.layout, x: Math.min(widget.layout.x, 12 - w), w, h }, limit)}>
+              {['Compact', 'Standard', 'Expanded'][i]}
+              {limit !== undefined && <span className="text-muted-foreground"> · {limit} rows</span>}
+            </Button>
+          ))}
+        </div>
+      </div>
       <details className="border-t pt-4">
         <summary className="mb-3 cursor-pointer font-medium">
-          Position &amp; size · {widget.layout.w} × {widget.layout.h}
+          Advanced position &amp; size · {widget.layout.w} × {widget.layout.h}
         </summary>
         <div className="grid grid-cols-2 gap-2">
           {(['x', 'y', 'w', 'h'] as const).map((k, i) => (

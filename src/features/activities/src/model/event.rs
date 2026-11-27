@@ -1,5 +1,22 @@
 use super::*;
 impl ActivityEvent {
+    pub fn new_dashboard_event(
+        id: Uuid,
+        name: String,
+        actor: ActorId,
+        info: ActivityEventInfo,
+    ) -> Result<Self, ActivityInvariantError> {
+        Self::new_resource_event(
+            id,
+            name,
+            ActivityResourceType::Dashboard,
+            actor,
+            info,
+            ActivityStatus::Success,
+            Utc::now(),
+        )
+    }
+
     pub fn new_instance_event(
         instance_id: Uuid,
         actor_id: ActorId,

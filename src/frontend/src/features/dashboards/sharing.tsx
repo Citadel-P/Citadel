@@ -30,10 +30,14 @@ export function useCanManageSharing(board: DashboardSummaryView) {
     !!profile.data?.data.authorization.isAdministrator
   );
 }
-export function SharingItem({ board, select }: { board: DashboardSummaryView; select: () => void }) {
+export function useSharingDisabled(board: DashboardSummaryView) {
   const { hasCapability } = useLicenseEntitlements();
-  const disabled =
-    board.visibility === DashboardVisibility.InstanceShared && !hasCapability(LicenseCapability.CustomAccessControl);
+  return (
+    board.visibility === DashboardVisibility.InstanceShared && !hasCapability(LicenseCapability.CustomAccessControl)
+  );
+}
+export function SharingItem({ board, select }: { board: DashboardSummaryView; select: () => void }) {
+  const disabled = useSharingDisabled(board);
   return (
     <DropdownMenuItem disabled={disabled} onSelect={select}>
       Sharing

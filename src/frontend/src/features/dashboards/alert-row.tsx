@@ -5,7 +5,8 @@ import { useAlertPage } from '@/features/alerters/alert-events/hooks/useAlertEve
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import Loader from '@/components/ui/loader';
 import { type ReactNode, useContext, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useOpenAlertEventSheet } from '@/features/alerters/alert-events/alert-task-sheet';
+import { Link } from 'react-router';
 import { useQueryClient, useIsMutating } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -17,7 +18,7 @@ import {
 import { StateBadge } from '@/components/custom/state-badge';
 import { TimelineItem } from './timeline';
 import { DropdownActions } from '@/components/custom/dropdown-with-dialog';
-import { Check, ExternalLink } from 'lucide-react';
+import { Check, Eye } from 'lucide-react';
 import { useMutate } from '@/lib/hooks';
 import { requestErrorMessage } from '@/lib/request-error';
 import { formatActivityEvent } from '@/lib/utils';
@@ -48,8 +49,7 @@ export function AlertRow({
     },
     onError: (e) => toast.error(requestErrorMessage(e)),
   });
-  const navigate = useNavigate();
-  const path = '/alerts/' + row.id;
+  const openAlert = useOpenAlertEventSheet();
   const resource = row.resourcePath;
   const safe = resource?.startsWith('/') && !resource.startsWith('//') && !resource.includes('\\');
   return (
@@ -57,8 +57,9 @@ export function AlertRow({
       format={format}
       type={row.resourceType}
       title={row.message || formatActivityEvent(row.type)}
-      path={path}
+      onOpen={() => openAlert(row.id)}
       time={row.createdAt}
+      tone={row.severity === 'Critical' ? 'failure' : row.severity === 'Warning' ? 'warning' : 'info'}
       status={
         <>
           <StateBadge kind="alertSeverity" value={row.severity} />
@@ -76,7 +77,7 @@ export function AlertRow({
       actions={
         <DropdownActions
           items={[
-            { id: 'open', label: 'Alert details', icon: <ExternalLink />, onClick: () => navigate(path) },
+            { id: 'open', label: 'Alert details', icon: <Eye />, onClick: () => openAlert(row.id) },
             ...(can && row.status === AlertEventStatus.Active
               ? [
                   {

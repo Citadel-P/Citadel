@@ -2,7 +2,7 @@
   "schemaVersion": 11,
   "schema": {
     "file": "src/schema/schema.sql",
-    "sha256": "a416d8e3dfdb9c0069b6de70ddd679a248197e1038ae3554f28e58c7ac3a9336"
+    "sha256": "29beecb6baf9133acc62fdfea725e62bd30c896594e690b1bb9aa1e35bbb4a7a"
   },
   "migrations": [
     {
@@ -89,7 +89,7 @@
       "id": "0011",
       "name": "dashboards",
       "file": "0011_dashboards.sql",
-      "sha256": "b2f225f23f17796e0c79b60977c3009d9e0d1fe7419253ba2635864ac334d58a",
+      "sha256": "99d1f91bf4576386a464e120ff259f98b12b6e80d565f6fe7a7939628ab0f664",
       "transactional": true,
       "generatedBy": "citadel-xtask-v1"
     }

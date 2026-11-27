@@ -385,6 +385,37 @@ pub enum ActivityEventInfoSchema {
         role: citadel_activities::RoleActivitySnapshot,
     },
 
+    DashboardCreated {
+        #[serde(rename = "Visibility")]
+        visibility: String,
+        #[serde(rename = "Configuration", skip_serializing_if = "Option::is_none")]
+        configuration: Option<serde_json::Value>,
+    },
+    DashboardUpdated {
+        #[serde(rename = "Changes")]
+        changes: Vec<String>,
+        #[serde(
+            rename = "PreviousConfiguration",
+            skip_serializing_if = "Option::is_none"
+        )]
+        previous_configuration: Option<serde_json::Value>,
+        #[serde(rename = "Configuration", skip_serializing_if = "Option::is_none")]
+        configuration: Option<serde_json::Value>,
+    },
+    DashboardSharingChanged {
+        #[serde(rename = "Visibility")]
+        visibility: String,
+    },
+    DashboardDeleted {
+        #[serde(rename = "Visibility")]
+        visibility: String,
+        #[serde(rename = "Configuration", skip_serializing_if = "Option::is_none")]
+        configuration: Option<serde_json::Value>,
+    },
+    InstanceHomeDashboardChanged {
+        #[serde(rename = "DashboardName")]
+        dashboard_name: Option<String>,
+    },
     ServiceAccountCreated {
         #[serde(rename = "Account")]
         #[schema(value_type = crate::api::resources::schema_models::activities::ServiceAccountActivitySnapshotSchema)]
@@ -1416,6 +1447,35 @@ impl From<citadel_activities::ActivityEventInfo> for ActivityEventInfoSchema {
             citadel_activities::ActivityEventInfo::RoleDeleted { role } => {
                 Self::RoleDeleted { role }
             }
+            citadel_activities::ActivityEventInfo::DashboardCreated {
+                visibility,
+                configuration,
+            } => Self::DashboardCreated {
+                visibility,
+                configuration,
+            },
+            citadel_activities::ActivityEventInfo::DashboardUpdated {
+                changes,
+                previous_configuration,
+                configuration,
+            } => Self::DashboardUpdated {
+                changes,
+                previous_configuration,
+                configuration,
+            },
+            citadel_activities::ActivityEventInfo::DashboardSharingChanged { visibility } => {
+                Self::DashboardSharingChanged { visibility }
+            }
+            citadel_activities::ActivityEventInfo::DashboardDeleted {
+                visibility,
+                configuration,
+            } => Self::DashboardDeleted {
+                visibility,
+                configuration,
+            },
+            citadel_activities::ActivityEventInfo::InstanceHomeDashboardChanged {
+                dashboard_name,
+            } => Self::InstanceHomeDashboardChanged { dashboard_name },
             citadel_activities::ActivityEventInfo::ServiceAccountCreated { account } => {
                 Self::ServiceAccountCreated { account }
             }
@@ -2007,6 +2067,7 @@ enum_schema!(
         Volume,
         BackupPolicy,
         SwarmService,
+        Dashboard,
         ServiceAccount
     ]
 );
@@ -2166,6 +2227,11 @@ enum_schema!(
         SwarmServiceOperationFailed,
         SwarmServiceDuplicated,
         SwarmServiceWebhookReceived,
+        DashboardCreated,
+        DashboardUpdated,
+        DashboardSharingChanged,
+        DashboardDeleted,
+        InstanceHomeDashboardChanged,
         ServiceAccountCreated,
         ServiceAccountUpdated,
         ServiceAccountRenamed,

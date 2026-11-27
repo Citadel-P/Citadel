@@ -67,6 +67,12 @@ impl DatabaseNotificationHub {
                 Ok(RuntimeNotification::Signal(signal)) => {
                     self.signals[signal as usize].send_modify(|_| {})
                 }
+                Ok(RuntimeNotification::RecentActivityChanged) => self.refresh_catalog("Activity"),
+                Ok(RuntimeNotification::DashboardChanged(id)) => {
+                    if let Some(hub) = &self.realtime {
+                        hub.publish_resource_change("Dashboard", id, "resourceChanged");
+                    }
+                }
                 Ok(RuntimeNotification::TagUsageChanged) => {
                     if let Some(hub) = &self.realtime {
                         hub.publish_tag_usage_changed();
@@ -81,7 +87,13 @@ impl DatabaseNotificationHub {
                     if let Some(hub) = &self.realtime {
                         hub.publish_tag_usage_changed();
                     }
-                    for resource in ["BackupPolicy", "BackupRepository", "GitRepository"] {
+                    for resource in [
+                        "BackupPolicy",
+                        "BackupRepository",
+                        "GitRepository",
+                        "Dashboard",
+                        "Activity",
+                    ] {
                         self.refresh_catalog(resource);
                     }
                     self.connections.publish(ConnectionNotification::Resync);

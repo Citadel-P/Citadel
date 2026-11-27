@@ -1,10 +1,10 @@
 , dashboard_access AS (
     SELECT d.id, d.name, d.visibility, d.revision,
         CASE WHEN d.visibility='Private' THEN d.owneractorid=$1
-             ELSE $2 OR d.visibility='InstanceShared' OR grants.level >= 1 END AS can_read,
+             ELSE (SELECT administrator FROM dashboard_viewer) OR d.visibility='InstanceShared' OR grants.level >= 1 END AS can_read,
         CASE WHEN d.visibility='Private' THEN d.owneractorid=$1
-             ELSE $2 OR grants.level >= 2 END AS can_edit,
-        CASE WHEN d.visibility='Private' THEN d.owneractorid=$1 ELSE $2 END AS can_delete
+             ELSE (SELECT administrator FROM dashboard_viewer) OR grants.level >= 2 END AS can_edit,
+        CASE WHEN d.visibility='Private' THEN d.owneractorid=$1 ELSE (SELECT administrator FROM dashboard_viewer) END AS can_delete
     FROM dashboards d
     LEFT JOIN LATERAL (
         SELECT greatest(

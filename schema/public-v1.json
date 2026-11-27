@@ -187,6 +187,11 @@
           "SwarmServiceOperationFailed",
           "SwarmServiceDuplicated",
           "SwarmServiceWebhookReceived",
+          "DashboardCreated",
+          "DashboardUpdated",
+          "DashboardSharingChanged",
+          "DashboardDeleted",
+          "InstanceHomeDashboardChanged",
           "ServiceAccountCreated",
           "ServiceAccountUpdated",
           "ServiceAccountRenamed",
@@ -219,6 +224,7 @@
           "Volume",
           "BackupPolicy",
           "SwarmService",
+          "Dashboard",
           "ServiceAccount"
         ],
         "type": "string"
@@ -14050,6 +14056,105 @@
             },
             "required": [
               "role",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "DashboardCreated"
+                ],
+                "type": "string"
+              },
+              "configuration": {},
+              "visibility": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "visibility",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "DashboardUpdated"
+                ],
+                "type": "string"
+              },
+              "changes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "configuration": {},
+              "previousConfiguration": {}
+            },
+            "required": [
+              "changes",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "DashboardSharingChanged"
+                ],
+                "type": "string"
+              },
+              "visibility": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "visibility",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "DashboardDeleted"
+                ],
+                "type": "string"
+              },
+              "configuration": {},
+              "visibility": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "visibility",
+              "$type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "$type": {
+                "enum": [
+                  "InstanceHomeDashboardChanged"
+                ],
+                "type": "string"
+              },
+              "dashboardName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
               "$type"
             ],
             "type": "object"

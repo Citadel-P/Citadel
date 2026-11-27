@@ -37,6 +37,7 @@ pub struct ApplicationGroupReader {
     pub scripts: Arc<dyn ScriptRepository>,
     pub builds: Arc<dyn BuildRepository>,
     pub backups: Arc<dyn BackupPersistence>,
+    pub dashboards: Arc<dyn citadel_dashboards::DashboardRepository>,
     pub activities: Arc<ActivityService>,
     pub alerts: Arc<dyn citadel_alerts::AlertRepository>,
     pub runtime: Arc<dyn citadel_platforms::runtime_provider::PlatformRuntimeProvider>,
@@ -505,6 +506,17 @@ impl ApplicationGroupReader {
                     error => failure(error),
                 })?;
                 return event("ResourceCopyInfoUpdated", progress);
+            }
+            Topic::Dashboard => {
+                if !p.is_human() {
+                    return Err(RealtimeReadError::Authorization);
+                }
+                return g
+                    .dashboard
+                    .as_ref()
+                    .ok_or(RealtimeReadError::Authorization)?
+                    .read(self, p)
+                    .await;
             }
             Topic::Activity { .. } => return self.activities(p, g, lease).await,
             Topic::AlertEvents => {

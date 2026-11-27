@@ -40,7 +40,7 @@ function openPage(route: string, queryClient = createQueryClient()) {
         <Route path="/dashboards/:id" element={<Board />} />
       </Routes>
     </Suspense>,
-    { route, queryClient },
+    { route, queryClient, groups: { realtimeTransport: 'Disabled' } },
   );
 }
 
@@ -72,14 +72,12 @@ it('opens a board from Dashboards and confirms sharing only on the selected boar
   expect(screen.queryByRole('button', { name: 'Sharing' })).toBeNull();
   await user.click(link);
   await screen.findByRole('heading', { name: 'On call' });
-  await user.click(await screen.findByRole('button', { name: 'Dashboard options' }));
-  await user.click(await screen.findByRole('menuitem', { name: 'Sharing' }));
+  await user.click(await screen.findByRole('button', { name: 'Sharing' }));
   expect(saves).toHaveLength(0);
   await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Share with everyone' }));
   await screen.findByText('Everyone in this instance');
   expect(saves).toEqual([{ revision: 7, visibility: 'InstanceShared' }]);
-  await user.click(screen.getByRole('button', { name: 'Dashboard options' }));
-  expect(screen.getByRole('menuitem', { name: 'Sharing' })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('button', { name: 'Sharing' })).toBeDisabled();
   expect(AccessComponents.Tabs.some((tab) => tab.slug === 'dashboard-sharing')).toBe(false);
 });
 
@@ -91,15 +89,13 @@ it('loads the current board revision before another decision after a conflict', 
   });
   server.use(http.put(api + '/dashboards/board/visibility', save));
   const { user } = openPage('/dashboards/board');
-  await user.click(await screen.findByRole('button', { name: 'Dashboard options' }));
-  await user.click(await screen.findByRole('menuitem', { name: 'Sharing' }));
+  await user.click(await screen.findByRole('button', { name: 'Sharing' }));
   await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Share with everyone' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('dashboard has changed');
   expect(screen.getByRole('button', { name: 'Share with everyone' })).toBeDisabled();
   await user.click(screen.getByRole('button', { name: 'Cancel' }));
   await screen.findByText('Everyone in this instance');
-  await user.click(screen.getByRole('button', { name: 'Dashboard options' }));
-  await user.click(screen.getByRole('menuitem', { name: 'Sharing' }));
+  await user.click(screen.getByRole('button', { name: 'Sharing' }));
   expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Restrict access' })).toBeEnabled();
   expect(save).toHaveBeenCalledTimes(1);
   expect(list).not.toHaveBeenCalled();
@@ -110,9 +106,26 @@ it.each([
   [true, 'mine', 'Personal'],
 ] as const)('hides Sharing for admin=%s on %s', async (admin, id, name) => {
   setup(admin, true);
-  const { queryClient, user } = openPage('/dashboards/' + id);
+  const { queryClient } = openPage('/dashboards/' + id);
   await screen.findByRole('heading', { name });
   await waitFor(() => expect(queryClient.isFetching()).toBe(0));
-  await user.click(screen.getByRole('button', { name: 'Dashboard options' }));
-  expect(screen.queryByRole('menuitem', { name: 'Sharing' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Sharing' })).toBeNull();
+});
+
+it('groups board actions and marks the current board in the switcher', async () => {
+  const { list } = setup(true, true);
+  const { user } = openPage('/dashboards/board');
+  const actions = await screen.findByRole('group', { name: 'Dashboard actions' });
+  for (const name of ['Edit dashboard', 'Set as home', 'Delete']) {
+    expect(within(actions).getByRole('button', { name })).toBeVisible();
+  }
+  expect(within(actions).queryByRole('button', { name: 'Duplicate' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Duplicate' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: board.name }));
+  const current = await screen.findByRole('link', { current: 'page' });
+  expect(current).toHaveTextContent(board.name);
+  await user.click(current);
+  await user.click(screen.getByRole('button', { name: board.name }));
+  expect(await screen.findByRole('link', { current: 'page' })).toBeVisible();
+  expect(list).toHaveBeenCalledTimes(1);
 });

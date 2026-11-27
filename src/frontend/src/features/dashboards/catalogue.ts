@@ -47,7 +47,7 @@ export const catalogue = {
     CitadelIcons.Alert,
     'Overview',
     7,
-    7,
+    5,
     4,
     4,
   ),
@@ -57,9 +57,9 @@ export const catalogue = {
     CitadelIcons.Platform,
     'Overview',
     5,
-    7,
     4,
     4,
+    3,
   ),
   Watchlist: definition(
     'Watchlist',
@@ -77,7 +77,7 @@ export const catalogue = {
     ChartNoAxesCombined,
     'Monitoring',
     6,
-    6,
+    5,
     4,
     4,
   ),
@@ -134,14 +134,21 @@ export const catalogue = {
   Notes: definition('Notes and links', 'Text and links for this dashboard.', NotebookText, 'Content', 4, 3, 3, 2),
 } satisfies Record<WidgetKind, ReturnType<typeof definition>>;
 
+export const metricColors = {
+  Cpu: DashboardChartColor.Blue,
+  Memory: DashboardChartColor.Violet,
+  Network: DashboardChartColor.Cyan,
+  DiskIo: DashboardChartColor.Amber,
+} satisfies Record<DashboardMetric, DashboardChartColor>;
+
 export function metricSettings(metric = DashboardMetric.Cpu) {
   return {
     kind: 'Metrics' as const,
     source: { kind: DashboardSourceKind.Platform, id: '' },
     metric,
     presentation: DashboardChartStyle.Gradient,
-    color: DashboardChartColor.Blue,
-    legend: true,
+    color: metricColors[metric],
+    legend: false,
   };
 }
 
@@ -264,6 +271,7 @@ export function supportedConfiguration(c: unknown): c is DashboardConfiguration 
   return (
     record(c) &&
     c.schemaVersion === 2 &&
+    (c.description == null || typeof c.description === 'string') &&
     STATS_PRESETS.some((p) => p.minutes === c.rangeMinutes) &&
     Array.isArray(c.tags) &&
     c.tags.every((t) => typeof t === 'string') &&

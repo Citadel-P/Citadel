@@ -1,16 +1,18 @@
-import Loader from '@/components/ui/loader';
+import { useDashboardRead } from './use-dashboard-read';
 import { useMemo, useState, type ReactNode } from 'react';
+import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router';
+import { useOpenActivitySheet } from '@/features/alerters/alert-events/alert-task-sheet';
 import { ActivityEventType, type RecentActivityView } from '@/api/generated/api.types';
 import { StateBadge } from '@/components/custom/state-badge';
 import { useAlertPage } from '@/features/alerters/alert-events/hooks/useAlertEventsList';
 import { useAppContext } from '@/lib/context/app-context';
 import { useRead } from '@/lib/hooks';
-import { formatActivityEvent } from '@/lib/utils';
+import { cn, formatActivityEvent } from '@/lib/utils';
 import { TimelineItem } from './timeline';
 import { CitadelIcons } from '@/lib/icons';
 import { useResolvedTagFilter } from '@/features/tags/components';
-import { Tile, OrderedTiles, WidgetNotice } from './tile';
+import { Tile, WidgetNotice, WidgetSkeleton } from './tile';
 import { SupplementalTiles } from './widget-data';
 import { ActivityActions } from './row-actions';
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -21,7 +23,13 @@ import type { SavedTile } from './grid';
 
 import { useProfileDateTimeFormatter } from '@/lib/use-profile-date-time';
 import type { DateTimeFormatter } from '@/lib/date-time';
-function recentRows(rows: RecentActivityView[], limit: number, backups: boolean, format: DateTimeFormatter) {
+function recentRows(
+  rows: RecentActivityView[],
+  limit: number,
+  backups: boolean,
+  format: DateTimeFormatter,
+  open: (id: string) => void,
+) {
   return rows
     .slice(0, limit)
     .map((row) => (
@@ -29,40 +37,45 @@ function recentRows(rows: RecentActivityView[], limit: number, backups: boolean,
         format={format}
         key={row.id}
         type={row.resourceType}
-        title={
-          backups
-            ? row.resourceName
-            : [formatActivityEvent(row.eventType), row.resourceName].filter(Boolean).join(' · ')
+        title={backups ? row.resourceName : formatActivityEvent(row.eventType)}
+        resourceName={backups ? undefined : row.resourceName}
+        onOpen={() => open(row.id)}
+        compact={!backups}
+        tone={
+          row.status === 'Failure'
+            ? 'failure'
+            : row.status === 'Warning'
+              ? 'warning'
+              : row.status === 'Success'
+                ? 'success'
+                : row.status === 'Information'
+                  ? 'info'
+                  : 'neutral'
         }
-        path={'/activities/' + row.id}
-        failed={row.status === 'Failure'}
         time={row.createdAt}
-        status={<StateBadge kind="activity" value={row.status} />}
-        actions={<ActivityActions id={row.id} />}
+        statusLabel={backups ? undefined : row.status}
+        status={backups && <StateBadge kind="activity" value={row.status} />}
+        actions={backups && <ActivityActions id={row.id} />}
       />
     ));
 }
 
-function list(rows: ReactNode[] | undefined, empty: string, loading: boolean, error: unknown, timeline = false) {
-  if (error || !rows) return loading && !error ? <Loader /> : <WidgetNotice>Unavailable</WidgetNotice>;
-  return rows.length ? (
-    <ul className={timeline ? 'text-sm' : 'divide-y text-sm'}>{rows}</ul>
-  ) : (
-    <p className="text-muted-foreground">{empty}</p>
-  );
+function list(rows: ReactNode[] | undefined, empty: string, loading: boolean, error: unknown) {
+  if (error || !rows) return loading && !error ? <WidgetSkeleton /> : <WidgetNotice>Unavailable</WidgetNotice>;
+  return rows.length ? <ul className="text-sm">{rows}</ul> : <p className="text-muted-foreground">{empty}</p>;
 }
 
 function ScopedActivity({ tags }: { tags: string[] }) {
   const format = useProfileDateTimeFormatter();
-  const recent = useRead('listRecentActivities', { query: { tags, limit: 10 } });
+  const openActivity = useOpenActivitySheet();
+  const recent = useDashboardRead('listRecentActivities', { query: { tags, limit: 10 } });
   return (
     <div className="min-h-0 overflow-auto px-4">
       {list(
-        recent.data && recentRows(recent.data.data, 10, false, format),
+        recent.data && recentRows(recent.data.data, 10, false, format, openActivity),
         'No recent activity.',
         recent.isLoading,
         recent.error,
-        true,
       )}
     </div>
   );
@@ -70,21 +83,18 @@ function ScopedActivity({ tags }: { tags: string[] }) {
 
 export function OverviewTiles({
   plan,
-  tiles,
   tags: tokens,
   range,
-  manual,
 }: {
   plan: DashboardRequirements;
-  tiles: SavedTile[];
   tags: string[];
   range: number;
-  manual: boolean;
 }) {
   const { selectedTagNames, filterReady: ready } = useResolvedTagFilter(tokens);
   const tags = selectedTagNames.length ? selectedTagNames : undefined;
   const app = useAppContext();
   const format = useProfileDateTimeFormatter();
+  const openActivity = useOpenActivitySheet();
   const { limits } = plan;
   const alertQuery = useMemo(
     () =>
@@ -105,26 +115,23 @@ export function OverviewTiles({
     alertQuery,
     {
       enabled: ready && !!limits.OpenAlerts,
-      staleTime: !manual && !tags && alertQuery.pageSize === 5 ? Infinity : 0,
-      refetchInterval: !manual && !app.alertFeedConnected ? interval : false,
+      staleTime: !tags && alertQuery.pageSize === 5 ? Infinity : 0,
+      refetchInterval: !app.alertFeedConnected ? interval : false,
     },
     tags,
   );
-  // Global activity has no subscription. Only active tiles observe these bounded queries.
-  const recent = useRead(
+  const recent = useDashboardRead(
     'listRecentActivities',
     { query: { tags, limit: limits.RecentActivity || 5 } },
     {
       enabled: ready && !!limits.RecentActivity,
-      refetchInterval: manual ? false : interval,
     },
   );
-  const backups = useRead(
+  const backups = useDashboardRead(
     'listRecentActivities',
     { query: { tags, eventType: ActivityEventType.BackupRunCompleted, limit: limits.Backups || 5 } },
     {
       enabled: ready && !!limits.Backups,
-      refetchInterval: manual ? false : interval,
     },
   );
   function contents(tile: SavedTile) {
@@ -142,10 +149,9 @@ export function OverviewTiles({
                 auth={profile.isError ? undefined : profile.data?.data.authorization}
               />
             )),
-          'No open alerts.',
+          'No open alerts in this scope.',
           !ready || alerts.isLoading,
           alerts.error,
-          true,
         );
       case 'Backups':
       case 'RecentActivity': {
@@ -163,11 +169,10 @@ export function OverviewTiles({
           );
         }
         return list(
-          query.data && recentRows(query.data.data, limit, isBackup, format),
+          query.data && recentRows(query.data.data, limit, isBackup, format, openActivity),
           isBackup ? 'No completed backups.' : 'No recent activity.',
           !ready || query.isLoading,
           query.error,
-          true,
         );
       }
       default:
@@ -175,47 +180,55 @@ export function OverviewTiles({
     }
   }
   return (
-    <OrderedTiles tiles={tiles}>
+    <>
       {plan.overview.map((tile) => (
         <Tile key={tile.id} tile={tile}>
-          {contents(tile)}
-          {tile.settings.kind === 'RecentActivity' &&
-            (tags?.length ? (
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button className="mt-auto w-fit" variant="link">
-                    Open recent activity
-                  </Button>
-                </SheetTrigger>
-                <SheetContent>
-                  <SheetHeader>
-                    <SheetTitle>Recent activity</SheetTitle>
-                  </SheetHeader>
-                  <ScopedActivity tags={tags} />
-                </SheetContent>
-              </Sheet>
-            ) : (
-              <Link className="table-link mt-auto text-xs" to="/activities">
-                View all activities
+          {tile.settings.kind === 'RecentActivity' || tile.settings.kind === 'Backups' ? (
+            <div
+              className={cn(
+                'dashboard-timeline-list',
+                tile.settings.kind === 'RecentActivity'
+                  ? 'px-5 py-2 [&_.dashboard-timeline-label]:text-[0.8125rem] [&_.dashboard-timeline-label]:font-normal'
+                  : 'px-4 py-3',
+              )}>
+              {contents(tile)}
+            </div>
+          ) : (
+            contents(tile)
+          )}
+          {tile.settings.kind === 'RecentActivity' && (
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button
+                  className="dashboard-widget-footer shrink-0 text-muted-foreground hover:text-foreground"
+                  variant="ghost"
+                  size="sm">
+                  View recent activity <ArrowRight aria-hidden="true" className="size-3.5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent>
+                <SheetHeader>
+                  <SheetTitle>Recent activity</SheetTitle>
+                </SheetHeader>
+                <ScopedActivity tags={tags ?? []} />
+              </SheetContent>
+            </Sheet>
+          )}
+          {tile.settings.kind === 'Backups' && (
+            <Button
+              className="dashboard-widget-footer shrink-0 text-muted-foreground hover:text-foreground"
+              variant="ghost"
+              size="sm"
+              asChild>
+              <Link to="/backup-policies">
+                View backup policies <ArrowRight aria-hidden="true" className="size-3.5" />
               </Link>
-            ))}
-          {tile.settings.kind === 'OpenAlerts' &&
-            (tags?.length ? (
-              <ScopedAlerts tags={tags}>View all alerts</ScopedAlerts>
-            ) : (
-              <Link className="table-link mt-auto text-xs" to="/alerts">
-                View all alerts
-              </Link>
-            ))}
+            </Button>
+          )}
+          {tile.settings.kind === 'OpenAlerts' && <ScopedAlerts tags={tags ?? []}>View all alerts</ScopedAlerts>}
         </Tile>
       ))}
-      <SupplementalTiles
-        plan={plan}
-        tags={tags ?? []}
-        range={range}
-        enabled={ready}
-        interval={manual ? false : interval}
-      />
-    </OrderedTiles>
+      <SupplementalTiles plan={plan} tags={tags ?? []} range={range} enabled={ready} interval={interval} />
+    </>
   );
 }

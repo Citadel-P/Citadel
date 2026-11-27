@@ -8,6 +8,7 @@ pub enum SourceKind {
     SwarmService,
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct SourceFilter {
     pub kind: SourceKind,
     pub search: String,

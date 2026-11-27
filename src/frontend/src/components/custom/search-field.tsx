@@ -7,10 +7,18 @@ import { useState, useEffect, useCallback } from 'react';
 interface SearchFieldProps {
   className?: string;
   placeholder?: string;
+  ariaLabel?: string;
+  maxLength?: number;
   onSearch: (searchTerm: string) => void;
 }
 
-export const SearchField = ({ onSearch, placeholder = 'Search', className = '' }: SearchFieldProps) => {
+export const SearchField = ({
+  onSearch,
+  placeholder = 'Search',
+  ariaLabel = 'Search resources by name',
+  maxLength,
+  className = '',
+}: SearchFieldProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
@@ -28,9 +36,10 @@ export const SearchField = ({ onSearch, placeholder = 'Search', className = '' }
         type="search"
         placeholder={placeholder}
         value={searchTerm}
+        maxLength={maxLength}
         onChange={handleSearchChange}
         className="bg-background placeholder:text-muted-foreground h-(--control-height) pl-3 pr-9 rounded-md text-sm"
-        aria-label="Search resources by name"
+        aria-label={ariaLabel}
       />
       <Search className="absolute text-muted-foreground right-3 top-1/2 -translate-y-1/2 size-4 pointer-events-none" />
     </div>

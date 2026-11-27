@@ -70,6 +70,7 @@ it('creates a personal board from Overview and safely retries the same definitio
   const { user, dialog } = await openCreator();
   expect(dialog.getByRole('button', { name: 'Create' })).toBeDisabled();
   await user.type(dialog.getByLabelText('Name'), ' On call ');
+  await user.type(dialog.getByLabelText('Description'), '**Night shift**');
   await user.click(dialog.getByLabelText('Template'));
   await user.click(screen.getByRole('option', { name: 'Overview' }));
   expect(writes).toHaveLength(0);
@@ -80,8 +81,37 @@ it('creates a personal board from Overview and safely retries the same definitio
   await screen.findByRole('heading', { name: 'On call' });
   expect(writes[0]).toMatchObject({ name: 'On call', visibility: 'Private' });
   expect(writes[1]).toEqual(writes[0]);
+  expect(writes[1].configuration.description).toBe('**Night shift**');
+  expect(screen.getByText('Night shift').tagName).toBe('STRONG');
   expect(new Set(writes[0].configuration.widgets.map(({ id }) => id)).size).toBe(4);
   expect(screen.getByText('Recent activity')).toBeInTheDocument();
+});
+
+it('creates adjacent Application charts from the selected metric resource', async () => {
+  const source = { kind: 'Platform', id: '10000000-0000-4000-8000-000000000001' };
+  const writes: CreateDashboard[] = [];
+  server.use(
+    http.get(api + '/dashboards/sources', () => HttpResponse.json([{ id: source.id, name: 'Main platform' }])),
+    http.post(api + '/dashboards', async ({ request }) => {
+      const data = (await request.json()) as CreateDashboard;
+      writes.push(data);
+      return HttpResponse.json({ summary: { id: data.id } });
+    }),
+  );
+  const { user, dialog } = await openCreator();
+  await user.type(dialog.getByLabelText('Name'), 'Application board');
+  await user.click(dialog.getByLabelText('Template'));
+  await user.click(screen.getByRole('option', { name: 'Application' }));
+  await user.click(dialog.getByRole('combobox', { name: 'Metric resource' }));
+  await user.click(await screen.findByRole('option', { name: 'Main platform' }));
+  await user.click(dialog.getByRole('button', { name: 'Create' }));
+  await vi.waitFor(() => expect(writes).toHaveLength(1));
+  const widgets = writes[0].configuration.widgets;
+  expect(widgets.find(({ title }) => title === 'Deployment state')?.layout.h).toBe(5);
+  expect(widgets.filter(({ settings }) => settings.kind === 'Metrics')).toMatchObject([
+    { layout: { x: 0, y: 10, w: 6, h: 5 }, settings: { metric: 'Cpu', source } },
+    { layout: { x: 6, y: 10, w: 6, h: 5 }, settings: { metric: 'Memory', source } },
+  ]);
 });
 
 it.each([false, true])('offers restricted creation to administrators only with Team (Team=%s)', async (team) => {

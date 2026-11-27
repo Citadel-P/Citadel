@@ -1,3 +1,4 @@
+import { CitadelIcons } from '@/lib/icons';
 import {
   ActivityResourceType,
   ActorType,
@@ -897,6 +898,7 @@ export const TargetCell = ({
   dockerNodeId?: string | null;
 }) => {
   const resourceConfig: Partial<Record<string, { Icon: any; path: string }>> = {
+    [ActivityResourceType.Dashboard]: { Icon: CitadelIcons.Dashboard, path: `/dashboards/${resourceId}` },
     [ActivityResourceType.AlertRule]: { Icon: Megaphone, path: `/alert-rules/edit/${resourceId}` },
     [ActivityResourceType.Deployment]: { Icon: Rocket, path: `/deployments/edit/${resourceId}` },
     [ActivityResourceType.Registry]: { Icon: Cable, path: `/registries/edit/${resourceId}` },

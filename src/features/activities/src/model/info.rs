@@ -286,6 +286,37 @@ pub enum ActivityEventInfo {
         #[serde(rename = "Role")]
         role: RoleActivitySnapshot,
     },
+    DashboardCreated {
+        #[serde(rename = "Visibility")]
+        visibility: String,
+        #[serde(rename = "Configuration", skip_serializing_if = "Option::is_none")]
+        configuration: Option<serde_json::Value>,
+    },
+    DashboardUpdated {
+        #[serde(rename = "Changes")]
+        changes: Vec<String>,
+        #[serde(
+            rename = "PreviousConfiguration",
+            skip_serializing_if = "Option::is_none"
+        )]
+        previous_configuration: Option<serde_json::Value>,
+        #[serde(rename = "Configuration", skip_serializing_if = "Option::is_none")]
+        configuration: Option<serde_json::Value>,
+    },
+    DashboardSharingChanged {
+        #[serde(rename = "Visibility")]
+        visibility: String,
+    },
+    DashboardDeleted {
+        #[serde(rename = "Visibility")]
+        visibility: String,
+        #[serde(rename = "Configuration", skip_serializing_if = "Option::is_none")]
+        configuration: Option<serde_json::Value>,
+    },
+    InstanceHomeDashboardChanged {
+        #[serde(rename = "DashboardName")]
+        dashboard_name: Option<String>,
+    },
     ServiceAccountCreated {
         #[serde(rename = "Account")]
         account: ServiceAccountActivitySnapshot,
@@ -1400,6 +1431,13 @@ impl ActivityEventInfo {
             Self::RoleUpdated { .. } => ActivityEventType::RoleUpdated,
             Self::RoleRenamed { .. } => ActivityEventType::RoleRenamed,
             Self::RoleDeleted { .. } => ActivityEventType::RoleDeleted,
+            Self::DashboardCreated { .. } => ActivityEventType::DashboardCreated,
+            Self::DashboardUpdated { .. } => ActivityEventType::DashboardUpdated,
+            Self::DashboardSharingChanged { .. } => ActivityEventType::DashboardSharingChanged,
+            Self::DashboardDeleted { .. } => ActivityEventType::DashboardDeleted,
+            Self::InstanceHomeDashboardChanged { .. } => {
+                ActivityEventType::InstanceHomeDashboardChanged
+            }
             Self::ServiceAccountCreated { .. } => ActivityEventType::ServiceAccountCreated,
             Self::ServiceAccountUpdated { .. } => ActivityEventType::ServiceAccountUpdated,
             Self::ServiceAccountRenamed { .. } => ActivityEventType::ServiceAccountRenamed,

@@ -10,8 +10,9 @@ use uuid::Uuid;
 
 pub const MAX_GROUPS: usize = 64;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Group {
+    pub(crate) dashboard: Option<super::dashboard::Projection>,
     // Preserve the client's spelling for idempotent joins/leaves, including
     // accepted alternate UUID spellings. Never canonicalize a subscription key.
     pub name: String,
@@ -24,6 +25,7 @@ pub struct Group {
 impl Group {
     pub fn parse(name: &str) -> Option<Self> {
         Some(Self {
+            dashboard: None,
             name: name.into(),
             tags: Vec::new(),
             include_disabled: false,
@@ -75,6 +77,9 @@ impl Group {
     }
 
     pub fn affected_by(&self, event: &PublishedRuntimeEvent) -> bool {
+        if let Some(dashboard) = &self.dashboard {
+            return dashboard.affected_by(event);
+        }
         if event.resource_type == "Tag" {
             let kind = match self.topic() {
                 Topic::Platforms => "Platform",
@@ -525,6 +530,7 @@ pub type GroupStream =
 pub struct GroupSubscription {
     pub group: Group,
     known: BTreeMap<&'static str, BTreeSet<String>>,
+    dashboard_digest: Option<[u8; 32]>,
     // Only routing fields needed to identify deleted Containers/Images, never
     // their configuration, environment, or secret-bearing resource payloads.
     tombstones: BTreeMap<&'static str, BTreeMap<String, Value>>,
@@ -535,6 +541,7 @@ impl GroupSubscription {
             group,
             known: BTreeMap::new(),
             tombstones: BTreeMap::new(),
+            dashboard_digest: None,
         }
     }
     pub(crate) fn expects_event(
@@ -560,6 +567,18 @@ impl GroupSubscription {
         limit: usize,
     ) -> Result<Vec<ClientEvent>, RealtimeReadError> {
         let mut events = snapshot.events;
+        if self.group.dashboard.is_some()
+            && let [update] = events.as_slice()
+        {
+            use sha2::{Digest, Sha256};
+            let bytes = serde_json::to_vec(&update.arguments)
+                .map_err(|e| RealtimeReadError::Storage(e.to_string()))?;
+            let digest = Sha256::digest(bytes).into();
+            if self.dashboard_digest.replace(digest) == Some(digest) {
+                events.clear();
+            }
+        }
+
         if self.group.subscription_id.is_some() && matches!(self.group.topic(), Topic::Platforms) {
             events.retain(|event| {
                 event.target != "PlatformStatsUpdated"

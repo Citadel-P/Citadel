@@ -20,6 +20,8 @@ mod webhooks;
 
 const AUTHORIZED_ACTIVITY_CTES: &str = concat!(
     include_str!("../../enabled_actor_scope.sql"),
+    ", dashboard_viewer AS (SELECT $5::boolean AS administrator)",
+    include_str!("../../dashboards/visibility.sql"),
     r#", authorized_resources AS (
     SELECT DISTINCT permission.resourcetype, NULL::uuid AS resourceid
     FROM actorroles actor_role
@@ -53,7 +55,15 @@ const AUTHORIZED_ACTIVITY_CTES: &str = concat!(
       AND ($3::text IS NULL OR activity.resourcetype = $3)
       AND ($4::text IS NULL OR activity.eventtype = $4)
       AND ($6::text IS NULL OR activity.status = $6)
-      AND (
+      AND CASE WHEN activity.resourcetype='Dashboard' THEN
+          EXISTS(SELECT FROM actors WHERE id=$1 AND type='User' AND isenabled) AND (
+              activity.resourceid IN (SELECT id FROM dashboard_access WHERE can_read)
+              OR EXISTS (SELECT FROM activityevents deletion
+                  WHERE deletion.resourceid=activity.resourceid AND deletion.eventtype='DashboardDeleted'
+                    AND CASE WHEN deletion.info::jsonb->>'Visibility'='Private'
+                        THEN deletion.createdbyactorid=$1 ELSE $5 END)
+          )
+      ELSE (
           $5::boolean
           OR permission.resourcetype IN (
               SELECT resourcetype FROM authorized_resources WHERE resourceid IS NULL
@@ -61,12 +71,14 @@ const AUTHORIZED_ACTIVITY_CTES: &str = concat!(
           OR (permission.resourcetype, activity.resourceid) IN (
               SELECT resourcetype, resourceid FROM authorized_resources WHERE resourceid IS NOT NULL
           )
-      )
+      ) END
 )
 "#
 );
 
-const ACTIVITY_PROJECTION: &str = r#"
+fn activity_projection(info: &str) -> String {
+    format!(
+        r#"
 SELECT activity.id,
        activity.platformid,
        activity.resourceid,
@@ -74,7 +86,7 @@ SELECT activity.id,
        activity.resourcetype,
        activity.eventtype,
        activity.status,
-       activity.info,
+       {info} AS info,
        activity.createdbyactorid,
        activity.createdat,
        COALESCE(platform.name, 'Unknown') AS platform_name,
@@ -88,7 +100,9 @@ LEFT JOIN platforms platform ON platform.id = activity.platformid
 JOIN actors actor ON actor.id = activity.createdbyactorid
 LEFT JOIN users actor_user ON actor_user.actorid = actor.id
 LEFT JOIN serviceaccounts service_account ON service_account.actorid = actor.id
-"#;
+"#
+    )
+}
 
 #[derive(Clone)]
 pub struct PostgresActivityStore {
@@ -109,9 +123,9 @@ impl ActivityQueryStore for PostgresActivityStore {
         id: Uuid,
     ) -> BoxFuture<'a, Result<Option<ActivityRecord>, ActivityError>> {
         Box::pin(async move {
-            let query = format!(
-                "{AUTHORIZED_ACTIVITY_CTES}{ACTIVITY_PROJECTION} WHERE activity.id = $7 LIMIT 1"
-            );
+            let projection = activity_projection("activity.info");
+            let query =
+                format!("{AUTHORIZED_ACTIVITY_CTES}{projection} WHERE activity.id = $7 LIMIT 1");
             sqlx::query(AssertSqlSafe(query.as_str()))
                 .bind(principal.actor_id.value())
                 .bind(Option::<Uuid>::None)
@@ -215,8 +229,13 @@ impl ActivityQueryStore for PostgresActivityStore {
                 .await
                 .map_err(activity_storage)?;
 
+            let projection = activity_projection(
+                "CASE WHEN activity.eventtype IN ('DashboardCreated', 'DashboardUpdated', 'DashboardDeleted') THEN
+                    (activity.info::jsonb - ARRAY['PreviousConfiguration', 'Configuration'])::text
+                 ELSE activity.info END",
+            );
             let page_query = format!(
-                "{AUTHORIZED_ACTIVITY_CTES}{ACTIVITY_PROJECTION} ORDER BY activity.createdat DESC, activity.id DESC LIMIT $7 OFFSET $8"
+                "{AUTHORIZED_ACTIVITY_CTES}{projection} ORDER BY activity.createdat DESC, activity.id DESC LIMIT $7 OFFSET $8"
             );
             let offset = i64::from(filter.page - 1) * i64::from(filter.page_size);
             let rows = sqlx::query(AssertSqlSafe(page_query.as_str()))

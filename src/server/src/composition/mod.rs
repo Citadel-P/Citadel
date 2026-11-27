@@ -313,6 +313,7 @@ impl ServerComponents {
                     scripts: Arc::clone(scripts.store()),
                     builds: Arc::clone(builds.store()),
                     backups: Arc::clone(backups.store()),
+                    dashboards: dashboards.clone(),
                     activities: Arc::clone(&activities),
                     alerts: alert_store.clone(),
                     runtime: platform_state.runtime.clone(),

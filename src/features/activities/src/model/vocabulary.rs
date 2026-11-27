@@ -58,6 +58,7 @@ database_string_enum! {
         Volume,
         BackupPolicy,
         SwarmService,
+        Dashboard,
         ServiceAccount,
     }
 }
@@ -216,6 +217,11 @@ database_string_enum! {
         SwarmServiceOperationFailed,
         SwarmServiceDuplicated,
         SwarmServiceWebhookReceived,
+        DashboardCreated,
+        DashboardUpdated,
+        DashboardSharingChanged,
+        DashboardDeleted,
+        InstanceHomeDashboardChanged,
         ServiceAccountCreated,
         ServiceAccountUpdated,
         ServiceAccountRenamed,
@@ -299,9 +305,13 @@ impl ActivityEventType {
             | Self::StackGitAutoDeployFailed
             | Self::StackImported
             | Self::StackWebhookReceived => ActivityResourceType::Stack,
-            Self::InstanceConfigurationUpdated | Self::InstanceRestarted => {
-                ActivityResourceType::Instance
-            }
+            Self::DashboardCreated
+            | Self::DashboardUpdated
+            | Self::DashboardDeleted
+            | Self::DashboardSharingChanged => ActivityResourceType::Dashboard,
+            Self::InstanceHomeDashboardChanged
+            | Self::InstanceConfigurationUpdated
+            | Self::InstanceRestarted => ActivityResourceType::Instance,
             Self::InstallationSettingsUpdated
             | Self::InitialAdministratorCreated
             | Self::UserProfileUpdated

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   GridLayout,
+  calcGridItemPosition,
   useContainerWidth,
   cloneLayout,
   collides,
@@ -13,14 +14,24 @@ import './editor.css';
 import 'react-resizable/css/styles.css';
 import { dashboardGrid } from './layout';
 import { OverviewTiles } from './overview';
-import { dashboardRequirements } from './requirements';
-import { focusManager } from '@tanstack/react-query';
+import type { DashboardRequirements } from './requirements';
 import { ReadAdmissionContext, createReadAdmission } from '@/lib/read-admission';
-import { EditorTileSlots, Slot, useTileSlots, ViewOnlyContext } from './tile';
+import { TileSlots, useTileSlots } from './tile-slots';
+import { Slot, ViewOnlyContext } from './tile';
 import { GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { DashboardWidget } from '@/api/generated/api.types';
 import { catalogue, widgetSourceError, type WidgetKind } from './catalogue';
+
+const gap = dashboardGrid.gap;
+const spacing: [number, number] = [gap, gap];
+const gridConfig = {
+  cols: 12,
+  rowHeight: dashboardGrid.rowHeight,
+  margin: spacing,
+  containerPadding: spacing,
+  maxRows: 536,
+};
 
 // RGL handles collisions. Keep gaps in already-valid layouts, including initial mount.
 export const dashboardCompactor: typeof verticalCompactor = {
@@ -41,6 +52,8 @@ export function EditorGrid({
   widgets,
   tags,
   minutes,
+  valid,
+  plan,
   selected,
   select,
   onMove,
@@ -51,6 +64,8 @@ export function EditorGrid({
   widgets: DashboardWidget[];
   tags: string[];
   minutes: number;
+  valid: DashboardWidget[];
+  plan: DashboardRequirements;
   selected?: string;
   select: (id: string) => void;
   onMove: (layout: Layout) => void;
@@ -60,14 +75,15 @@ export function EditorGrid({
 }) {
   const { width, containerRef } = useContainerWidth({ initialWidth: 720 });
   const [epoch, setEpoch] = useState(0);
-  const [gesture, setGesture] = useState('');
+  const [gesture, setGesture] = useState<LayoutItem>();
   const [announcement, announce] = useState('');
   const active = useRef(false);
+  const dragged = useRef(false);
   useEffect(() => {
     const cancel = () => {
       if (!active.current && !dragKind) return;
       active.current = false;
-      setGesture('');
+      setGesture(undefined);
       setDragKind(undefined);
       setEpoch((v) => v + 1);
     };
@@ -81,11 +97,8 @@ export function EditorGrid({
       window.removeEventListener('pointercancel', cancel);
     };
   }, [dragKind, setDragKind]);
-  const { slots, register } = useTileSlots();
+  const { target, register } = useTileSlots(true);
   const [admit] = useState(() => createReadAdmission(2));
-  const visible = useSyncExternalStore(focusManager.subscribe, () => focusManager.isFocused());
-  const valid = useMemo(() => widgets.filter((w) => !widgetSourceError(w.settings)), [widgets]);
-  const plan = useMemo(() => dashboardRequirements(valid, tags, minutes), [valid, tags, minutes]);
   const stacked = width < 480;
   const ordered = [...widgets].sort((a, b) => a.layout.y - b.layout.y || a.layout.x - b.layout.x);
   // On narrow canvases the inspector still edits the saved twelve-column layout.
@@ -107,29 +120,59 @@ export function EditorGrid({
   const move = (next: Layout, _previous: LayoutItem | null, item: LayoutItem | null) => {
     if (active.current && next.every((p) => p.y <= 512)) {
       onMove(next);
-      if (item)
-        announce(
-          (widgets.find((w) => w.id === item.i)?.title ?? 'Widget') +
-            ' at column ' +
-            item.x +
-            ', row ' +
-            item.y +
-            ', ' +
-            item.w +
-            ' × ' +
-            item.h,
-        );
+      const placed = next.find((p) => p.i === item?.i);
+      if (placed) {
+        const title = widgets.find((w) => w.id === placed.i)?.title ?? 'Widget';
+        announce(`${title} at column ${placed.x + 1}, row ${placed.y + 1}, ${placed.w} × ${placed.h}`);
+      }
     }
     active.current = false;
-    setGesture('');
+    setGesture(undefined);
   };
   const preview = (item: LayoutItem | null) => {
-    if (item) setGesture((widgets.find((w) => w.id === item.i)?.title ?? 'Widget') + ' · ' + item.w + ' × ' + item.h);
+    if (item)
+      setGesture((prev) =>
+        prev?.i === item.i && prev.x === item.x && prev.y === item.y && prev.w === item.w && prev.h === item.h
+          ? prev
+          : { ...item },
+      );
   };
+  const destination = gesture && (gesture.i !== '__drop__' || dragKind) ? gesture : undefined;
+  const footprint =
+    destination &&
+    calcGridItemPosition(
+      { ...gridConfig, containerWidth: width },
+      destination.x,
+      destination.y,
+      destination.w,
+      destination.h,
+    );
+  const positionLabel =
+    destination && `Column ${destination.x + 1}, row ${destination.y + 1} · ${destination.w} × ${destination.h}`;
   return (
-    <div ref={containerRef} className="min-w-0">
+    <div
+      ref={containerRef}
+      className="dashboard-placement min-w-0"
+      data-guides={!stacked}
+      data-moving={!!(destination || ghost)}
+      style={
+        {
+          '--grid-gap': gap + 'px',
+          '--grid-column-step': (width - gap) / gridConfig.cols + 'px',
+          '--grid-row-step': dashboardGrid.rowHeight + dashboardGrid.gap + 'px',
+        } as React.CSSProperties
+      }>
+      {!stacked && (
+        <div className="dashboard-column-ruler" aria-hidden="true">
+          {Array.from({ length: 12 }, (_, i) => (
+            <span key={i} data-covered={destination && i >= destination.x && i < destination.x + destination.w}>
+              {i + 1}
+            </span>
+          ))}
+        </div>
+      )}
       <p className="sr-only" aria-live="polite">
-        {gesture || ghost}
+        {positionLabel || ghost}
       </p>
       <span className="sr-only" role="status">
         {announcement}
@@ -140,18 +183,19 @@ export function EditorGrid({
         width={width}
         layout={layout}
         compactor={dashboardCompactor}
-        gridConfig={{
-          cols: 12,
-          rowHeight: dashboardGrid.rowHeight,
-          margin: [dashboardGrid.gap, dashboardGrid.gap],
-          maxRows: 536,
-        }}
-        style={{
-          minHeight: 240,
-          ...({
-            '--dashboard-ghost': JSON.stringify(gesture || ghost),
-          } as React.CSSProperties),
-        }}
+        gridConfig={gridConfig}
+        style={
+          {
+            minHeight: 240,
+            '--dashboard-ghost': JSON.stringify(ghost),
+            ...(footprint && {
+              '--drop-left': footprint.left + 'px',
+              '--drop-top': footprint.top + 'px',
+              '--drop-width': footprint.width + 'px',
+              '--drop-height': footprint.height + 'px',
+            }),
+          } as React.CSSProperties
+        }
         resizeConfig={{ enabled: !stacked }}
         dragConfig={{ enabled: !stacked, handle: '.dashboard-drag-handle' }}
         dropConfig={{
@@ -165,70 +209,76 @@ export function EditorGrid({
             (event instanceof DragEvent && event.dataTransfer?.getData('application/x-citadel-widget')) || dragKind;
           if (kind && Object.hasOwn(catalogue, kind) && item && next.every((p) => p.y <= 512))
             drop(kind as WidgetKind, next, item);
+          active.current = false;
+          setGesture(undefined);
           setDragKind(undefined);
         }}
-        onDragStart={() => {
+        onDragStart={(_, __, item) => {
+          dragged.current = true;
           active.current = true;
+          preview(item);
         }}
-        onResizeStart={() => {
+        onResizeStart={(_, __, item) => {
           active.current = true;
+          preview(item);
         }}
         onDrag={(_, __, item) => preview(item)}
-        onResize={(_, __, item) => preview(item)}
+        onResize={(_, __, item, placeholder) => preview(placeholder ?? item)}
         onDragStop={move}
         onResizeStop={move}>
         {ordered.map((w) => {
           const Icon = catalogue[w.settings.kind].Icon;
+          const sourceError = widgetSourceError(w.settings);
           return (
             <div
               key={w.id}
+              id={'tile-' + w.id}
               data-selected={selected === w.id}
-              className="dashboard-edit-tile flex min-w-0 flex-col border bg-card">
-              {selected === w.id && (
-                <span className="pointer-events-none absolute -top-2.5 start-3 z-1 rounded bg-blue-600 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                  Editing
+              className="dashboard-edit-tile group/tile flex min-w-0 flex-col">
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label={w.title || catalogue[w.settings.kind].label}
+                aria-pressed={selected === w.id}
+                className="dashboard-drag-handle absolute inset-0 z-1 h-full w-full rounded-md hover:bg-transparent dark:hover:bg-transparent focus-visible:ring-ring"
+                onPointerDown={() => {
+                  dragged.current = false;
+                }}
+                onClick={(e) => {
+                  if (e.detail === 0 || !dragged.current) select(w.id);
+                }}
+              />
+              {(selected === w.id || gesture?.i === w.id) && (
+                <span aria-hidden="true" className="dashboard-selection-size">
+                  {gesture?.i === w.id ? positionLabel : `${w.layout.w} × ${w.layout.h}`}
                 </span>
               )}
-              <header className="flex shrink-0 items-center gap-2 border-b bg-muted/25 px-3 py-1.5">
-                <GripVertical
-                  aria-label={'Move ' + w.title}
-                  className={
-                    stacked
-                      ? 'hidden'
-                      : 'dashboard-drag-handle size-4 shrink-0 cursor-grab text-muted-foreground/70 active:cursor-grabbing'
-                  }
-                />
-                <Icon className="size-4 shrink-0 text-muted-foreground" />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-pressed={selected === w.id}
-                  className="h-7 min-w-0 shrink justify-start overflow-hidden px-0.5 text-xs font-semibold uppercase tracking-wider"
-                  onClick={() => select(w.id)}>
-                  <span className="truncate">{w.title || catalogue[w.settings.kind].label}</span>
-                </Button>
-                <span className="ml-auto shrink-0 rounded border bg-background px-1.5 py-0.5 font-mono text-[10px] leading-tight tabular-nums text-muted-foreground">
-                  {w.layout.w} × {w.layout.h}
+              {!stacked && (
+                <span
+                  title={'Move ' + w.title}
+                  aria-hidden="true"
+                  className="dashboard-grip pointer-events-none absolute right-1 top-1 z-2 rounded bg-card p-1 text-muted-foreground opacity-0 group-hover/tile:opacity-100 group-focus-within/tile:opacity-100">
+                  <GripVertical className="size-4" />
                 </span>
-              </header>
-              {widgetSourceError(w.settings) ? (
+              )}
+              {sourceError ? (
                 <div className="m-3 flex min-h-0 flex-1 flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-muted/15 p-2 text-center text-xs text-muted-foreground">
                   <Icon className="size-5" />
-                  {widgetSourceError(w.settings)}
+                  {sourceError}
                 </div>
               ) : (
-                <Slot id={w.id} register={register} editor={w.title} />
+                <Slot id={w.id} register={register} editor />
               )}
             </div>
           );
         })}
       </GridLayout>
-      {visible && valid.length > 0 && (
+      {valid.length > 0 && (
         <ReadAdmissionContext.Provider value={admit}>
           <ViewOnlyContext.Provider value={true}>
-            <EditorTileSlots.Provider value={slots}>
-              <OverviewTiles plan={plan} tiles={valid} tags={tags} range={minutes} manual={false} />
-            </EditorTileSlots.Provider>
+            <TileSlots.Provider value={target}>
+              <OverviewTiles plan={plan} tags={tags} range={minutes} />
+            </TileSlots.Provider>
           </ViewOnlyContext.Provider>
         </ReadAdmissionContext.Provider>
       )}

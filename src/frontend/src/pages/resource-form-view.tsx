@@ -1,3 +1,5 @@
+import { ResourceDetailHeader } from '@/components/custom/resource-detail-header';
+import { InlineTitleLabel } from '@/components/custom/inline-title-label';
 import type { KnownResourceName } from '@/api/types';
 import { canShowCachedResource } from '@/lib/request-error';
 import { ResourceReadError } from '@/components/custom/resource-read-error';
@@ -270,38 +272,26 @@ const EditHeader = <T extends RequiredFormFields>({
 }: EditHeaderProps<T>) => {
   const Icon = CitadelIcons[type] ?? Pencil;
   return (
-    <header className="flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card shadow-xs lg:flex-row lg:items-center">
-      <div className="flex min-w-0 flex-1 items-start gap-4 p-(--surface-padding)">
-        <span
-          aria-hidden="true"
-          className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/5 text-primary dark:text-foreground">
-          <Icon className="size-5" />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <EditableTitle
-            value={item.name}
-            readOnly={!canEditTitle}
-            onSave={onRename}
-            status={<Indicator resource={item} />}
-          />
-          {showDescription && (
-            <EditableDescription
-              readOnly={!canEditDescription}
-              value={item.description ?? ''}
-              onSave={onChangeDescription}
-            />
-          )}
-          {Tags && (
-            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
-              <Tags resource={item} />
-            </div>
-          )}
+    <ResourceDetailHeader icon={<Icon className="size-5" />} actions={<Actions resource={item} />}>
+      <EditableTitle
+        value={item.name}
+        readOnly={!canEditTitle}
+        onSave={onRename}
+        status={<Indicator resource={item} />}
+      />
+      {showDescription && (
+        <EditableDescription
+          readOnly={!canEditDescription}
+          value={item.description ?? ''}
+          onSave={onChangeDescription}
+        />
+      )}
+      {Tags && (
+        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+          <Tags resource={item} />
         </div>
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-3 border-t bg-muted/10 px-(--surface-padding) py-3 lg:max-w-[45%] lg:shrink-0 lg:justify-end lg:border-t-0 lg:bg-transparent lg:py-(--surface-padding)">
-        <Actions resource={item} />
-      </div>
-    </header>
+      )}
+    </ResourceDetailHeader>
   );
 };
 
@@ -353,42 +343,7 @@ const EditableTitle = ({
   }, [edit.editing]);
 
   if (!edit.editing)
-    return (
-      <div className="group/title flex w-fit min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-2">
-        <h1 className="min-w-0 max-w-full text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-          {readOnly ? (
-            value
-          ) : (
-            <button
-              type="button"
-              onClick={edit.start}
-              className="max-w-full cursor-text rounded-sm text-left focus-visible:outline-2 focus-visible:outline-ring">
-              {value}
-            </button>
-          )}
-        </h1>
-
-        <div
-          className={
-            readOnly
-              ? 'flex shrink-0 items-center'
-              : 'relative flex shrink-0 items-center pl-0 transition-[padding] duration-150 ease-out group-hover/title:pl-8 group-focus-within/title:pl-8 motion-reduce:transition-none'
-          }>
-          {!readOnly && (
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label="Edit name"
-              onClick={edit.start}
-              className="pointer-events-none absolute left-0 size-7 -translate-x-1 opacity-0 transition-[opacity,transform] duration-150 ease-out group-hover/title:pointer-events-auto group-hover/title:translate-x-0 group-hover/title:opacity-100 group-focus-within/title:pointer-events-auto group-focus-within/title:translate-x-0 group-focus-within/title:opacity-100 motion-reduce:transition-none">
-              <Pencil className="size-3.5" />
-            </Button>
-          )}
-          {status}
-        </div>
-      </div>
-    );
+    return <InlineTitleLabel value={value} status={status} onEdit={readOnly ? undefined : edit.start} />;
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -415,10 +370,12 @@ const EditableTitle = ({
 
 export const EditableDescription = ({
   value = '',
+  maxLength,
   readOnly,
   onSave,
 }: {
   value?: string;
+  maxLength?: number;
   readOnly: boolean;
   onSave?: (v: string) => void;
 }) => {
@@ -463,6 +420,7 @@ export const EditableDescription = ({
     <InlineEditActions dirty={edit.isDirty} onSave={() => edit.commit(onSave)} onCancel={edit.cancel}>
       <MarkdownDescriptionEditor
         aria-label="Description"
+        maxLength={maxLength}
         value={edit.value}
         onChange={(e) => edit.setValue(e.target.value)}
         placeholder="Add a description…"

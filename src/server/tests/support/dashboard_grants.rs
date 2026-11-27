@@ -20,13 +20,15 @@ pub async fn verify(
     let shared = Uuid::now_v7();
     let restricted = Uuid::now_v7();
     let private = Uuid::now_v7();
+    let shared_name = format!("Operations {shared}");
+    let restricted_name = format!("On call {restricted}");
     sqlx::query(
         "WITH private_owner AS (
             INSERT INTO actors(id,type,isenabled) VALUES ($5,'User',true) RETURNING id
          )
          INSERT INTO dashboards(id,owneractorid,name,visibility,configuration) VALUES
-            ($1,$4,'Operations','InstanceShared',$6), ($2,$4,'On call','Restricted',$6),
-            ($3,(SELECT id FROM private_owner),'Personal notes','Private',$6)",
+            ($1,$4,$7,'InstanceShared',$6), ($2,$4,$8,'Restricted',$6),
+            ($3,(SELECT id FROM private_owner),$9,'Private',$6)",
     )
     .bind(shared)
     .bind(restricted)
@@ -34,6 +36,9 @@ pub async fn verify(
     .bind(admin.actor_id.value())
     .bind(Uuid::now_v7())
     .bind(json!({"schemaVersion":1,"rangeMinutes":60,"tags":[],"widgets":[]}))
+    .bind(&shared_name)
+    .bind(&restricted_name)
+    .bind(format!("Personal notes {private}"))
     .execute(pool)
     .await
     .unwrap();
@@ -70,8 +75,8 @@ pub async fn verify(
     let saved = body["resourceAccesses"].as_array().unwrap();
     assert_eq!(saved.len(), 3);
     for (id, name, level) in [
-        (shared, Some("Operations"), "Read"),
-        (restricted, Some("On call"), "Write"),
+        (shared, Some(shared_name.as_str()), "Read"),
+        (restricted, Some(restricted_name.as_str()), "Write"),
         (private, None, "Read"),
     ] {
         let grant = saved

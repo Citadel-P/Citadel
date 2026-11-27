@@ -22,6 +22,13 @@ impl ApplicationGroupReader {
         let mut permission_id = id;
         let mut specific = None;
         let kind = match g.topic() {
+            Dashboard => {
+                return if p.is_human() && g.dashboard.is_some() {
+                    Ok(())
+                } else {
+                    Err(RealtimeReadError::Authorization)
+                };
+            }
             InstanceJobs | InstanceSchedules => return Ok(()),
             ContainerExec { .. } | SwarmTaskExec { .. } => {
                 self.terminal_target(p, g).await?;
@@ -237,6 +244,13 @@ impl ApplicationGroupReader {
             serde_json::from_value(json!(g.reference()))
                 .map_err(|_| RealtimeReadError::Authorization)?;
         use citadel_activities::ActivityResourceType as A;
+        if kind == A::Dashboard {
+            // Dashboard history applies owner, current audience, and deletion rules in the activity query.
+            return p
+                .is_human()
+                .then_some(kind)
+                .ok_or(RealtimeReadError::Authorization);
+        }
         if matches!(
             kind,
             A::User

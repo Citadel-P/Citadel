@@ -25,7 +25,15 @@ const examples = [
   ['Quote', '> Maintenance note', 'Start a new line with > followed by a space.'],
 ];
 
-export function MarkdownDescription({ children, className }: { children: string; className?: string }) {
+export function MarkdownDescription({
+  children,
+  className,
+  allowLink,
+}: {
+  children: string;
+  className?: string;
+  allowLink?: (url: string) => boolean;
+}) {
   return (
     <div
       className={cn(
@@ -37,7 +45,7 @@ export function MarkdownDescription({ children, className }: { children: string;
         unwrapDisallowed
         components={{
           a: ({ href, children, title }) =>
-            href ? (
+            href && (!allowLink || allowLink(href)) ? (
               <a
                 href={href}
                 title={title}
@@ -79,10 +87,8 @@ export function MarkdownDescriptionEditor({ className, ...props }: ComponentProp
           </Tooltip>
           <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Formatting descriptions</DialogTitle>
-              <DialogDescription>
-                Type Markdown in your description. Formatting appears when you save.
-              </DialogDescription>
+              <DialogTitle>Markdown formatting</DialogTitle>
+              <DialogDescription>Use Markdown to format text and add links.</DialogDescription>
             </DialogHeader>
             <Table className="table-fixed">
               <TableHeader>

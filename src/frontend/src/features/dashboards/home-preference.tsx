@@ -16,12 +16,24 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useMutate, useRead } from '@/lib/hooks';
 import { requestErrorMessage } from '@/lib/request-error';
 
+// The API resolves the personal preference, then the visible instance default.
+export function useDashboardHomeAction(board?: DashboardSummaryView) {
+  const home = useRead('getDashboardDefault', undefined, { enabled: !!board, staleTime: 30_000 });
+  const current = !!board && !home.isError && home.data?.data.dashboardId === board.id;
+  return {
+    current,
+    label: current ? 'Current home' : 'Set as home',
+    disabled: current && board.visibility === DashboardVisibility.Private,
+  };
+}
+
 export function DashboardHomePreference({ board }: { board?: DashboardSummaryView }) {
   const [open, setOpen] = useState(false);
+  const home = useDashboardHomeAction(board);
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
-        {board ? 'Set as home' : 'Reset home'}
+      <Button variant="outline" disabled={home.disabled} onClick={() => setOpen(true)}>
+        {board ? home.label : 'Reset home'}
       </Button>
       {open && <PreferenceDialog board={board} close={() => setOpen(false)} />}
     </>
@@ -49,10 +61,10 @@ export function PreferenceDialog({ board, close }: { board?: DashboardSummaryVie
   const description = instance
     ? board
       ? 'People who can read this dashboard will see it on Home unless they chose their own dashboard.'
-      : 'The built-in Overview will become the instance default. People who chose their own dashboard keep it.'
+      : 'Clear the instance default. People who chose their own dashboard keep it.'
     : board
       ? 'Open this dashboard whenever you go to Home.'
-      : 'Use the instance default for your home. If none is available to you, Home opens the built-in Overview.';
+      : 'Use the instance default for your home if you can read it.';
   return (
     <Dialog
       open

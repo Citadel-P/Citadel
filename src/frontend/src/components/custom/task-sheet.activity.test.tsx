@@ -61,6 +61,63 @@ vi.mock('@/lib/monaco', () => ({
 }));
 
 describe('TaskSheet activity details', () => {
+  const initial = { ...mocks };
+  beforeEach(() => {
+    Object.assign(mocks, initial);
+  });
+
+  it.each([
+    ['DashboardCreated', 'Initial configuration', 'Visibility · Private'],
+    ['DashboardDeleted', 'Deleted configuration', 'Visibility at deletion · Private'],
+  ] as const)('shows a configuration snapshot when available for %s', (eventType, title, summary) => {
+    mocks.activity = {
+      ...mocks.activity,
+      resourceType: 'Dashboard',
+      eventType,
+      info: { $type: eventType, visibility: 'Private' },
+    } as ActivityView;
+    const { unmount } = renderCitadel(<TaskSheet type="Activity" />);
+    expect(screen.getByText(summary)).toBeVisible();
+    expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
+    unmount();
+
+    mocks.activity.info = {
+      $type: eventType,
+      visibility: 'Private',
+      configuration: { name: 'Operations', configuration: { rangeMinutes: 60 } },
+    };
+    renderCitadel(<TaskSheet type="Activity" />);
+    expect(screen.getByText(summary)).toBeVisible();
+    expect(screen.getByRole('heading', { name: title })).toBeVisible();
+    expect(screen.getByTestId('monaco-editor')).toHaveTextContent('rangeMinutes: 60');
+  });
+
+  it('renders the saved dashboard configuration diff', () => {
+    const previousConfiguration = { name: 'Operations', configuration: { rangeMinutes: 60 } };
+    const configuration = { name: 'Operations', configuration: { rangeMinutes: 360 } };
+    mocks.activity = {
+      ...mocks.activity,
+      resourceType: 'Dashboard',
+      eventType: 'DashboardUpdated',
+      info: { $type: 'DashboardUpdated', changes: ['Chart range'], previousConfiguration, configuration },
+    } as ActivityView;
+    renderCitadel(<TaskSheet type="Activity" />);
+    expect(screen.getByTestId('diff-original')).toHaveTextContent(JSON.stringify(previousConfiguration));
+    expect(screen.getByTestId('diff-modified')).toHaveTextContent(JSON.stringify(configuration));
+  });
+
+  it('shows the summary for dashboard edits without snapshots', () => {
+    mocks.activity = {
+      ...mocks.activity,
+      resourceType: 'Dashboard',
+      eventType: 'DashboardUpdated',
+      info: { $type: 'DashboardUpdated', changes: ['Layout', 'Widgets'] },
+    } as ActivityView;
+    renderCitadel(<TaskSheet type="Activity" />);
+    expect(screen.getByText('Changed · Layout, Widgets')).toBeVisible();
+    expect(screen.queryByTestId('monaco-diff')).not.toBeInTheDocument();
+  });
+
   it.each([UserDateDisplay.Relative, UserDateDisplay.Exact])(
     'uses %s dates in activity sheets and exposes the exact timestamp',
     async (dateDisplay) => {

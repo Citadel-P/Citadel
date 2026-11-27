@@ -315,36 +315,12 @@ async fn sources(
         crate::api::request_validation::parse_tag_filters(raw.as_deref()),
         &headers,
     )?;
-    let ids = query
-        .ids
-        .as_deref()
-        .into_iter()
-        .flat_map(|ids| ids.split(','))
-        .take(9)
-        .map(Uuid::parse_str)
-        .collect::<Result<Vec<_>, _>>();
-    let ids = api_result(
-        ids.map_err(|_| ApiError::Validation("Invalid pinned resource ID.".into())),
+    let filter = api_result(
+        query
+            .filter(tags)
+            .map_err(|e| ApiError::Validation(e.into())),
         &headers,
     )?;
-    let search = query.search.unwrap_or_default();
-    let limit = query.limit.unwrap_or(10);
-    if ids.len() > 8 || search.chars().count() > 128 || !(1..=25).contains(&limit) {
-        return api_result(
-            Err(ApiError::Validation(
-                "Search up to 128 characters, select up to eight IDs, and request 1–25 results."
-                    .into(),
-            )),
-            &headers,
-        );
-    }
-    let filter = citadel_dashboards::SourceFilter {
-        kind: query.kind,
-        search,
-        ids,
-        tags,
-        limit: i64::from(limit),
-    };
     let rows = api_result(state.dashboards.sources(actor, filter).await, &headers)?;
     Ok(no_store(
         Json(
@@ -373,58 +349,10 @@ async fn fleet(
         crate::api::request_validation::parse_tag_filters(raw.as_deref()),
         &headers,
     )?;
-    let kinds: Vec<_> = q
-        .kinds
-        .as_deref()
-        .into_iter()
-        .flat_map(|s| s.split(','))
-        .map(str::to_owned)
-        .collect();
-    let limit = q.limit.unwrap_or(5);
-    if !(1..=25).contains(&limit)
-        || kinds.len() > 12
-        || kinds.iter().any(|s| {
-            !matches!(
-                s.as_str(),
-                "Platform"
-                    | "Deployment"
-                    | "Stack"
-                    | "SwarmService"
-                    | "Container"
-                    | "BackupPolicy"
-                    | "Build"
-                    | "BuildAgentPool"
-                    | "Registry"
-                    | "GitRepository"
-                    | "Script"
-            )
-        })
-        || q.state.as_ref().is_some_and(|s| s.len() > 64)
-    {
-        return api_result(
-            Err(ApiError::Validation(
-                "Invalid dashboard fleet filter.".into(),
-            )),
-            &headers,
-        );
-    }
-    let page = api_result(
-        state
-            .dashboards
-            .fleet(
-                actor,
-                citadel_dashboards::FleetFilter {
-                    read: q.read,
-                    tags,
-                    kinds,
-                    tab: q.tab.unwrap_or(citadel_dashboards::AttentionTab::All),
-                    state: q.state,
-                    limit: i64::from(limit),
-                    offset: i64::from(q.offset.unwrap_or(0)),
-                },
-            )
-            .await,
+    let filter = api_result(
+        q.filter(tags).map_err(|e| ApiError::Validation(e.into())),
         &headers,
     )?;
+    let page = api_result(state.dashboards.fleet(actor, filter).await, &headers)?;
     Ok(no_store(Json(page).into_response()))
 }

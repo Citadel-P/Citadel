@@ -1,4 +1,5 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
+import { collectionEventKey } from '@/lib/collection-scope';
 import { focusManager } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { Route, Routes } from 'react-router';
@@ -7,10 +8,16 @@ import * as transport from '@/lib/createRealtimeConnection';
 import { FakeRealtimeConnection } from '@/test/fakes/realtime';
 import { renderCitadel } from '@/test/render-citadel';
 import { server } from '@/test/server';
+import { ActivityTaskSheet } from '@/features/alerters/alert-events/alert-task-sheet';
 import Board from './board';
 import { DashboardGrid } from './grid';
 import { makeWidget, metricSettings, supportedConfiguration, type WidgetKind } from './catalogue';
-import { DashboardFleetKind, DashboardSourceKind, DashboardMetric } from '@/api/generated/api.types';
+import {
+  DashboardFleetKind,
+  DashboardSourceKind,
+  DashboardMetric,
+  DashboardStateKind,
+} from '@/api/generated/api.types';
 import { fromTemplate } from './templates';
 
 it.each([
@@ -88,8 +95,8 @@ it('shares reads and realtime listeners across the activity and alert widgets of
     </AppProvider>,
     { route: '/dashboards/mine' },
   );
-  await screen.findByRole('link', { name: 'Nightly volumes' });
-  expect(await screen.findByRole('link', { name: 'Stack Applied · Web' })).toHaveAttribute('href', '/activities/event');
+  await screen.findByRole('button', { name: 'Nightly volumes' });
+  expect(await screen.findByRole('button', { name: 'Stack Applied · Web' })).toBeVisible();
   await waitFor(() => expect(live.listenerCount('AlertEventReceived')).toBe(1));
   act(() =>
     live.emit('AlertEventReceived', {
@@ -99,22 +106,105 @@ it('shares reads and realtime listeners across the activity and alert widgets of
       severity: 'Warning',
     }),
   );
-  expect(await screen.findAllByRole('link', { name: 'Disk nearly full' })).toHaveLength(2);
+  expect(await screen.findAllByRole('button', { name: 'Disk nearly full' })).toHaveLength(2);
   expect(alerts).toHaveBeenCalledTimes(1);
   expect(platforms).toHaveBeenCalledTimes(1);
   expect(recent).toHaveBeenCalledTimes(2);
   expect(recent.mock.calls.map(([{ request }]) => new URL(request.url).searchParams.get('limit'))).toEqual(['5', '5']);
+  const scope = JSON.stringify({
+    group: 'dashboard',
+    projection: 'listRecentActivities',
+    tags: [],
+    query: { limit: 5 },
+  });
+  act(() =>
+    live.emit(collectionEventKey(scope, 'DashboardSnapshot'), [
+      {
+        id: 'changed',
+        eventType: 'StackApplied',
+        resourceName: 'Updated stack',
+        status: 'Success',
+        createdAt: '2026-11-01T10:01:00Z',
+      },
+    ]),
+  );
+  expect(await screen.findByRole('button', { name: 'Stack Applied · Updated stack' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Nightly volumes' })).toBeVisible();
+  expect(recent).toHaveBeenCalledTimes(2);
+  const timeline = screen.getByRole('region', { name: 'Recent activity' });
+  const liveEvent = collectionEventKey(scope, 'DashboardSnapshot');
+  const groupCalls = () => live.invoke.mock.calls.filter(([, group]) => group === scope);
+  const initialGroupCalls = groupCalls();
   try {
     act(() => focusManager.setFocused(false));
-    expect(screen.queryByRole('region', { name: 'Recent activity' })).toBeNull();
-    expect(live.listenerCount('AlertEventReceived')).toBe(1);
+    expect(live.listenerCount(liveEvent)).toBe(1);
+    act(() =>
+      live.emit(liveEvent, [
+        {
+          id: 'while-away',
+          eventType: 'StackApplied',
+          resourceName: 'Stack updated in background',
+          status: 'Success',
+          createdAt: '2026-11-01T10:02:00Z',
+        },
+      ]),
+    );
+    await within(timeline).findByRole('button', { name: 'Stack Applied · Stack updated in background' });
     act(() => focusManager.setFocused(true));
-    await screen.findByRole('region', { name: 'Recent activity' });
+    expect(screen.getByRole('region', { name: 'Recent activity' })).toBe(timeline);
+    expect(groupCalls()).toEqual(initialGroupCalls);
+    expect(recent).toHaveBeenCalledTimes(2);
+    expect(alerts).toHaveBeenCalledTimes(1);
   } finally {
     act(() => focusManager.setFocused(undefined));
   }
   unmount();
   expect(live.listenerCount('AlertEventReceived')).toBe(0);
+});
+
+it('loads activity details only when an event is opened from the timeline', async () => {
+  const row = {
+    id: 'stack-event',
+    eventType: 'StackApplied',
+    resourceType: 'Stack',
+    resourceName: 'Web',
+    createdAt: '2026-11-01T10:00:00Z',
+    status: 'Success',
+  };
+  const details = vi.fn(() =>
+    HttpResponse.json({
+      ...row,
+      actorType: 'System',
+      actorName: 'Core',
+      info: { $type: 'StackApplied', result: { containerIds: [] } },
+    }),
+  );
+  server.use(
+    http.get('*/api/v1/application/info', () => HttpResponse.json({})),
+    http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
+    http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
+    http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
+    http.get('*/api/v1/activities/recent', () => HttpResponse.json([row])),
+    http.get('*/api/v1/activities/stack-event', details),
+  );
+  const { user } = renderCitadel(
+    <AppProvider>
+      <DashboardGrid configuration={{ ...fromTemplate('Blank'), widgets: [makeWidget('RecentActivity')] }} />
+      <ActivityTaskSheet />
+    </AppProvider>,
+  );
+  const widget = within(await screen.findByRole('region', { name: 'Recent activity' }));
+  const title = { name: 'Stack Applied · Web' };
+  expect(await widget.findByRole('button', title)).toHaveAccessibleDescription('Success');
+  expect(widget.getByText('Success')).toHaveClass('sr-only');
+  expect(widget.queryByRole('button', { name: 'Activity links' })).toBeNull();
+  await user.click(widget.getByRole('button', { name: 'View recent activity' }));
+  const timeline = within(await screen.findByRole('dialog', { name: 'Recent activity' }));
+  const event = await timeline.findByRole('button', title);
+  expect(details).not.toHaveBeenCalled();
+  await user.click(event);
+  expect(await screen.findByRole('dialog', { name: 'Stack Applied' })).toBeVisible();
+  expect(details).toHaveBeenCalledTimes(1);
 });
 
 it('keeps alerts and activity scoped when tag membership or the selected scope changes', async () => {
@@ -162,9 +252,9 @@ it('keeps alerts and activity scoped when tag membership or the selected scope c
     </AppProvider>
   );
   const { rerender } = renderCitadel(renderBoard(config.tags));
-  expect(await screen.findByRole('link', { name: 'Scoped alert' })).toBeVisible();
-  expect(await screen.findByRole('link', { name: 'Tagged policy' })).toBeVisible();
-  expect(await screen.findByRole('link', { name: 'Stack Applied · Tagged stack' })).toBeVisible();
+  expect(await screen.findByRole('button', { name: 'Scoped alert' })).toBeVisible();
+  expect(await screen.findByRole('button', { name: 'Tagged policy' })).toBeVisible();
+  expect(await screen.findByRole('button', { name: 'Stack Applied · Tagged stack' })).toBeVisible();
   prodAlerts = [];
   const outside = { id: 'outside', message: 'Outside alert', severity: 'Warning', status: 'Active' };
   act(() => {
@@ -198,7 +288,172 @@ it('keeps alerts and activity scoped when tag membership or the selected scope c
   ]);
 });
 
-it('shares pinned chart history and freezes a paused board after one explicit refresh', async () => {
+it('shows scheduled work and authoritative update status on the Maintenance board', async () => {
+  const board = fromTemplate('Maintenance');
+  expect(board.widgets.map(({ layout }) => layout)).toEqual([
+    { x: 0, y: 0, w: 7, h: 5 },
+    { x: 7, y: 0, w: 5, h: 5 },
+    { x: 0, y: 5, w: 7, h: 5 },
+    { x: 7, y: 5, w: 5, h: 5 },
+  ]);
+  server.use(
+    http.get('*/api/v1/application/info', () => HttpResponse.json({ version: 'fixture', availableUpdate: null })),
+    http.get('*/api/v1/profile', () => HttpResponse.json({ authorization: { isAdministrator: true } })),
+    http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
+    http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
+    http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
+    http.get('*/api/v1/activities/recent', () => HttpResponse.json([])),
+    http.get('*/api/v1/dashboards/fleet', () =>
+      HttpResponse.json({ rows: [], states: [], total: 0, problems: 0, updates: 0, alerts: 0 }),
+    ),
+    http.get('*/api/v1/instance/schedules/upcoming', () =>
+      HttpResponse.json({
+        items: [{ purpose: 'Backup', ownerId: 'backup-id', name: 'Nightly volumes', nextAt: '2026-11-29T00:00:00Z' }],
+      }),
+    ),
+    http.get('*/api/v1/updates', () =>
+      HttpResponse.json({
+        installedVersion: '0.1.4',
+        available: null,
+        checkError: 'Release feed unavailable',
+        lastSuccess: '2026-11-22T08:00:00Z',
+        checksEnabled: true,
+        databaseVersion: '17.1',
+        databaseInstallation: 'Bundled',
+        databaseManaged: true,
+        databaseAvailable: '17.2',
+      }),
+    ),
+  );
+  renderCitadel(
+    <AppProvider>
+      <DashboardGrid configuration={board} />
+    </AppProvider>,
+  );
+  const schedules = within(await screen.findByRole('region', { name: 'Upcoming schedules' }));
+  const schedule = await schedules.findByRole('link', { name: 'Run backup · Nightly volumes' });
+  expect(schedule).toHaveAttribute('href', '/backup-policies/edit/backup-id');
+  expect(schedule.closest('li')?.querySelector('time')).toHaveAttribute('datetime', '2026-11-29T00:00:00.000Z');
+  expect(schedules.getByRole('link', { name: 'View schedules' })).toHaveAttribute('href', '/instance/schedules');
+  const updates = within(screen.getByRole('region', { name: 'Instance updates' }));
+  expect(await updates.findByText('Check failed')).toBeVisible();
+  expect(updates.getByText('0.1.4')).toBeVisible();
+  expect(updates.getByText('Available 17.2')).toBeVisible();
+  expect(updates.getByText('Last successful Core check')).toBeVisible();
+  expect(updates.getByRole('link', { name: 'View updates' })).toHaveAttribute('href', '/updates');
+});
+
+it.each([
+  [DashboardStateKind.Platform, 'Platforms', 'Online', 'Offline'],
+  [DashboardStateKind.Deployment, 'Deployments', 'Healthy', 'Failed'],
+  [DashboardStateKind.Stack, 'Stacks', 'Healthy', 'Failed'],
+  [DashboardStateKind.Container, 'Containers', 'Running', 'Exited'],
+  [DashboardStateKind.SwarmService, 'Swarm services', 'Healthy', 'Degraded'],
+])('shows a donut and status drill-down for %s', async (kind, label, firstState, secondState) => {
+  const members = vi.fn(({ request }: { request: Request }) => {
+    expect(new URL(request.url).searchParams.get('kinds')).toBe(kind);
+    expect(new URL(request.url).searchParams.get('state')).toBe(secondState);
+    return HttpResponse.json({ rows: [], total: 0 });
+  });
+  server.use(
+    http.get('*/api/v1/application/info', () => HttpResponse.json({})),
+    http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
+    http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
+    http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
+    http.get('*/api/v1/dashboards/fleet', ({ request }) =>
+      new URL(request.url).searchParams.get('read') === 'Members'
+        ? members({ request })
+        : HttpResponse.json({
+            states: [
+              { kind, state: firstState, count: 3 },
+              { kind, state: secondState, count: 1 },
+            ],
+          }),
+    ),
+  );
+  const tile = { ...makeWidget('ResourceState'), settings: { kind: 'ResourceState', resourceKind: kind } };
+  const { user } = renderCitadel(
+    <AppProvider>
+      <DashboardGrid configuration={{ ...fromTemplate('Blank'), widgets: [tile] }} />
+    </AppProvider>,
+  );
+  const region = await screen.findByRole('region', { name: 'Resource state' });
+  const widget = within(region);
+  expect(await widget.findByText(label.toLowerCase())).toBeVisible();
+  expect(region.querySelectorAll('.dashboard-state-ring > span')).toHaveLength(2);
+  expect(widget.getByText('75%')).toBeVisible();
+  await user.click(widget.getByRole('button', { name: `${secondState} 1 25%` }));
+  expect(await screen.findByRole('dialog', { name: `${secondState} · ${label}` })).toBeVisible();
+  await waitFor(() => expect(members).toHaveBeenCalledOnce());
+});
+
+it('searches across the paginated resource state sheet and opens the matching container', async () => {
+  const widget = {
+    ...makeWidget('ResourceState'),
+    settings: { kind: 'ResourceState', resourceKind: 'Container' },
+  } as const;
+  const members = vi.fn(({ request }: { request: Request }) => {
+    const query = new URL(request.url).searchParams;
+    const matches = query.get('search') === 'postgres';
+    return HttpResponse.json({
+      total: matches ? 1 : 26,
+      rows: [
+        {
+          id: matches ? 'postgres' : 'web',
+          platformId: 'node-id',
+          platformName: 'lab',
+          kind: 'Container',
+          name: matches ? 'database' : 'web',
+          state: 'Running',
+          image: matches ? 'postgres:17' : 'nginx:latest',
+          publishedPorts: matches ? ['5432/tcp'] : ['8080/tcp'],
+          reasons: [],
+        },
+      ],
+    });
+  });
+  server.use(
+    http.get('*/api/v1/application/info', () => HttpResponse.json({})),
+    http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
+    http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
+    http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
+    http.get('*/api/v1/dashboards/fleet', ({ request }) =>
+      new URL(request.url).searchParams.get('read') === 'Members'
+        ? members({ request })
+        : HttpResponse.json({ states: [{ kind: 'Container', state: 'Running', count: 26 }] }),
+    ),
+  );
+  const { user } = renderCitadel(
+    <AppProvider>
+      <DashboardGrid configuration={{ ...fromTemplate('Blank'), widgets: [widget] }} />
+    </AppProvider>,
+  );
+  await user.click(await screen.findByRole('button', { name: 'Running 26 100%' }));
+  const sheet = within(await screen.findByRole('dialog', { name: 'Running · Containers' }));
+  await sheet.findByText('26 matches');
+  await user.click(sheet.getByRole('link', { name: /next/i }));
+  await waitFor(() => expect(members).toHaveBeenCalledTimes(2));
+  await user.type(sheet.getByRole('searchbox'), 'postgres');
+  expect(await sheet.findByRole('link', { name: 'database' })).toHaveAttribute(
+    'href',
+    '/platforms/node-id/containers/postgres',
+  );
+  expect(sheet.getByText('5432/tcp')).toBeVisible();
+  expect(sheet.getByText('postgres:17', { exact: false })).toBeVisible();
+  expect(sheet.getByText('lab')).toBeVisible();
+  expect(
+    members.mock.calls.map(([{ request }]) => {
+      const query = new URL(request.url).searchParams;
+      return [query.get('search'), query.get('offset'), query.get('state')];
+    }),
+  ).toEqual([
+    [null, '0', 'Running'],
+    [null, '25', 'Running'],
+    ['postgres', '0', 'Running'],
+  ]);
+});
+
+it('shares pinned chart history across widgets and keeps it when their layout changes', async () => {
   const id = '10000000-0000-4000-8000-000000000001';
   const config = fromTemplate('Infrastructure and capacity');
   config.widgets.push({
@@ -225,13 +480,12 @@ it('shares pinned chart history and freezes a paused board after one explicit re
     http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
     http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
   );
-  const settled = vi.fn();
-  const board = (paused: boolean, refresh: number) => (
+  const board = () => (
     <AppProvider>
-      <DashboardGrid configuration={config} paused={paused} refresh={refresh} onSettled={settled} />
+      <DashboardGrid configuration={config} />
     </AppProvider>
   );
-  const { rerender, queryClient } = renderCitadel(board(false, 0));
+  const { rerender } = renderCitadel(board());
   await waitFor(() => expect(screen.getAllByText('No measurements in this range.')).toHaveLength(3), { timeout: 5000 });
   expect(history).toHaveBeenCalledTimes(1);
   expect(metadata).toHaveBeenCalledTimes(1);
@@ -240,38 +494,9 @@ it('shares pinned chart history and freezes a paused board after one explicit re
     title: w.title + ' edited',
     layout: { ...w.layout, h: w.layout.h + 1 },
   }));
-  rerender(board(false, 0));
+  rerender(board());
   expect(history).toHaveBeenCalledTimes(1);
   expect(metadata).toHaveBeenCalledTimes(1);
-  rerender(board(true, 0));
-  const unrelated = ['getPlatformStats', { id: 'other', query: { minutes: 60 } }];
-  queryClient.setQueryData(unrelated, { data: { stats: [] } });
-  await act(async () => {
-    await queryClient.invalidateQueries({ queryKey: unrelated });
-  });
-  expect(screen.getAllByText('No measurements in this range.')).toHaveLength(3);
-  let release!: () => void;
-  const pending = queryClient.fetchQuery({
-    queryKey: unrelated,
-    queryFn: () =>
-      new Promise((resolve) => {
-        release = () => resolve({ data: { stats: [] } });
-      }),
-    staleTime: 0,
-  });
-  settled.mockClear();
-  rerender(board(true, 1));
-  await waitFor(() => expect(history).toHaveBeenCalledTimes(2));
-  await waitFor(() => expect(screen.getAllByText('No measurements in this range.')).toHaveLength(3));
-  await waitFor(() => expect(settled).toHaveBeenCalled());
-  expect(queryClient.isFetching({ queryKey: unrelated })).toBe(1);
-  release();
-  await pending;
-  expect(metadata).toHaveBeenCalledTimes(2);
-  await act(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['getPlatformStats', { id }] });
-  });
-  expect(screen.queryByText('No measurements in this range.')).toBeNull();
 });
 
 it('links to full statistics without fetching an oversized stack history', async () => {
@@ -413,3 +638,36 @@ it('resolves shared watchlist pins once, preserves order, and hides unavailable 
   await user.click(widget.getByRole('button', { name: 'View health for Zulu app' }));
   await waitFor(() => expect(details).toHaveBeenCalledTimes(1));
 });
+
+it.each([false, true])(
+  'distinguishes zero affected resources from open events with a summary present: %s',
+  async (includeSummary) => {
+    const board = fromTemplate('Overview');
+    board.widgets = board.widgets.filter(
+      (w) => w.settings.kind === 'NeedsAttention' || (includeSummary && w.settings.kind === 'FleetSummary'),
+    );
+    const summaries = vi.fn();
+    server.use(
+      http.get('*/api/v1/dashboards/fleet', ({ request }) => {
+        const summary = new URL(request.url).searchParams.get('read') === 'Summary';
+        if (summary) summaries();
+        return HttpResponse.json({ states: [], rows: [], total: 0, updates: 0, problems: 0, alerts: summary ? 25 : 0 });
+      }),
+      http.get('*/api/v1/application/info', () => HttpResponse.json({})),
+      http.get('*/api/v1/profile/preferences', () => HttpResponse.json({})),
+      http.get('*/api/v1/profile', () => HttpResponse.json({ authorization: { writableResourceTypes: [] } })),
+      http.get('*/api/v1/platforms', () => HttpResponse.json({ platforms: [] })),
+      http.get('*/api/v1/alertEvents', () => HttpResponse.json({ pagedResult: { items: [], totalCount: 0 } })),
+    );
+    renderCitadel(
+      <AppProvider>
+        <DashboardGrid configuration={board} />
+      </AppProvider>,
+    );
+    await screen.findByText('No matching resource issues or updates.');
+    expect(
+      await screen.findByRole('button', { name: includeSummary ? 'Review 25 open alerts' : 'Review open alerts' }),
+    ).toBeVisible();
+    expect(summaries).toHaveBeenCalledTimes(includeSummary ? 1 : 0);
+  },
+);

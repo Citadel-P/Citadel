@@ -29,6 +29,15 @@ describe('StateBadge', () => {
     expect(screen.getByText('Applying retention')).toHaveClass('text-blue-700');
   });
 
+  it.each([
+    ['Private', 'Private', 'text-muted-foreground'],
+    ['Restricted', 'Restricted', 'text-violet-700'],
+    ['InstanceShared', 'Everyone in this instance', 'text-blue-700'],
+  ])('uses a distinct visibility color for %s', (value, label, color) => {
+    render(<StateBadge kind="visibility" value={value} label={label} />);
+    expect(screen.getByText(label)).toHaveClass(color);
+  });
+
   it('supports boolean resource states without treating false as missing', () => {
     render(<StateBadge value={false} />);
     expect(screen.getByText('false')).toHaveClass('text-muted-foreground');

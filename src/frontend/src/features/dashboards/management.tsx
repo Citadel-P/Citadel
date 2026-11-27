@@ -1,61 +1,49 @@
-import { DashboardDeleteDialog } from './delete-dialog';
-import { PreferenceDialog } from './home-preference';
-import { useCanManageSharing, SharingItem, SharingDialog } from './sharing';
-import { MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
+import { Copy, Share2, Trash } from 'lucide-react';
 import type { DashboardConfiguration, DashboardSummaryView } from '@/api/generated/api.types';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { SetSelectedHome } from './actions';
+import { DashboardDeleteDialog } from './delete-dialog';
+import { useCanManageSharing, useSharingDisabled, SharingDialog } from './sharing';
 import { CreateDashboardDialog } from './create';
 
-export function DashboardMenu({
-  board,
-  configuration,
-}: {
-  board: DashboardSummaryView;
-  configuration?: DashboardConfiguration;
-}) {
-  const [action, setAction] = useState<'duplicate' | 'delete' | 'home'>();
-  const canShare = useCanManageSharing(board);
+export function DuplicateDashboard({ name, configuration }: { name: string; configuration: DashboardConfiguration }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <Copy /> Duplicate
+      </Button>
+      {open && <CreateDashboardDialog copy={{ name, configuration }} close={() => setOpen(false)} />}
+    </>
+  );
+}
+
+export function DashboardActions({ board }: { board: DashboardSummaryView }) {
+  const [deleting, setDeleting] = useState(false);
   const [sharing, setSharing] = useState<DashboardSummaryView>();
+  const canShare = useCanManageSharing(board);
+  const sharingDisabled = useSharingDisabled(board);
   const navigate = useNavigate();
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" aria-label="Dashboard options">
-            <MoreHorizontal />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem asChild>
-            <Link to="/dashboards">Choose a dashboard</Link>
-          </DropdownMenuItem>
-          {configuration && (
-            <DropdownMenuItem onSelect={() => setAction('duplicate')}>Duplicate dashboard</DropdownMenuItem>
-          )}
-          <DropdownMenuItem onSelect={() => setAction('home')}>Set as home</DropdownMenuItem>
-          {canShare && <SharingItem board={board} select={() => setSharing(board)} />}
-          {board.canDelete && (
-            <DropdownMenuItem onSelect={() => setAction('delete')}>Delete dashboard</DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {action === 'home' && <PreferenceDialog board={board} close={() => setAction(undefined)} />}
-      {sharing && canShare && <SharingDialog board={sharing} close={() => setSharing(undefined)} />}
-      {action === 'duplicate' && configuration && (
-        <CreateDashboardDialog copy={{ name: board.name, configuration }} close={() => setAction(undefined)} />
+      <SetSelectedHome resources={[board]} />
+      {canShare && (
+        <Button variant="outline" disabled={sharingDisabled} onClick={() => setSharing(board)}>
+          <Share2 /> Sharing
+        </Button>
       )}
-      {action === 'delete' && board.canDelete && (
+      {board.canDelete && (
+        <Button variant="destructive" onClick={() => setDeleting(true)}>
+          <Trash /> Delete
+        </Button>
+      )}
+      {sharing && canShare && <SharingDialog board={sharing} close={() => setSharing(undefined)} />}
+      {deleting && board.canDelete && (
         <DashboardDeleteDialog
           boards={[board]}
-          close={() => setAction(undefined)}
+          close={() => setDeleting(false)}
           onDeleted={() => navigate('/dashboards', { replace: true })}
         />
       )}

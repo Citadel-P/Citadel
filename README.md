@@ -12,21 +12,26 @@ Build images from Git, deploy containers and Compose stacks, and manage Docker S
 
 [Live demo](https://demo.citadelplane.com/) · [Documentation](https://docs.citadelplane.com/) · [Report an issue](https://github.com/Citadel-P/Citadel/issues)
 
+![Example Citadel dashboard filtered to Production and Storefront, showing fleet totals, CPU and memory trends, deployment health, and recent activity](docs/public/screenshots/dashboard.png)
+
+*This dashboard shows resources that match both **Production** and **Storefront**.*
+
 ## What Citadel does
 
 - **Deploy applications** — build images from Git, publish to registries, deploy containers and Compose stacks, and roll back releases.
 - **Manage hosts and Swarm** — connect local Docker, remote Agents, and outbound Edge Agents; manage nodes, services, tasks, configs, and secrets.
 - **Inspect workloads** — follow logs, open terminals, and track resource usage.
+- **Monitor operations** — build [private or shared dashboards](docs/content/docs/resources/dashboards.md) for resource health, usage, alerts, and activity.
 - **Back up and restore** — protect the control plane, Docker volumes, and supported bind mounts with scheduled backups, retention policies, and restore workflows.
 - **Automate operations** — run TypeScript actions, schedule work, respond to webhooks, and check configuration drift.
 - **Control access** — manage users, teams, roles, and resource permissions, with MFA, OIDC sign-in, and activity history.
 
 Capabilities vary by edition; see the [Community and Team comparison](docs/content/docs/overview/licensing.md#edition-comparison).
 
-![Citadel Compose stack details with running services, deployment controls, and logs](docs/public/screenshots/stacks.png)
-
 <details>
 <summary>More screenshots</summary>
+
+![Citadel Compose stack details with running services, deployment controls, and logs](docs/public/screenshots/stacks.png)
 
 ![Citadel Platforms page with an online standalone Docker host and an online Swarm host](docs/public/screenshots/platforms.png)
 

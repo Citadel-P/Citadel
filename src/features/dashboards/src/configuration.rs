@@ -5,6 +5,8 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DashboardConfiguration {
     pub schema_version: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub tags: Vec<String>,
     pub range_minutes: u16,
     pub widgets: Vec<Widget>,
