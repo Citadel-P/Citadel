@@ -16,8 +16,9 @@ cargo test --locked -p citadel-docker-api
 
 `codegen/v1.49.yaml` is the Rust-owned Docker schema; no submodule is needed.
 `codegen/source.json` pins its path and checksum, and the
-OpenAPI Generator 7.25.0 JAR URL/checksum. The JAR is downloaded only by this explicit
-xtask command and cached in `target/codegen`. Normal Cargo builds use committed
+OpenAPI Generator 7.25.0 JAR sources and checksum. The explicit xtask command
+downloads the JAR from Maven Central or its mirror and caches it in
+`target/codegen`. Normal Cargo builds use committed
 Rust files and do not run Java, download generators, or regenerate code.
 `JAVA_HOME` selects Java; `CITADEL_OPENAPI_GENERATOR_JAR` can select a predownloaded
 JAR, which must still match the pinned checksum.

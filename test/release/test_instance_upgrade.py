@@ -78,6 +78,37 @@ class PublishedUpgradeTests(unittest.TestCase):
                 if published:
                     self.assertEqual(fixture.tag, image)
 
+    def test_fixture_retries_pinned_pull_and_cleans_up_its_docker_hub_login(self):
+        registration = upgrade.registration
+        fixture = upgrade.UpgradeFixture('unused', Path('/unused'))
+        docker = ['docker', '--host', 'unix://' + fixture.socket]
+        config = None
+        attempts = 0
+
+        def execute(*args, stdin=None, **kwargs):
+            nonlocal config, attempts
+            if 'login' in args:
+                self.assertEqual(list(args[:3]), docker)
+                self.assertEqual(args[3], '--config')
+                config = args[4]
+                self.assertEqual(args[5:], ('login', '--username', 'ci-user', '--password-stdin'))
+                self.assertEqual(stdin.read(), b'fixture-token\n')
+            elif 'pull' in args:
+                self.assertEqual(list(args), docker + ['--config', config, 'pull', registration.POSTGRES])
+                attempts += 1
+                raise RuntimeError('fixture pull failed')
+            else:
+                self.assertEqual(args, ('rm', '-rf', config))
+
+        with patch.dict(registration.os.environ, DOCKERHUB_USERNAME='ci-user', DOCKERHUB_TOKEN='fixture-token'), \
+             patch.object(fixture, 'execute', side_effect=execute) as commands, \
+             patch.object(registration.time, 'sleep') as sleep, \
+             self.assertRaisesRegex(RuntimeError, 'Could not pull pinned fixture image postgres@sha256'):
+            fixture.pull_fixture_images(registry=False)
+        self.assertEqual(attempts, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [10, 20])
+        self.assertEqual(commands.call_args.args, ('rm', '-rf', config))
+
     def test_refresh_can_change_only_core_and_configuration(self):
         before = dict(coreContainerId='source', configurationSha256='a', runtimeSha256='b',
                       instanceId='instance', id='registration', databaseContainerId='pg',

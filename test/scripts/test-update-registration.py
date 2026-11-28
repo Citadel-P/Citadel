@@ -8,6 +8,7 @@ runs the shipped Python host setup command inside the disposable daemon.
 
 import argparse
 import json
+import os
 from pathlib import Path
 import secrets
 import re
@@ -69,6 +70,35 @@ class Fixture:
     def docker(self, *args, **kwargs):
         return self.execute("docker", "--host", "unix://" + self.socket, *args, **kwargs)
 
+    def pull_fixture_images(self, registry):
+        images = [POSTGRES, REGISTRY] if registry else [POSTGRES]
+        username = os.environ.get("DOCKERHUB_USERNAME")
+        token = os.environ.get("DOCKERHUB_TOKEN")
+        docker = ["docker", "--host", "unix://" + self.socket]
+        config = None
+        if username and token:
+            config = f"/tmp/citadel-fixture-docker-{uuid.uuid4().hex}"
+            docker += ["--config", config]
+        try:
+            if config:
+                with tempfile.TemporaryFile() as password:
+                    password.write(token.encode() + b"\n")
+                    password.seek(0)
+                    self.execute(*docker, "login", "--username", username, "--password-stdin", stdin=password)
+            for image in images:
+                for delay in (10, 20, 0):
+                    try:
+                        self.execute(*docker, "pull", image, timeout=300)
+                        break
+                    except RuntimeError as error:
+                        if not delay:
+                            raise RuntimeError(f"Could not pull pinned fixture image {image}") from error
+                        print(f"Pulling {image} failed; retrying in {delay}s.", flush=True)
+                        time.sleep(delay)
+        finally:
+            if config:
+                self.execute("rm", "-rf", config)
+
     def start(self, *, published=False, registry=False, browser_port=None, activation=False, automatic=False):
         registry = registry or activation or automatic
         require(not (published and registry), "Fixture registry cannot be used for published releases")
@@ -103,10 +133,9 @@ class Fixture:
         require(("name=rootless" in info["SecurityOptions"]) == self.rootless, "Fixture daemon mode is incorrect")
         self.docker_root = info["DockerRootDir"]
         # Docker save/load can discard RepoDigests. Pull the exact installer pin
-        # inside the disposable daemon, then disconnect it before starting Core.
-        self.docker("pull", POSTGRES, timeout=300)
-        if registry:
-            self.docker("pull", REGISTRY, timeout=300)
+        # with the CI registry credentials when available, then erase the
+        # disposable client's login before starting Core.
+        self.pull_fixture_images(registry)
         if published:
             # Retain registry/GitHub access and RepoDigests for the real verifier.
             # No host ports or host Docker socket are exposed to this daemon.

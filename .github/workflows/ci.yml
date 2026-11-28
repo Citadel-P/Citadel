@@ -172,6 +172,12 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Cache the pinned Docker API generator
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: target/codegen/openapi-generator-cli-*.jar
+          key: docker-api-generator-${{ hashFiles('src/infrastructure/docker-api/codegen/source.json') }}
+
       - name: Verify generated Docker API crate
         run: cargo run --locked -p xtask -- docker-api --check
 
