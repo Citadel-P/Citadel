@@ -19,7 +19,7 @@ Build images from Git, deploy containers and Compose stacks, and manage Docker S
 - **Deploy applications** — build images from Git, publish to registries, deploy containers and Compose stacks, and roll back releases.
 - **Manage hosts and Swarm** — connect local Docker, remote Agents, and outbound Edge Agents; manage nodes, services, tasks, configs, and secrets.
 - **Inspect workloads** — follow logs, open terminals, and track resource usage.
-- **Monitor operations** — build [private or shared dashboards](docs/content/docs/resources/dashboards.md) for resource health, usage, alerts, and activity.
+- **Build custom dashboards** — arrange widgets for resource health, metrics, alerts, and activity in [private or shared views](docs/content/docs/resources/dashboards.md).
 - **Back up and restore** — protect the control plane, Docker volumes, and supported bind mounts with scheduled backups, retention policies, and restore workflows.
 - **Automate operations** — run TypeScript actions, schedule work, respond to webhooks, and check configuration drift.
 - **Control access** — manage users, teams, roles, and resource permissions, with MFA, OIDC sign-in, and activity history.

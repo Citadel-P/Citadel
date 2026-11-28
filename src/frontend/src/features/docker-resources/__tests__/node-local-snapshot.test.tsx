@@ -170,24 +170,35 @@ it('merges newer node removals into the initial HTTP inventory and capabilities'
   const fake = new FakeRealtimeConnection();
   const gate = deferred();
   const captured = deferred();
-  server.use(
-    http.get(`http://localhost/api/v1/volumes/${platformId}`, async () => {
-      captured.resolve();
-      await gate.promise;
-      return HttpResponse.json(baseline);
-    }),
-  );
-  renderCitadel(<VolumesProbe />, {
-    groups: { connectionFactory: () => fake, startConnection: (c) => c.start() },
+  const requestUrl = `http://localhost/api/v1/volumes/${platformId}`;
+  const fetch = globalThis.fetch;
+  // Keep the request pending at the fetch boundary, where MSW cannot forward it to localhost.
+  const request = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+    if (input !== requestUrl) return fetch(input, init);
+    captured.resolve();
+    return gate.promise.then(() => HttpResponse.json(baseline));
   });
-  await act(async () => captured.promise);
-  await waitFor(() => expect(fake.listenerCount('VolumesUpdated')).toBe(1));
-  act(() => fake.emit('VolumesUpdated', { platformId, scope: 'nodes', volumes: [] }));
-  expect(screen.getByRole('status')).toBeEmptyDOMElement();
-  act(() => gate.resolve());
-  await waitFor(() =>
-    expect(screen.getByRole('status')).toHaveTextContent(JSON.stringify({ volumes: [manager], capabilities })),
-  );
+  try {
+    const { queryClient } = renderCitadel(<VolumesProbe />, {
+      groups: { connectionFactory: () => fake, startConnection: (c) => c.start() },
+    });
+    await act(async () => captured.promise);
+    await waitFor(() => expect(fake.listenerCount('VolumesUpdated')).toBe(1));
+    act(() => fake.emit('VolumesUpdated', { platformId, scope: 'nodes', volumes: [] }));
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    const initialRead = queryClient.getQueryCache().find({ queryKey: key, exact: true })?.promise;
+    expect(initialRead).toBeDefined();
+    await act(async () => {
+      gate.resolve();
+      await initialRead;
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(JSON.stringify({ volumes: [manager], capabilities })),
+    );
+  } finally {
+    gate.resolve();
+    request.mockRestore();
+  }
 });
 
 function ResourceProbe() {

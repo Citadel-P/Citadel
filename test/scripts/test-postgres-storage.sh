@@ -36,9 +36,11 @@ for layout in '' 19 19/docker; do
   [[ $(sql "SHOW server_version_num") == 190000 ]]
 done
 sql "CREATE TABLE retained(marker int); INSERT INTO retained VALUES (37)"
+database=$("${compose[@]}" ps --quiet pg_db)
 "${compose[@]}" stop pg_db
 if PG_DATA=/var/lib/postgresql/18/docker "${compose[@]}" run --rm --no-deps pg_db postgres --version; then exit 1; fi
-"${compose[@]}" start --wait pg_db
+"${compose[@]}" up -d --no-recreate --wait --wait-timeout 90 pg_db
+[[ $("${compose[@]}" ps --quiet pg_db) == "$database" ]]
 [[ $(sql "SELECT marker FROM retained") == 37 ]]
 # Replace only this disposable test volume with a retained older cluster marker.
 reset_volume
