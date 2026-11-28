@@ -16,6 +16,7 @@ struct Source {
     api_version: String,
     generator_version: String,
     generator_url: String,
+    generator_mirror_url: String,
     generator_sha256: String,
 }
 
@@ -145,20 +146,33 @@ fn generator_jar(workspace: &Path, source: &Source) -> Result<PathBuf> {
         }
         fs::create_dir_all(jar.parent().unwrap())?;
         let download = Scratch(jar.with_extension(format!("download-{}", std::process::id())));
-        let status = Command::new("curl")
-            .args([
-                "--fail",
-                "--location",
-                "--silent",
-                "--show-error",
-                "--retry",
-                "2",
-            ])
-            .arg(&source.generator_url)
-            .arg("--output")
-            .arg(&download.0)
-            .status()?;
-        if !status.success() {
+        let mut downloaded = false;
+        for url in [&source.generator_url, &source.generator_mirror_url] {
+            let status = Command::new("curl")
+                .args([
+                    "--fail",
+                    "--location",
+                    "--silent",
+                    "--show-error",
+                    "--connect-timeout",
+                    "10",
+                    "--max-time",
+                    "60",
+                    "--retry",
+                    "2",
+                    "--retry-max-time",
+                    "90",
+                ])
+                .arg(url)
+                .arg("--output")
+                .arg(&download.0)
+                .status()?;
+            if status.success() {
+                downloaded = true;
+                break;
+            }
+        }
+        if !downloaded {
             return Err("Could not download the pinned OpenAPI Generator JAR".into());
         }
         verify_hash(
